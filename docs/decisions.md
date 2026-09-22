@@ -145,3 +145,64 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
 - **Перед первым коммитом — `git add --renormalize .`** `LICENSE` и
   `README.md` числятся изменёнными с пустым diff: новый `.gitattributes`
   (`* text=auto`) требует перенормировать окончания строк. Содержимое то же.
+
+### Шаг 1 вертикали «звук из файла»: каркас A1 + A1.3 + A2
+
+- **Тулчейн взят актуальный, а не установленный.** AGP **9.4.1**, Gradle **9.7.1**,
+  `compileSdk`/`targetSdk` **37**, Kotlin 2.3.21, KSP 2.3.12, Hilt 2.60.1,
+  Compose BOM 2026.09.00, Media3 1.11.1. Причина: библиотеки AndroidX выпуска
+  2026 (`compose-ui` 1.12, `core-ktx` 1.19) требуют AGP 9.1+ и compileSdk 37,
+  а Hilt с версии **2.59** отказывается работать с AGP 8. Оставаться на
+  AGP 8.12 означало бы пригвоздить проект к Hilt 2.58 и библиотекам осени 2025
+  в первый же день. Решение автора: «на то, что установлено, не обращай
+  внимания — бери тот вариант, что лучше».
+  **Следствие:** установленная Android Studio 2025.1.2 несёт AGP 8.12 и этот
+  проект не откроет — Studio нужно обновить. Платформу `android-37` сборка
+  скачивает сама, вручную ставить не нужно.
+  Отменяет прежнюю запись «`compileSdk 36`» в решениях перед стартом волны.
+- **Плагин `org.jetbrains.kotlin.android` не применяется.** С AGP 9.0 поддержка
+  Kotlin встроена в сам AGP, и отдельный плагин он запрещает явной ошибкой.
+  В сборке остались `com.android.application`, `kotlin.plugin.compose`, `ksp`
+  и `hilt.android`.
+- **Форматирование — только ktlint.** Набор `detekt-formatting` снят: он несёт
+  свою, более старую копию правил ktlint, и два линтера начинают спорить об
+  одних и тех же отступах (поймано на цепочке `Modifier`). Зоны разведены:
+  ktlint + `.editorconfig` — стиль, detekt — запахи кода и сложность.
+- **`ui/navigation/Destinations.kt` переименован в `Destination.kt`** — правило
+  ktlint `standard:filename`. Декомпозиция в `tasks-v0.1.md` поправлена.
+- **`AudioModule` и `LibraryModule` (A2.4) не созданы.** Привязывать пока нечего:
+  `AudioEngine` появляется на шаге 2, репозитории — в эпике C. `AppModule`
+  выдаёт диспетчеры (`@IoDispatcher`, `@DefaultDispatcher`) через граф, а не
+  через обращение к `Dispatchers` по месту, — иначе в тестах их нечем подменить
+  на `TestDispatcher`.
+- **`PlaybackService` в манифесте не объявлен** — появится вместе со своим
+  классом (B3.1). Разрешения фонового воспроизведения объявлены уже сейчас:
+  состав разрешений — ответственность A2.1, и все они нужны этой же вертикали.
+- **Подпись релиза готова, но выключена.** `signingConfigs` создаётся только
+  если есть `keystore.properties` или переменные `PLINTH_KEYSTORE_*`; без них
+  `assembleGithubRelease` даёт неподписанный APK. `release.yml` написан целиком
+  и включится в H5, когда появится ключ.
+- **Gradle wrapper собран вручную.** В `~/.gradle/wrapper/dists` лежал битый
+  (недокачанный) дистрибутив 8.13, `gradle` в PATH нет. Файлы wrapper взяты из
+  локального проекта Android Studio, `distributionUrl` переведён на 9.7.1.
+- **`local.properties`: путь пишется прямыми слэшами.** В формате `.properties`
+  одиночный обратный слэш съедается, путь вида `C:\Users\...` превращается в
+  `C:Users...`, и AGP падает с «Синтаксическая ошибка в имени файла».
+- **TDD по `tdd-workflow`, но без чекпойнт-коммитов скилла.** RED зафиксирован
+  компиляционной ошибкой (`Unresolved reference 'FlavorConfig'`,
+  `'ApiKeySource'`, `'Destination'`), GREEN — прогоном тестов. Коммиты скилла
+  не делаются: в этом репозитории коммитит только автор.
+- **Зелёный критерий шага 1 достигнут.** От `clean`: `ktlintCheck`, `detekt`,
+  `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` (по 11 тестов на flavor,
+  0 падений), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubRelease`.
+- **Сборке нужен JDK 21.** `java` в PATH — JDK 8; в терминале перед `./gradlew`
+  надо выставить `JAVA_HOME` на JBR из Android Studio. Записано в обоих README.
+- **Как запускать сборку из терминала.** Форма `JAVA_HOME=... ./gradlew ...`
+  работает только в bash. В PowerShell (терминал по умолчанию) префикса
+  переменной перед командой нет, нужно:
+  `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew.bat assembleGithubDebug`
+  Проверено — собирается.
+- **`ARCHITECTURE.md` и ADR (A3) на шаге 1 не заводились**, решение автора
+  ожидается. Обоснование Hilt и остальных выборов уже лежит здесь же, в
+  `docs/decisions.md`, так что ADR `0004` сейчас был бы дубликатом.

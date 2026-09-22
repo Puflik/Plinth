@@ -1,0 +1,40 @@
+# Надстройка над правилами detekt по умолчанию (buildUponDefaultConfig = true).
+# Здесь живут только отклонения от стандарта и их причины.
+#
+# Зоны ответственности разведены: форматирование целиком за ktlint
+# (.editorconfig), detekt смотрит только на запахи кода и сложность.
+# Набор detekt-formatting намеренно не подключён — он несёт свою,
+# более старую копию правил ktlint, и два линтера начинают спорить
+# об одних и тех же отступах.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongParameterList:
+    # У @Composable параметров естественно много: состояние + колбэки + модификатор.
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    thresholdInFiles: 20
+    thresholdInClasses: 20
+    ignoreAnnotatedFunctions: ['Composable']
+
+naming:
+  FunctionNaming:
+    # @Composable-функции по соглашению Compose пишутся с заглавной буквы.
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
+
+style:
+  MagicNumber:
+    ignoreAnnotated: ['Composable', 'Preview']
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+  MaxLineLength:
+    maxLineLength: 120
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+  ForbiddenComment:
+    # TODO по ходу волны — рабочий инструмент, а не нарушение.
+    active: false

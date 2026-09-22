@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      XML-тема отвечает только за окно до первого кадра Compose:
+      фон, отсутствие ActionBar. Всё остальное — ui/theme/Theme.kt.
+    -->
+    <style name="Theme.Plinth" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

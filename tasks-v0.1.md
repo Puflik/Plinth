@@ -120,7 +120,7 @@ plinth/
 | `AndroidManifest.xml` | A2.1 | Разрешения, `Application`, `Activity`, `PlaybackService`, `allowBackup` |
 | `PlinthApplication.kt` | A2.1 | Точка входа, инициализация DI и логгера |
 | `MainActivity.kt` | A2.1 | Single activity, хост Compose |
-| `ui/navigation/Destinations.kt` | A2.1 | Перечень экранов приложения |
+| `ui/navigation/Destination.kt` | A2.1 | Перечень экранов приложения |
 | `ui/navigation/PlinthNavHost.kt` | A2.1 | Граф навигации |
 | `ui/navigation/BottomNavigationBar.kt` | A2.3 | Вкладки `Библиотека` · `Поиск` · `Настройки` |
 | `ui/theme/Color.kt` | A2.2 | Цветовые токены светлой и тёмной тем |

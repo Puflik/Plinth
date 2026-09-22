@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Plinth</string>
+
+    <string name="nav_library">Библиотека</string>
+    <string name="nav_search">Поиск</string>
+    <string name="nav_settings">Настройки</string>
+
+    <string name="placeholder_library">Библиотека пуста — сканер появится следующей вертикалью.</string>
+    <string name="placeholder_search">Поиск появится вместе с библиотекой.</string>
+    <string name="placeholder_settings">Настройки появятся вместе с онбордингом.</string>
+</resources>
