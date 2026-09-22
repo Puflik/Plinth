@@ -1,0 +1,56 @@
+# --- Gradle / Android ---
+.gradle/
+build/
+captures/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+.cxx/
+release/
+lint-results*.html
+lint-results*.xml
+
+# Подпись релизов — ключ никогда не попадает в репозиторий
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# --- Rust ---
+target/
+core/target/
+**/*.rs.bk
+*.pdb
+
+# --- IDE ---
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.fleet/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Локальные секреты и ключи API ---
+secrets.properties
+*.env
+.env.local
+
+# --- Graphify knowledge graph (локальный, пересобирается) ---
+graphify-out/
+
+# --- Claude Code: проектные настройки коммитятся, личные — нет ---
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/settings.local.json
+
+# Скиллы — копии из плагина ecc (MIT, (c) Affaan Mustafa) без текста лицензии.
+# В AGPL-репозиторий их не кладём: каждый ставит себе сам.
+.claude/skills/

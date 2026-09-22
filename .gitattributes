@@ -1,2 +1,43 @@
-# Auto detect text files and perform LF normalization
+# Автоопределение текстовых файлов и нормализация в LF внутри репозитория
 * text=auto
+
+# Скрипты, которым нужен конкретный перевод строки
+gradlew          text eol=lf
+*.sh             text eol=lf
+*.bat            text eol=crlf
+*.cmd            text eol=crlf
+
+# Явно текстовые
+*.kt             text
+*.kts            text
+*.rs             text
+*.toml           text
+*.java           text
+*.xml            text
+*.json           text
+*.md             text
+*.yml            text
+*.yaml           text
+*.pro            text
+
+# Бинарные — не трогать
+*.png            binary
+*.jpg            binary
+*.jpeg           binary
+*.webp           binary
+*.ico            binary
+*.jar            binary
+*.so             binary
+*.apk            binary
+*.aab            binary
+*.keystore       binary
+*.jks            binary
+*.flac           binary
+*.mp3            binary
+*.ogg            binary
+*.opus           binary
+*.m4a            binary
+*.wav            binary
+
+# gradle-wrapper.jar хранится в репозитории и должен быть побитово неизменным
+gradle/wrapper/gradle-wrapper.jar binary
