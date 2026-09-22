@@ -24,6 +24,10 @@ core/target/
 **/*.rs.bk
 *.pdb
 
+# --- Python (хуки) ---
+__pycache__/
+*.py[cod]
+
 # --- IDE ---
 .idea/
 *.iml
