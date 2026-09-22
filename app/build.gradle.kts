@@ -84,6 +84,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // B1.4: контрактные тесты и FakeAudioEngine лежат в общем наборе исходников.
+    // Их обязаны прогонять оба набора: JVM-тесты (FakeAudioEngine) и
+    // инструментальные (Media3Engine в B2 — Media3 тестируется на эмуляторе).
+    sourceSets {
+        getByName("test") { kotlin.srcDir("src/sharedTest/kotlin") }
+        getByName("androidTest") { kotlin.srcDir("src/sharedTest/kotlin") }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -116,4 +124,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // Тот же набор, что и у unit-тестов: общие исходники sharedTest
+    // компилируются в обоих наборах.
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.truth)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
 }

@@ -70,6 +70,7 @@ plinth/
 │       ├── github/kotlin/io/github/puflik/plinth/flavor/
 │       ├── fdroid/kotlin/io/github/puflik/plinth/flavor/
 │       ├── test/kotlin/io/github/puflik/plinth/
+│       ├── sharedTest/kotlin/io/github/puflik/plinth/
 │       └── androidTest/kotlin/io/github/puflik/plinth/
 ├── .editorconfig
 ├── .gitignore
@@ -160,12 +161,16 @@ plinth/
 | `audio/engine/PlaybackState.kt` | B1.2 | Состояние: idle / buffering / playing / paused / ended / error |
 | `audio/engine/PlaybackEvent.kt` | B1.2 | События: смена позиции, буферизация, конец трека, ошибка |
 | `audio/engine/PlaybackError.kt` | B1.2 | Типизированные ошибки: файл недоступен, формат не поддержан, сеть, неизвестно |
-| `test/audio/FakeAudioEngine.kt` | B1.3 | Управляемая реализация для тестов, без Android |
-| `test/audio/AudioEngineContractTest.kt` | B1.4 | Контрактные тесты: любая реализация обязана их проходить |
+| `sharedTest/audio/engine/FakeAudioEngine.kt` | B1.3 | Управляемая реализация для тестов, без Android |
+| `sharedTest/audio/engine/AudioEngineContractTest.kt` | B1.4 | Контрактные тесты: любая реализация обязана их проходить |
+| `test/audio/engine/EngineBoundaryTest.kt` | B1.1 📌 | Страж границы: ни одного импорта Android в `audio/engine` |
+| `test/audio/engine/FakeAudioEngineTest.kt` | B1.3 | Прогон контракта на фейке плюс его собственная управляющая поверхность |
 
 > 📌 ⚠️ **Правило, нарушение которого убивает и десктопный клиент, и будущий движок R3:** ни один тип из `androidx.media3` не пересекает эту границу. `Media3Engine` знает об интерфейсе — интерфейс о Media3 не знает никогда.
 >
 > Контрактные тесты (`B1.4`) существуют именно для того, чтобы через год Rust-движок можно было подставить, прогнав тот же набор.
+>
+> Набор `sharedTest` подключён и к `test`, и к `androidTest`: `FakeAudioEngine` проходит контракт на JVM, `Media3Engine` (B2) — на эмуляторе, одним и тем же классом.
 
 ## B2. `Media3Engine`
 

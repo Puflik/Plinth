@@ -14,7 +14,7 @@ ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
 # @Composable-функции пишутся с большой буквы — это соглашение Compose,
 # а не нарушение стиля Kotlin.
-ktlint_function_naming_ignore_when_annotated_with = Composable
+ktlint_function_naming_ignore_when_annotated_with = Composable,Test
 ktlint_standard_function-expression-body = disabled
 
 [*.{xml,yml,yaml,toml,json}]

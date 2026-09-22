@@ -17,7 +17,7 @@ complexity:
   TooManyFunctions:
     thresholdInFiles: 20
     thresholdInClasses: 20
-    ignoreAnnotatedFunctions: ['Composable']
+    ignoreAnnotatedFunctions: ['Composable', 'Test']
 
 naming:
   FunctionNaming:
