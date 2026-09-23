@@ -25,6 +25,9 @@ interface AudioEngine {
     /** Что происходит сейчас; новый подписчик сразу получает текущее значение. */
     val state: StateFlow<PlaybackState>
 
+    /** Позиция и длительность текущего трека; новый подписчик сразу получает снимок. */
+    val progress: StateFlow<PlaybackProgress>
+
     /** Происшествия; приходят только тем, кто подписан в момент события. */
     val events: Flow<PlaybackEvent>
 

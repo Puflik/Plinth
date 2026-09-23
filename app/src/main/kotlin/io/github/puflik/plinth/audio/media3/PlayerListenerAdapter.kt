@@ -1,10 +1,12 @@
 package io.github.puflik.plinth.audio.media3
 
 import android.os.Handler
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
+import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -17,12 +19,15 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * Позицию ExoPlayer сам не сообщает, её приходится спрашивать. Адаптер
  * сообщает её в трёх случаях: источник готов (стартовая позиция), перемотка,
- * и раз в [TICK] пока звук идёт — на этом живёт полоса перемотки.
+ * и раз в [TICK] пока звук идёт — на этом живёт полоса перемотки. Снимок
+ * позиции и длительности ([onProgress]) обновляется при каждом событии
+ * плеера и на каждом тике.
  */
 internal class PlayerListenerAdapter(
     private val player: Player,
     private val onState: (PlaybackState) -> Unit,
     private val onEvent: (PlaybackEvent) -> Unit,
+    private val onProgress: (PlaybackProgress) -> Unit,
 ) : Player.Listener {
     private val ticker = Handler(player.applicationLooper)
     private val tick =
@@ -51,6 +56,7 @@ internal class PlayerListenerAdapter(
         events: Player.Events,
     ) {
         onState(player.toPlaybackState())
+        onProgress(player.toPlaybackProgress())
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) {
@@ -90,6 +96,7 @@ internal class PlayerListenerAdapter(
 
     private fun reportPosition() {
         onEvent(PlaybackEvent.PositionChanged(player.currentPosition.milliseconds))
+        onProgress(player.toPlaybackProgress())
     }
 
     private companion object {
@@ -114,6 +121,13 @@ internal fun Player.toPlaybackState(): PlaybackState {
         else -> PlaybackState.Idle
     }
 }
+
+/** Позиция и длительность; `C.TIME_UNSET` — длительность ещё неизвестна. */
+internal fun Player.toPlaybackProgress(): PlaybackProgress =
+    PlaybackProgress(
+        position = currentPosition.milliseconds,
+        duration = duration.takeIf { it != C.TIME_UNSET }?.milliseconds,
+    )
 
 /**
  * Код ошибки ExoPlayer → тип [PlaybackError].

@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import io.github.puflik.plinth.audio.media3.PlaybackServiceConnection
 import io.github.puflik.plinth.ui.navigation.BottomNavigationBar
 import io.github.puflik.plinth.ui.navigation.Destination
 import io.github.puflik.plinth.ui.navigation.PlinthNavHost
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        lifecycle.addObserver(PlaybackServiceConnection(this))
         setContent {
             PlinthTheme {
                 PlinthApp()

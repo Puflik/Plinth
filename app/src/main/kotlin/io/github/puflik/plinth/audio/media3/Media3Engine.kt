@@ -1,13 +1,14 @@
 package io.github.puflik.plinth.audio.media3
 
 import android.os.Handler
-import android.os.HandlerThread
+import android.os.Looper
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.puflik.plinth.audio.engine.AudioEngine
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackParams
+import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -21,12 +22,18 @@ import kotlin.time.Duration
 /**
  * [AudioEngine] поверх ExoPlayer (B2.2).
  *
- * Плеер живёт в собственном потоке: ExoPlayer разрешает обращаться к себе
- * только из одного потока, а команды движка приходят откуда угодно — из UI,
- * из службы, из тестов. Поэтому команда проверяет аргументы и состояние
- * сразу, в потоке вызывающего (так контракт требует бросать исключения),
- * а до плеера доходит сообщением в его поток. Ответ — как у любого движка,
- * через [state] и [events].
+ * Движок работает в потоке своего плеера. В приложении это главный поток:
+ * плеер делят движок и `PlaybackService`, а `MediaSessionService` требует,
+ * чтобы плеер сессии жил на главном looper. Команды приходят откуда угодно —
+ * из UI, службы, тестов, — поэтому команда проверяет аргументы и состояние
+ * сразу, в потоке вызывающего (так контракт требует бросать исключения), а
+ * до плеера доходит сообщением в его поток. Ответ — как у любого движка,
+ * через [state] и [events]. Команды, пришедшие в плеер мимо движка (из
+ * уведомления, гарнитуры), движок видит: адаптер слушает сам плеер.
+ *
+ * Создаётся в потоке плеера — там же, где на него подписывается адаптер.
+ * [release] освобождает и плеер; в приложении движок живёт столько же,
+ * сколько процесс, и не освобождается.
  *
  * Поля под [lock] — общие для вызывающих и потока плеера; `player` и
  * `adapter` трогает только поток плеера.
@@ -35,10 +42,13 @@ import kotlin.time.Duration
  * разрешает («движок вправе»), склейка треков придёт отдельной задачей.
  */
 class Media3Engine(
-    playerFactory: ExoPlayerFactory,
+    private val player: ExoPlayer,
 ) : AudioEngine {
-    private val thread = HandlerThread(THREAD_NAME).apply { start() }
-    private val handler = Handler(thread.looper)
+    init {
+        check(Looper.myLooper() == player.applicationLooper) { "Media3Engine создаётся в потоке своего плеера" }
+    }
+
+    private val handler = Handler(player.applicationLooper)
 
     private val lock = Any()
     private var released = false
@@ -54,6 +64,9 @@ class Media3Engine(
     private val mutableState = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     override val state: StateFlow<PlaybackState> = mutableState.asStateFlow()
 
+    private val mutableProgress = MutableStateFlow(PlaybackProgress.NONE)
+    override val progress: StateFlow<PlaybackProgress> = mutableProgress.asStateFlow()
+
     private val mutableEvents =
         MutableSharedFlow<PlaybackEvent>(
             extraBufferCapacity = EVENT_BUFFER,
@@ -61,15 +74,10 @@ class Media3Engine(
         )
     override val events: Flow<PlaybackEvent> = mutableEvents.asSharedFlow()
 
-    private lateinit var player: ExoPlayer
-    private lateinit var adapter: PlayerListenerAdapter
+    private val adapter = PlayerListenerAdapter(player, ::publishState, ::publishEvent, ::publishProgress)
 
     init {
-        onPlayer {
-            player = playerFactory.create(thread.looper)
-            adapter = PlayerListenerAdapter(player, ::publishState, ::publishEvent)
-            player.addListener(adapter)
-        }
+        player.addListener(adapter)
     }
 
     override fun prepare(
@@ -82,6 +90,7 @@ class Media3Engine(
             val generation = ++requested
             hasSource = true
             mutableState.value = PlaybackState.Buffering
+            mutableProgress.value = PlaybackProgress(params.startPosition, null)
             onPlayer {
                 synchronized(lock) { applied = generation }
                 adapter.onPrepare()
@@ -122,14 +131,14 @@ class Media3Engine(
             released = true
             hasSource = false
             mutableState.value = PlaybackState.Idle
+            mutableProgress.value = PlaybackProgress.NONE
+            // Последнее сообщение плееру: всё, что прошло проверку раньше,
+            // уже стоит в очереди перед ним.
             onPlayer {
                 adapter.stop()
                 player.release()
             }
         }
-        // Сообщения, отправленные до этого места, включая освобождение
-        // плеера, поток ещё выполнит — и только потом остановится.
-        thread.quitSafely()
     }
 
     private fun command(action: () -> Unit) =
@@ -142,8 +151,19 @@ class Media3Engine(
     private fun publishState(next: PlaybackState) {
         synchronized(lock) {
             if (released || applied != requested) return
-            if (next is PlaybackState.Error) hasSource = false
+            if (next is PlaybackState.Error) {
+                hasSource = false
+                mutableProgress.value = PlaybackProgress.NONE
+            }
             mutableState.value = next
+        }
+    }
+
+    private fun publishProgress(next: PlaybackProgress) {
+        synchronized(lock) {
+            // После ошибки источника нет — и снимка тоже, как у фейка.
+            if (released || applied != requested || mutableState.value is PlaybackState.Error) return
+            mutableProgress.value = next
         }
     }
 
@@ -163,7 +183,6 @@ class Media3Engine(
     private fun checkSource() = check(hasSource) { "источник не подготовлен" }
 
     private companion object {
-        const val THREAD_NAME = "Media3Engine"
         const val EVENT_BUFFER = 64
     }
 }

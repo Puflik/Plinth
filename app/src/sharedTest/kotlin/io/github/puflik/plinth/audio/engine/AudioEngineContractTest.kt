@@ -171,6 +171,45 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
+    fun new_engine_has_no_progress() =
+        contract { engine ->
+            assertThat(engine.progress.value).isEqualTo(PlaybackProgress.NONE)
+        }
+
+    @Test
+    fun prepared_source_reports_its_duration() =
+        contract { engine ->
+            engine.prepare(playableSource())
+
+            val duration = checkNotNull(engine.progress.first { it.duration != null }.duration)
+            assertThat(duration.inWholeMilliseconds).isAtLeast(MIN_TRACK_LENGTH.inWholeMilliseconds)
+        }
+
+    @Test
+    fun progress_follows_seek() =
+        contract { engine ->
+            engine.prepare(playableSource())
+            engine.awaitState { it is PlaybackState.Paused }
+
+            engine.seekTo(ONE_SECOND)
+
+            val reached = (ONE_SECOND - positionTolerance).inWholeMilliseconds
+            val progress = engine.progress.first { it.position.inWholeMilliseconds >= reached }
+            assertThat(progress.position.inWholeMilliseconds).isAtLeast(reached)
+        }
+
+    @Test
+    fun released_engine_forgets_progress() =
+        contract { engine ->
+            engine.prepare(playableSource())
+            engine.progress.first { it.duration != null }
+
+            engine.release()
+
+            assertThat(engine.progress.value).isEqualTo(PlaybackProgress.NONE)
+        }
+
+    @Test
     fun play_without_source_is_rejected() =
         contract { engine ->
             assertThrows(IllegalStateException::class.java) { engine.play() }
@@ -256,6 +295,7 @@ abstract class AudioEngineContractTest {
 
     private companion object {
         val ONE_SECOND = 1.seconds
+        val MIN_TRACK_LENGTH = 2.seconds
         const val HALF_VOLUME = 0.5f
         const val BELOW_SILENCE = -0.01f
         const val ABOVE_FULL = 1.01f

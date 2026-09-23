@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Plinth</string>
+    <string name="notification_channel_playback">Воспроизведение</string>
 
     <string name="nav_library">Библиотека</string>
     <string name="nav_search">Поиск</string>
     <string name="nav_settings">Настройки</string>
-
-    <string name="placeholder_library">Библиотека пуста — сканер появится следующей вертикалью.</string>
     <string name="placeholder_search">Поиск появится вместе с библиотекой.</string>
     <string name="placeholder_settings">Настройки появятся вместе с онбордингом.</string>
+    <string name="player_nothing_open">Ничего не играет. Откройте аудиофайл.</string>
+    <string name="player_open_file">Открыть файл</string>
+    <string name="player_play">Играть</string>
+    <string name="player_pause">Пауза</string>
+    <string name="player_error_unavailable">Файл недоступен: его переместили, удалили или отозвали доступ.</string>
+    <string name="player_error_format">Этот формат не поддерживается.</string>
+    <string name="player_error_network">Ошибка сети. Проверьте соединение и попробуйте снова.</string>
+    <string name="player_error_unknown">Не удалось воспроизвести.</string>
 </resources>

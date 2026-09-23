@@ -190,12 +190,14 @@ plinth/
 
 | Файл | ID | Ответственность |
 |---|---|---|
-| `audio/media3/PlaybackService.kt` | B3.1 📌 | `MediaSessionService`, жизненный цикл foreground-сервиса |
+| `audio/media3/PlaybackService.kt` | B3.1 📌 | `MediaSessionService`, жизненный цикл foreground-сервиса — **сделано на шаге 4**: сессия на плеере-синглтоне, foreground и уведомление силами Media3 |
+| `audio/media3/PlaybackServiceConnection.kt` | B3.1 | Держит службу поднятой, пока экран на виду (`MediaController` на `onStart`/`onStop`) |
+| `di/AudioModule.kt` | B3.1 | Плеер и движок — синглтоны процесса на главном looper |
 | `audio/media3/PlaybackSessionCallback.kt` | B3.2 | Обработка команд извне: уведомление, гарнитура, Bluetooth |
 | `audio/media3/MediaMetadataBuilder.kt` | B3.2 | Метаданные для сессии: название, артист, обложка, длительность |
 | `audio/media3/PlaybackNotificationProvider.kt` | B3.3 | Кастомизация уведомления-плеера и его действий |
 | `audio/media3/NotificationChannels.kt` | B3.1 | Каналы уведомлений: воспроизведение, сканирование, диагностика |
-| `library/permission/NotificationPermission.kt` | B3.5 | Запрос `POST_NOTIFICATIONS` при первом воспроизведении |
+| `library/permission/NotificationPermission.kt` | B3.5 | Запрос `POST_NOTIFICATIONS` при первом воспроизведении. Для уведомления-плеера не обязателен: по документации Android 13+ уведомления медиасессий освобождены от этого разрешения (на шаге 4 служба вышла в foreground с уведомлением без запроса) |
 | `audio/media3/PlaybackWakeLocks.kt` | B3.6 | `WakeLock` и `WifiLock` |
 
 > Экран блокировки (`B3.4`) отдельного файла не требует — он отображается системой на основе `MediaSession` и метаданных из `MediaMetadataBuilder`. Отдельная задача — проверить, что обложка доходит.
@@ -213,8 +215,7 @@ plinth/
 > **Вертикаль «звук из файла», шаг 4 — обязательные пункты, найденные на B2:**
 >
 > - **SAF-доступ сохраняется.** После `ACTION_OPEN_DOCUMENT` — `takePersistableUriPermission` на чтение. Иначе доступ к `content://` не переживёт перезапуск процесса, и восстановление позиции (`PlaybackParams.startPosition`) упрётся в `SourceUnavailable`. Проверка: выбрать файл, убить процесс, продолжить.
-> - **`PlaybackService` владеет `Media3Engine`** и освобождает его в `onDestroy`: у движка свой поток, без `release()` он утечёт.
-> - **`MediaSession` нужен `Player`, а `Media3Engine` его прячет.** Решить до кода: `internal`-доступ к плееру внутри `audio/media3` или сессия поверх обёртки. Команды из уведомления, пришедшие прямо в плеер, движок увидит — адаптер слушает сам плеер. Проверить до кода: насколько помню, Media3 привязывает сессию к потоку плеера, а у нас это не главный поток.
+> - ~~Служба владеет движком~~, ~~как сессия получит плеер~~ — **решено в B3.1:** плеер и движок — синглтоны процесса на главном потоке (`di/AudioModule`), служба строит сессию на том же плеере и ничего не освобождает. См. `docs/decisions.md`, 2026-09-23.
 
 ---
 
@@ -309,7 +310,7 @@ plinth/
 | `ui/player/MiniPlayer.kt` | E1.1 | Слой **D0**: строка поверх навигации |
 | `ui/player/MiniPlayerGestures.kt` | E1.2 | Свайп вверх → полноэкранный, свайп вбок → смена трека |
 | `ui/player/PlayerScreen.kt` | E2 | Слой **D1**: компоновка полноэкранного плеера |
-| `ui/player/PlayerViewModel.kt` | E2 | Состояние плеера, команды в `PlaybackController` |
+| `ui/player/PlayerViewModel.kt` | E2 | Состояние плеера, команды в `PlaybackController`. **Заведён на шаге 4** вместе с `PlayerUiState` и временным `FilePlayerScreen` (SAF → звук) |
 | `ui/player/components/Artwork.kt` | E2.1 | Обложка, плейсхолдер при отсутствии |
 | `ui/player/components/TrackTitleBlock.kt` | E2.1 | Название, артист (кликабелен), место под бейдж версии — **бейдж появится в v0.3** |
 | `ui/player/components/ProgressSlider.kt` | E2.2 | Прогресс, скраббинг, тап по времени переключает `прошло ⇄ осталось` |

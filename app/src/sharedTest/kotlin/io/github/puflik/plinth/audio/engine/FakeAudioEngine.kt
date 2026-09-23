@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Управляемая реализация [AudioEngine] для тестов (B1.3).
@@ -23,6 +24,9 @@ import kotlin.time.Duration
 class FakeAudioEngine : AudioEngine {
     private val mutableState = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     override val state: StateFlow<PlaybackState> = mutableState.asStateFlow()
+
+    private val mutableProgress = MutableStateFlow(PlaybackProgress.NONE)
+    override val progress: StateFlow<PlaybackProgress> = mutableProgress.asStateFlow()
 
     private val mutableEvents = MutableSharedFlow<PlaybackEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val events: Flow<PlaybackEvent> = mutableEvents.asSharedFlow()
@@ -55,6 +59,9 @@ class FakeAudioEngine : AudioEngine {
     var isReleased: Boolean = false
         private set
 
+    /** Длительность, которую фейк сообщает для любого подготовленного источника. */
+    var trackDuration: Duration = DEFAULT_TRACK_DURATION
+
     /** Объявляет источник недоступным: [prepare] на нём закончится ошибкой. */
     fun markUnavailable(source: AudioSource) {
         unavailable += source.key
@@ -65,6 +72,8 @@ class FakeAudioEngine : AudioEngine {
         checkAlive()
         checkSource()
         moveTo(PlaybackState.Ended)
+        position = trackDuration
+        mutableProgress.value = PlaybackProgress(position, trackDuration)
         emit(PlaybackEvent.TrackEnded)
     }
 
@@ -90,6 +99,7 @@ class FakeAudioEngine : AudioEngine {
             return
         }
         hasSource = true
+        mutableProgress.value = PlaybackProgress(position, trackDuration)
         emit(PlaybackEvent.BufferingChanged(buffering = false))
         emit(PlaybackEvent.PositionChanged(position))
         moveTo(if (params.autoPlay) PlaybackState.Playing else PlaybackState.Paused)
@@ -112,6 +122,7 @@ class FakeAudioEngine : AudioEngine {
         checkSource()
         require(!position.isNegative()) { "позиция не может быть отрицательной: $position" }
         this.position = position
+        mutableProgress.value = mutableProgress.value.copy(position = position)
         emit(PlaybackEvent.PositionChanged(position))
     }
 
@@ -125,11 +136,13 @@ class FakeAudioEngine : AudioEngine {
         if (isReleased) return
         isReleased = true
         hasSource = false
+        mutableProgress.value = PlaybackProgress.NONE
         moveTo(PlaybackState.Idle)
     }
 
     private fun fail(error: PlaybackError) {
         hasSource = false
+        mutableProgress.value = PlaybackProgress.NONE
         moveTo(PlaybackState.Error(error))
         emit(PlaybackEvent.Failed(error))
     }
@@ -149,5 +162,6 @@ class FakeAudioEngine : AudioEngine {
 
     private companion object {
         const val EVENT_BUFFER = 64
+        val DEFAULT_TRACK_DURATION = 3.minutes
     }
 }

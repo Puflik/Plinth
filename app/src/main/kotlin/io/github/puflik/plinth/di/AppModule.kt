@@ -24,8 +24,8 @@ annotation class DefaultDispatcher
  *
  * Диспетчеры выдаются через граф, а не берутся из `Dispatchers` по месту:
  * иначе в тестах их нечем подменить на `TestDispatcher`.
- * Привязки аудиодвижка и репозиториев живут в `AudioModule` и
- * `LibraryModule` — они появятся вместе со своими реализациями.
+ * Аудиограф — в `AudioModule`; репозитории появятся в `LibraryModule`
+ * вместе со своими реализациями.
  */
 @Module
 @InstallIn(SingletonComponent::class)
