@@ -25,6 +25,10 @@ import kotlin.time.Duration.Companion.seconds
  * Тесты написаны на `runBlocking`, а не на `runTest`: виртуальное время
  * `runTest` не двигает настоящий плеер, живущий в своём потоке. Ожидание
  * идёт через `state`/`events` и ограничено [timeout].
+ *
+ * Имена тестов — через подчёркивание, а не фразой в обратных кавычках:
+ * класс собирается и в APK для эмулятора, а DEX до API 30 (у нас
+ * `minSdk 26`) не допускает пробелов в именах методов и классов.
  */
 abstract class AudioEngineContractTest {
     /** Новый движок в начальном состоянии; освобождает его сам тест. */
@@ -55,13 +59,13 @@ abstract class AudioEngineContractTest {
     protected open val timeout: Duration = 5.seconds
 
     @Test
-    fun `new engine is idle`() =
+    fun new_engine_is_idle() =
         contract { engine ->
             assertThat(engine.state.value).isEqualTo(PlaybackState.Idle)
         }
 
     @Test
-    fun `prepared engine waits in paused`() =
+    fun prepared_engine_waits_in_paused() =
         contract { engine ->
             engine.prepare(playableSource())
 
@@ -69,7 +73,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `prepare with auto play starts playback`() =
+    fun prepare_with_auto_play_starts_playback() =
         contract { engine ->
             engine.prepare(playableSource(), PlaybackParams(autoPlay = true))
 
@@ -77,7 +81,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `play resumes prepared engine`() =
+    fun play_resumes_prepared_engine() =
         contract { engine ->
             engine.prepare(playableSource())
             engine.awaitState { it is PlaybackState.Paused }
@@ -88,7 +92,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `pause suspends playback`() =
+    fun pause_suspends_playback() =
         contract { engine ->
             engine.prepare(playableSource(), PlaybackParams(autoPlay = true))
             engine.awaitState { it is PlaybackState.Playing }
@@ -99,7 +103,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `prepare honours start position`() =
+    fun prepare_honours_start_position() =
         contract { engine ->
             val start = ONE_SECOND
             val reported = awaitEvent(engine) { it is PlaybackEvent.PositionChanged }
@@ -112,7 +116,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `seek reports new position`() =
+    fun seek_reports_new_position() =
         contract { engine ->
             engine.prepare(playableSource())
             engine.awaitState { it is PlaybackState.Paused }
@@ -128,7 +132,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `finished track ends playback`() =
+    fun finished_track_ends_playback() =
         contract { engine ->
             engine.prepare(playableSource(), PlaybackParams(autoPlay = true))
             engine.awaitState { it is PlaybackState.Playing }
@@ -141,7 +145,20 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `unavailable source reports typed error`() =
+    fun play_after_end_starts_track_again() =
+        contract { engine ->
+            engine.prepare(playableSource(), PlaybackParams(autoPlay = true))
+            engine.awaitState { it is PlaybackState.Playing }
+            playToEnd(engine)
+            engine.awaitState { it is PlaybackState.Ended }
+
+            engine.play()
+
+            assertThat(engine.awaitState { it is PlaybackState.Playing }).isEqualTo(PlaybackState.Playing)
+        }
+
+    @Test
+    fun unavailable_source_reports_typed_error() =
         contract { engine ->
             val failed = awaitEvent(engine) { it is PlaybackEvent.Failed }
 
@@ -154,19 +171,19 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `play without source is rejected`() =
+    fun play_without_source_is_rejected() =
         contract { engine ->
             assertThrows(IllegalStateException::class.java) { engine.play() }
         }
 
     @Test
-    fun `seek without source is rejected`() =
+    fun seek_without_source_is_rejected() =
         contract { engine ->
             assertThrows(IllegalStateException::class.java) { engine.seekTo(ONE_SECOND) }
         }
 
     @Test
-    fun `negative seek is rejected`() =
+    fun negative_seek_is_rejected() =
         contract { engine ->
             engine.prepare(playableSource())
             engine.awaitState { it is PlaybackState.Paused }
@@ -175,18 +192,18 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `volume outside zero to one is rejected`() =
+    fun volume_outside_zero_to_one_is_rejected() =
         contract { engine ->
             engine.setVolume(0f)
             engine.setVolume(HALF_VOLUME)
             engine.setVolume(1f)
 
-            assertThrows(IllegalArgumentException::class.java) { engine.setVolume(-0.01f) }
-            assertThrows(IllegalArgumentException::class.java) { engine.setVolume(1.01f) }
+            assertThrows(IllegalArgumentException::class.java) { engine.setVolume(BELOW_SILENCE) }
+            assertThrows(IllegalArgumentException::class.java) { engine.setVolume(ABOVE_FULL) }
         }
 
     @Test
-    fun `released engine returns to idle and rejects commands`() =
+    fun released_engine_returns_to_idle_and_rejects_commands() =
         contract { engine ->
             engine.prepare(playableSource())
             engine.awaitState { it is PlaybackState.Paused }
@@ -201,7 +218,7 @@ abstract class AudioEngineContractTest {
         }
 
     @Test
-    fun `release is idempotent`() =
+    fun release_is_idempotent() =
         contract { engine ->
             engine.release()
             engine.release()
@@ -240,5 +257,7 @@ abstract class AudioEngineContractTest {
     private companion object {
         val ONE_SECOND = 1.seconds
         const val HALF_VOLUME = 0.5f
+        const val BELOW_SILENCE = -0.01f
+        const val ABOVE_FULL = 1.01f
     }
 }

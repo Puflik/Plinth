@@ -31,8 +31,9 @@ Media3 за ней, фоновое воспроизведение с медиа�
 
 Что нужно:
 
-- **JDK 21.** Свой лежит в Android Studio — `<studio>/jbr`; в терминале укажите
-  на него `JAVA_HOME`. На JDK 8 Gradle не запустится.
+- **JDK 21 или новее.** Подходит тот, что лежит в Android Studio —
+  `<studio>/jbr` (JDK 25); в терминале укажите на него `JAVA_HOME`. CI
+  собирает на Temurin 21. На JDK 8 Gradle не запустится.
 - **Android SDK.** Путь к нему — в `local.properties`, строка `sdk.dir=...`
   (Android Studio пишет этот файл сама). Недостающие платформы сборка скачает.
 

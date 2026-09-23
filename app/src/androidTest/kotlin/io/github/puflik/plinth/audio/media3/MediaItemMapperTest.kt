@@ -1,0 +1,42 @@
+package io.github.puflik.plinth.audio.media3
+
+import com.google.common.truth.Truth.assertThat
+import io.github.puflik.plinth.audio.engine.AudioSource
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+/** `AudioSource` → `MediaItem` (B2.2). */
+class MediaItemMapperTest {
+    @Test
+    fun local_file_keeps_its_uri() {
+        val item = MediaItemMapper.map(AudioSource.LocalFile(SAF_URI))
+
+        assertThat(item.localConfiguration?.uri?.toString()).isEqualTo(SAF_URI)
+    }
+
+    @Test
+    fun source_key_becomes_media_id() {
+        val source = AudioSource.LocalFile(SAF_URI)
+
+        assertThat(MediaItemMapper.map(source).mediaId).isEqualTo(source.key)
+    }
+
+    @Test
+    fun remote_stream_keeps_its_url() {
+        val item = MediaItemMapper.map(AudioSource.Remote(STREAM_URL))
+
+        assertThat(item.localConfiguration?.uri?.toString()).isEqualTo(STREAM_URL)
+    }
+
+    @Test
+    fun remote_headers_are_rejected_until_providers_arrive() {
+        val source = AudioSource.Remote(STREAM_URL, headers = mapOf("Authorization" to "Bearer token"))
+
+        assertThrows(UnsupportedOperationException::class.java) { MediaItemMapper.map(source) }
+    }
+
+    private companion object {
+        const val SAF_URI = "content://com.android.externalstorage.documents/document/primary%3AMusic%2Ftrack.flac"
+        const val STREAM_URL = "https://example.org/stream.opus"
+    }
+}

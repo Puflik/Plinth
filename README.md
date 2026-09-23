@@ -31,8 +31,9 @@ the queue and the online sources come in later waves.
 
 Requirements:
 
-- **JDK 21.** Android Studio ships one in `<studio>/jbr`; from a terminal point
-  `JAVA_HOME` at it. Gradle will not run on JDK 8.
+- **JDK 21 or newer.** The one Android Studio ships in `<studio>/jbr` (JDK 25)
+  works; from a terminal point `JAVA_HOME` at it. CI uses Temurin 21. Gradle
+  will not run on JDK 8.
 - **Android SDK.** Put its path into `local.properties` as `sdk.dir=...`
   (Android Studio writes this file for you). Missing platforms are downloaded
   by the build.

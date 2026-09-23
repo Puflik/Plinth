@@ -1,0 +1,103 @@
+package io.github.puflik.plinth.audio.media3
+
+import android.content.Context
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.net.Uri
+import androidx.test.platform.app.InstrumentationRegistry
+import com.google.common.truth.Truth.assertThat
+import io.github.puflik.plinth.audio.engine.AudioEngine
+import io.github.puflik.plinth.audio.engine.AudioEngineContractTest
+import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.audio.engine.PlaybackEvent
+import io.github.puflik.plinth.audio.engine.PlaybackParams
+import io.github.puflik.plinth.audio.engine.PlaybackState
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.Test
+import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * `Media3Engine` проходит общий контракт движка (B2.2, B1.4) — тот же класс,
+ * что `FakeAudioEngine` проходит на JVM, здесь прогоняется на настоящем
+ * ExoPlayer. Поэтому тесты и живут на эмуляторе: декодер, `AudioTrack` и
+ * поток плеера на JVM не подделать.
+ */
+class Media3EngineContractTest : AudioEngineContractTest() {
+    private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
+
+    private val track =
+        File(context.cacheDir, "contract-silence.wav").also { SilentWav.write(it, TRACK_LENGTH) }
+
+    private val missing = File(context.cacheDir, "contract-missing.wav").also { it.delete() }
+
+    // Настоящему плееру нужно время на поток, декодер и AudioTrack;
+    // на холодном эмуляторе пять секунд контракта впритык.
+    override val timeout = 10.seconds
+
+    override fun createEngine(): AudioEngine = Media3Engine(ExoPlayerFactory(context))
+
+    override fun playableSource(): AudioSource = AudioSource.LocalFile(Uri.fromFile(track).toString())
+
+    override fun unavailableSource(): AudioSource = AudioSource.LocalFile(Uri.fromFile(missing).toString())
+
+    /**
+     * Слушать трек целиком незачем: перемотка к хвосту проводит декодер
+     * до конца файла тем же путём, что и обычное воспроизведение.
+     */
+    override suspend fun playToEnd(engine: AudioEngine) {
+        engine.seekTo(TRACK_LENGTH - TAIL)
+    }
+
+    // Ниже — то, чего контракт не требует от всех движков, но без чего
+    // Media3Engine бесполезен: полоса перемотки живёт на этих событиях.
+
+    @Test
+    fun playback_reports_progress() =
+        runBlocking<Unit> {
+            val engine = createEngine()
+            try {
+                withTimeout(timeout) {
+                    val progressed =
+                        awaitEvent(engine) { it is PlaybackEvent.PositionChanged && it.position >= PROGRESS }
+
+                    engine.prepare(playableSource(), PlaybackParams(autoPlay = true))
+
+                    progressed.await()
+                }
+            } finally {
+                engine.release()
+            }
+        }
+
+    @Test
+    fun losing_audio_focus_pauses_playback() =
+        runBlocking<Unit> {
+            val engine = createEngine()
+            val audio = context.getSystemService(AudioManager::class.java)
+            // Фокус раздаётся по слушателям, а не по приложениям: этот запрос
+            // для плеера — то же, что другой музыкальный плеер, начавший играть.
+            val rival = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).build()
+            try {
+                withTimeout(timeout) {
+                    engine.prepare(playableSource(), PlaybackParams(autoPlay = true))
+                    engine.awaitState { it is PlaybackState.Playing }
+
+                    assertThat(audio.requestAudioFocus(rival)).isEqualTo(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+
+                    assertThat(engine.awaitState { it is PlaybackState.Paused }).isEqualTo(PlaybackState.Paused)
+                }
+            } finally {
+                audio.abandonAudioFocusRequest(rival)
+                engine.release()
+            }
+        }
+
+    private companion object {
+        val TRACK_LENGTH = 3.seconds
+        val TAIL = 300.milliseconds
+        val PROGRESS = 300.milliseconds
+    }
+}

@@ -7,22 +7,23 @@
 # более старую копию правил ktlint, и два линтера начинают спорить
 # об одних и тех же отступах.
 
-build:
-  maxIssues: 0
-
 complexity:
   LongParameterList:
     # У @Composable параметров естественно много: состояние + колбэки + модификатор.
     ignoreAnnotated: ['Composable']
   TooManyFunctions:
-    thresholdInFiles: 20
-    thresholdInClasses: 20
+    # detekt 2.0: «разрешено столько», а не «порог срабатывания» 1.x —
+    # 19 разрешённых здесь то же, что прежний порог 20.
+    allowedFunctionsPerFile: 19
+    allowedFunctionsPerClass: 19
     ignoreAnnotatedFunctions: ['Composable', 'Test']
 
 naming:
   FunctionNaming:
     # @Composable-функции по соглашению Compose пишутся с заглавной буквы.
-    ignoreAnnotated: ['Composable']
+    # Имена тестов — фразы: в обратных кавычках (JVM) или через подчёркивание
+    # (всё, что попадает в DEX); то же исключение задано ktlint в .editorconfig.
+    ignoreAnnotated: ['Composable', 'Test']
   TopLevelPropertyNaming:
     constantPattern: '[A-Z][_A-Za-z0-9]*'
 
@@ -33,7 +34,8 @@ style:
     ignoreCompanionObjectPropertyDeclaration: true
   MaxLineLength:
     maxLineLength: 120
-  UnusedPrivateMember:
+  UnusedPrivateFunction:
+    # Приватные @Preview нигде не вызываются — их вызывает Studio.
     ignoreAnnotated: ['Preview']
   ForbiddenComment:
     # TODO по ходу волны — рабочий инструмент, а не нарушение.

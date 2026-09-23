@@ -76,6 +76,12 @@ def main():
         # срез уже ограничен — пропускаем
         if re.search(r'\b(head|tail|sed\s+-n|grep|awk|wc)\b', cmd):
             return
+        # Запись — не чтение: `cat >> decisions.md <<'EOF'` дописывает файл,
+        # а в теле heredoc имена документов — просто текст. Выкидываем тела
+        # heredoc и цели перенаправления вывода, остаётся то, что cat читает.
+        cmd = re.sub(r"<<-?\s*(['\"]?)(\w+)\1.*?\n.*?^\2[ \t]*$", '', cmd,
+                     flags=re.S | re.M)
+        cmd = re.sub(r'\d*>>?\s*\S+', '', cmd)
         for token in re.findall(r'[\w./\-]+\.(?:md|txt|rst)', cmd):
             cand = token if os.path.isabs(token) else os.path.join(root, token)
             if not os.path.isfile(cand):

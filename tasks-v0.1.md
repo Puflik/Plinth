@@ -180,6 +180,9 @@ plinth/
 | `audio/media3/ExoPlayerFactory.kt` | B2.1 | Создание и конфигурация плеера: буферы, атрибуты звука, gapless |
 | `audio/media3/MediaItemMapper.kt` | B2.2 | `AudioSource` → `MediaItem` |
 | `audio/media3/PlayerListenerAdapter.kt` | B2.2 | События ExoPlayer → `PlaybackEvent` |
+| `androidTest/audio/media3/Media3EngineContractTest.kt` | B2.2 | `Media3Engine` проходит `AudioEngineContractTest` на эмуляторе, плюс ход позиции |
+| `androidTest/audio/media3/ExoPlayerFactoryTest.kt` · `MediaItemMapperTest.kt` · `PlayerListenerAdapterTest.kt` | B2.1, B2.2 | Настройка плеера, сопоставление источников и кодов ошибок |
+| `androidTest/audio/media3/SilentWav.kt` | B2.2 | Тестовый трек — тишина в WAV, пишется при запуске теста |
 | `androidTest/audio/FormatSupportTest.kt` | B2.4 | Прогон тестовых файлов: MP3 · AAC · FLAC · ALAC · OGG · Opus · WAV |
 | `androidTest/assets/` | B2.3, B2.4 | Эталонные файлы, включая склеенную пару для проверки gapless |
 
@@ -201,11 +204,17 @@ plinth/
 
 | Файл | ID | Ответственность |
 |---|---|---|
-| `audio/media3/AudioFocusConfig.kt` | B4.1 📌 | Аудиофокус через `setAudioAttributes(handleAudioFocus = true)` + обработка крайних случаев |
-| `audio/media3/BecomingNoisyHandler.kt` | B4.3 | Пауза при отключении наушников |
+| `audio/media3/AudioFocusConfig.kt` | B4.1 📌 | Крайние случаи аудиофокуса. **Ядро сделано в B2:** `ExoPlayerFactory` берёт фокус (`handleAudioFocus = true`), потерю фокуса проверяет `losing_audio_focus_pauses_playback` |
+| `audio/media3/ExoPlayerFactory.kt` | B4.3 | Пауза при отключении наушников — **сделано в B2** (`setHandleAudioBecomingNoisy(true)`), отдельный `BecomingNoisyHandler` не нужен. Проверка только на живом устройстве: событие защищено, тест его не пошлёт |
 | `audio/PlaybackController.kt` | B2–B4 | **Фасад для UI**: единственная точка, через которую экраны управляют воспроизведением |
 
 > `B4.2` (кнопки гарнитуры) и `B4.4` (метаданные Bluetooth) обслуживаются `MediaSession` — новых файлов нет, но обе требуют отдельной проверки на живом устройстве.
+
+> **Вертикаль «звук из файла», шаг 4 — обязательные пункты, найденные на B2:**
+>
+> - **SAF-доступ сохраняется.** После `ACTION_OPEN_DOCUMENT` — `takePersistableUriPermission` на чтение. Иначе доступ к `content://` не переживёт перезапуск процесса, и восстановление позиции (`PlaybackParams.startPosition`) упрётся в `SourceUnavailable`. Проверка: выбрать файл, убить процесс, продолжить.
+> - **`PlaybackService` владеет `Media3Engine`** и освобождает его в `onDestroy`: у движка свой поток, без `release()` он утечёт.
+> - **`MediaSession` нужен `Player`, а `Media3Engine` его прячет.** Решить до кода: `internal`-доступ к плееру внутри `audio/media3` или сессия поверх обёртки. Команды из уведомления, пришедшие прямо в плеер, движок увидит — адаптер слушает сам плеер. Проверить до кода: насколько помню, Media3 привязывает сессию к потоку плеера, а у нас это не главный поток.
 
 ---
 

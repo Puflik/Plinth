@@ -4,8 +4,11 @@
 
 UserPromptSubmit — при превышении порога подсказывает Claude, что пора
 закрывать чат (тихо, пока контекст в норме).
-PreToolUse      — запрещает запуск субагентов и тяжёлых скиллов в чате,
-                  который уже раздут: их место в свежем чате.
+PreToolUse      — разрешает субагентов и тяжёлые скиллы только в первых
+                  ходах чата. От размера контекста это не зависит: субагент
+                  стоит одинаково в любом чате, а вот его результат остаётся
+                  в рабочем чате до конца — поэтому место таким операциям
+                  в начале свежего чата.
 
 Любая внутренняя ошибка = молчание: хук не должен ломать работу.
 """
@@ -13,12 +16,19 @@ import json
 import os
 import sys
 
-SOFT = 80000      # пора планировать завершение чата
-HARD = 120000     # новую задачу здесь не начинать
-HEAVY = 60000     # выше этого тяжёлые операции только отдельным чатом
+SOFT = 120000     # пора планировать завершение чата
+HARD = 180000     # новую задачу здесь не начинать
+HEAVY_TURNS = 2   # тяжёлые операции — только в первых стольких ходах
 TAIL = 1000000    # сколько байт хвоста транскрипта читать
 
 HEAVY_SKILLS = ('graphify',)
+
+# Строки типа user, которые пользователь не набирал: вывод локальных
+# команд вроде /model, отметка о прерванном ответе, уведомление о конце
+# фоновой задачи. Вызов скилла (/graphify) начинается с <command-message>
+# и считается ходом.
+NOT_PROMPTS = ('<local-command-', '<command-name>', '[Request interrupted',
+               '<task-notification>')
 
 
 def context_tokens(path):
@@ -43,12 +53,37 @@ def context_tokens(path):
     return 0
 
 
+def prompt_text(d):
+    """Текст сообщения пользователя или None, если это не его ход."""
+    if (d.get('type') != 'user' or d.get('isMeta') or d.get('isSidechain')
+            or d.get('isCompactSummary')):
+        return None
+    # Новые транскрипты помечают источник строки; ход — только от человека.
+    origin = d.get('origin')
+    if isinstance(origin, dict) and origin.get('kind') not in (None, 'human'):
+        return None
+    c = (d.get('message') or {}).get('content')
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        if any(isinstance(x, dict) and x.get('type') == 'tool_result' for x in c):
+            return None
+        return ''.join(x.get('text') or '' for x in c if isinstance(x, dict))
+    return None
+
+
 def prompt_count(path):
     n = 0
     with open(path, 'rb') as fh:
         for raw in fh:
-            if (b'"type":"user"' in raw and b'"tool_use_id"' not in raw
-                    and b'"isSidechain":true' not in raw):
+            if b'"type":"user"' not in raw:
+                continue
+            try:
+                d = json.loads(raw.decode('utf-8', 'replace'))
+            except ValueError:
+                continue
+            text = prompt_text(d)
+            if text is not None and not text.lstrip().startswith(NOT_PROMPTS):
                 n += 1
     return n
 
@@ -66,12 +101,10 @@ def main():
     tp = data.get('transcript_path') or ''
     if not tp or not os.path.isfile(tp):
         return
-    ctx = context_tokens(tp)
-    if not ctx:
-        return
     event = data.get('hook_event_name') or ''
 
     if event == 'UserPromptSubmit':
+        ctx = context_tokens(tp)
         if ctx < SOFT:
             return
         turns = prompt_count(tp)
@@ -100,19 +133,22 @@ def main():
             what = u'субагент «{0}»'.format(ti.get('description') or tool)
         elif tool == 'Skill' and str(ti.get('skill', '')).lower().endswith(HEAVY_SKILLS):
             what = u'скилл /{0}'.format(ti.get('skill'))
-        if not what or ctx < HEAVY:
+        if not what:
+            return
+        turns = prompt_count(tp)
+        if turns <= HEAVY_TURNS:
             return
         emit({"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": (
-                u"Тяжёлая операция ({0}) в чате с контекстом ~{1} тыс. токенов. "
-                u"Такие операции запускаются только в свежем чате: субагенты и "
-                u"семантическая экстракция добавляют сотни тысяч токенов к "
-                u"общему счёту и выбивают лимит сессии. "
+                u"Тяжёлая операция ({0}) на ходу {1} чата. Субагенты и "
+                u"семантическая экстракция запускаются только в первых {2} "
+                u"ходах свежего чата: их результат остаётся в контексте до "
+                u"конца чата и утяжеляет каждый следующий ход. "
                 u"Скажи пользователю открыть новый чат в этой папке и запустить "
                 u"её там первым сообщением."
-            ).format(what, ctx // 1000),
+            ).format(what, turns, HEAVY_TURNS),
         }})
         return
 

@@ -119,6 +119,8 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    implementation(libs.androidx.media3.exoplayer)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
@@ -127,6 +129,7 @@ dependencies {
 
     // Тот же набор, что и у unit-тестов: общие исходники sharedTest
     // компилируются в обоих наборах.
+    androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.kotlinx.coroutines.test)
