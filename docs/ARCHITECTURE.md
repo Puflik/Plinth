@@ -101,6 +101,30 @@ ExoPlayer разрешает обращаться к себе только из 
 | `PlaybackService` | `MediaSessionService`: сессия на том же плеере, уведомление и foreground — силами Media3 |
 | `NotificationChannels` | Идентификаторы каналов уведомлений |
 
+## Вторая граница: `LibraryRepository`
+
+```
+     ui/library ──► LibraryRepository (интерфейс) ◄── library/scan (сканер пишет)
+                            ▲
+             ┌──────────────┴──────────────┐
+     RoomLibraryRepository          FakeLibraryRepository
+       (library/db, Android)        (тесты, чистый Kotlin)
+```
+
+Весь эпик C временный: в v0.2 Room и сканер заменит ядро на Rust. Переживёт
+его только фасад `LibraryRepository` — и только если экраны ходят в
+библиотеку через него. Правило сторожит `LibraryBoundaryTest`: `ui/**` не
+импортирует `library/db` и `library/scan`, а фасад, модель (`library/model`)
+и сортировка (`library/sort`) не импортируют Android. Требования к
+хранилищу — `LibraryRepositoryContractTest`, устроенный как контракт движка.
+
+| Тип | Что описывает |
+|---|---|
+| `LibraryTrack` | Трек v0.1: `id` из `MediaStore`, `content://`, теги, папка, время изменения |
+| `Album`, `Artist` | Собираются из треков, своих записей нет. Альбом — название + владелец (исполнитель альбома, иначе трека) |
+| `NaturalOrder`, `ArticleStripper`, `SortKeys` | Ключ сортировки: без артикля, регистра и диакритики, числа по значению. База сортирует по ключу, посчитанному при записи |
+| `TrackSort`, `AlbumSort` | Варианты порядка списков |
+
 ## Поток данных первой вертикали
 
 ```
@@ -129,11 +153,11 @@ SAF: ACTION_OPEN_DOCUMENT
 | `src/github`, `src/fdroid` | Различия сборок: `FlavorConfig` |
 | `src/test` | JVM-тесты |
 | `src/androidTest` | Тесты на эмуляторе: всё, что требует настоящего Media3 |
-| `src/sharedTest` | Общее для двух предыдущих: контрактные тесты и `FakeAudioEngine` |
+| `src/sharedTest` | Общее для двух предыдущих: контрактные тесты, `FakeAudioEngine`, `FakeLibraryRepository` |
 
 `sharedTest` подключён к обоим наборам в `app/build.gradle.kts`. Иначе
-контракт пришлось бы писать дважды: `FakeAudioEngine` проверяется на JVM,
-`Media3Engine` — на эмуляторе.
+контракт пришлось бы писать дважды: фейки проверяются на JVM, настоящие
+реализации (`Media3Engine`, Room) — на эмуляторе.
 
 ## Зависимости
 
@@ -150,4 +174,6 @@ SAF: ACTION_OPEN_DOCUMENT
 движка (B1), `Media3Engine` (B2 без прогона семи форматов и gapless),
 фоновая служба с сессией (B3.1), `PlaybackController` и временный экран
 `ui/player/FilePlayerScreen` — выбрать файл через SAF, слушать, пауза,
-перемотка. Следующая вертикаль — библиотека на `MediaStore` (эпик C).
+перемотка. Идёт вертикаль «библиотека на `MediaStore`» (эпик C, шаги — в
+`docs/decisions.md`): готовы модель, сортировка и контракт фасада
+`LibraryRepository` с фейком; хранилища, сканера и экранов ещё нет.
