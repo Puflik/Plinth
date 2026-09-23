@@ -41,14 +41,19 @@ private fun PlinthApp() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    // Плеер и альбом открываются поверх вкладок — без нижней навигации.
+    val onTab = currentRoute == null || Destination.tabs.any { it.route == currentRoute }
+
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(
-                currentRoute = currentRoute,
-                onDestinationSelected = { destination ->
-                    navController.navigateToTab(destination)
-                },
-            )
+            if (onTab) {
+                BottomNavigationBar(
+                    currentRoute = currentRoute,
+                    onDestinationSelected = { destination ->
+                        navController.navigateToTab(destination)
+                    },
+                )
+            }
         },
     ) { innerPadding ->
         PlinthNavHost(

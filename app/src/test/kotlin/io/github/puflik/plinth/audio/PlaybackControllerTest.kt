@@ -15,7 +15,7 @@ class PlaybackControllerTest {
 
     @Test
     fun `opened file starts playing at once`() {
-        controller.open(track)
+        controller.open(track, title = null)
 
         assertThat(engine.preparedSources).containsExactly(track)
         assertThat(engine.lastParams?.autoPlay).isTrue()
@@ -23,8 +23,19 @@ class PlaybackControllerTest {
     }
 
     @Test
+    fun `opened track shows its title until the next one opens`() {
+        assertThat(controller.title.value).isNull()
+
+        controller.open(track, title = "Bohemian Rhapsody")
+        assertThat(controller.title.value).isEqualTo("Bohemian Rhapsody")
+
+        controller.open(AudioSource.LocalFile("content://plinth.test/untitled.flac"), title = null)
+        assertThat(controller.title.value).isNull()
+    }
+
+    @Test
     fun `toggle pauses playing track and resumes paused one`() {
-        controller.open(track)
+        controller.open(track, title = null)
 
         controller.togglePlayPause()
         assertThat(controller.state.value).isEqualTo(PlaybackState.Paused)
@@ -35,7 +46,7 @@ class PlaybackControllerTest {
 
     @Test
     fun `toggle after the end plays the track again`() {
-        controller.open(track)
+        controller.open(track, title = null)
         engine.completeTrack()
 
         controller.togglePlayPause()
@@ -52,7 +63,7 @@ class PlaybackControllerTest {
 
     @Test
     fun `seek moves within the open track`() {
-        controller.open(track)
+        controller.open(track, title = null)
 
         controller.seekTo(30.seconds)
 

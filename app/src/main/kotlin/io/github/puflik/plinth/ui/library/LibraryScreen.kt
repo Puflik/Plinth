@@ -4,14 +4,19 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -20,24 +25,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.ScanProgress
+import io.github.puflik.plinth.library.model.Album
+import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.library.permission.PermissionState
 import io.github.puflik.plinth.ui.common.PermissionRationaleScreen
-import io.github.puflik.plinth.ui.player.FilePlayerScreen
+import io.github.puflik.plinth.ui.library.tabs.AlbumsTab
+import io.github.puflik.plinth.ui.library.tabs.ArtistsTab
+import io.github.puflik.plinth.ui.library.tabs.FoldersTab
+import io.github.puflik.plinth.ui.library.tabs.TracksTab
+import io.github.puflik.plinth.ui.player.rememberAudioFilePicker
 
 /**
- * Библиотека до списков (шаг 4 вертикали): разрешение, скан и «Найдено N
- * треков» над плеером первой вертикали. Списки встанут сюда на шаге 5.
+ * Библиотека — стартовый экран (C4.1): вкладки треков, альбомов,
+ * исполнителей и папок. Касание трека включает его и открывает плеер; файл
+ * мимо библиотеки открывается через SAF из меню.
  *
  * Разрешение проверяется при каждом возврате на экран: его могли выдать или
  * отозвать в настройках. Первый раз экран спрашивает сам, не объясняя, —
@@ -45,10 +58,78 @@ import io.github.puflik.plinth.ui.player.FilePlayerScreen
  */
 @Composable
 fun LibraryScreen(
+    onOpenPlayer: () -> Unit,
+    onOpenAlbum: (Album) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    var tab by rememberSaveable { mutableStateOf(LibraryTab.TRACKS) }
+    val requestPermission = rememberMediaPermission(viewModel::onPermission)
+    val context = LocalContext.current
+    val openFile =
+        rememberAudioFilePicker { uri, name ->
+            viewModel.openFile(uri, name)
+            onOpenPlayer()
+        }
+    val play = { track: LibraryTrack ->
+        viewModel.play(track)
+        onOpenPlayer()
+    }
+    BackHandler(enabled = tab == LibraryTab.FOLDERS && state.folder.parentPath != null) { viewModel.folderUp() }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        LibraryTopBar(
+            tab = tab,
+            state = state,
+            showSort = state.permission == PermissionState.Granted,
+            onTrackSort = viewModel::onTrackSort,
+            onAlbumSort = viewModel::onAlbumSort,
+            onOpenFile = openFile,
+            onNowPlaying = onOpenPlayer,
+        )
+        when (state.permission) {
+            PermissionState.Granted -> {
+                ScanStatus(state.scan)
+                PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+                    LibraryTab.entries.forEach { entry ->
+                        Tab(
+                            selected = entry == tab,
+                            onClick = { tab = entry },
+                            text = { Text(stringResource(entry.labelRes)) },
+                        )
+                    }
+                }
+                if (state.tracks.isEmpty()) {
+                    EmptyLibrary(scanning = state.scan is ScanProgress.Running)
+                } else {
+                    when (tab) {
+                        LibraryTab.TRACKS -> TracksTab(state.tracks, onPlay = play)
+                        LibraryTab.ALBUMS -> AlbumsTab(state.albums, onOpen = onOpenAlbum)
+                        LibraryTab.ARTISTS -> ArtistsTab(state.artists)
+                        LibraryTab.FOLDERS ->
+                            FoldersTab(state.folder, viewModel::openFolder, onUp = viewModel::folderUp, onPlay = play)
+                    }
+                }
+            }
+            PermissionState.Denied, PermissionState.PermanentlyDenied ->
+                PermissionRationaleScreen(
+                    permanentlyDenied = state.permission == PermissionState.PermanentlyDenied,
+                    onRequest = requestPermission,
+                    onOpenSettings = { openAppSettings(context) },
+                )
+            PermissionState.NotRequested -> Unit
+        }
+    }
+}
+
+/**
+ * Следит за разрешением на музыку и сообщает его [onState] при каждом
+ * возврате на экран; в первый раз сам показывает системный запрос.
+ * Возвращает действие «спросить снова».
+ */
+@Composable
+private fun rememberMediaPermission(onState: (PermissionState) -> Unit): () -> Unit {
     val context = LocalContext.current
     val activity = LocalActivity.current
     val permission = remember { MediaPermission.name() }
@@ -63,49 +144,49 @@ fun LibraryScreen(
     val request =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             requested = true
-            viewModel.onPermission(currentState())
+            onState(currentState())
         }
     LifecycleResumeEffect(Unit) {
         val current = currentState()
-        viewModel.onPermission(current)
+        onState(current)
         if (current == PermissionState.NotRequested) request.launch(permission)
         onPauseOrDispose {}
     }
+    return { request.launch(permission) }
+}
 
-    Column(modifier = modifier.fillMaxSize()) {
-        when (state.permission) {
-            PermissionState.Granted -> ScanStatus(state.scan)
-            PermissionState.Denied, PermissionState.PermanentlyDenied ->
-                PermissionRationaleScreen(
-                    permanentlyDenied = state.permission == PermissionState.PermanentlyDenied,
-                    onRequest = { request.launch(permission) },
-                    onOpenSettings = { openAppSettings(context) },
+/** Скан виден, только пока идёт или если сломался; готовый скан — это сами списки. */
+@Composable
+private fun ScanStatus(scan: ScanProgress) {
+    when (scan) {
+        is ScanProgress.Running ->
+            if (scan.total == 0) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(
+                    progress = { scan.written.toFloat() / scan.total },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-            PermissionState.NotRequested -> Unit
-        }
-        FilePlayerScreen(modifier = Modifier.weight(1f))
+            }
+        ScanProgress.Failed ->
+            Text(
+                text = stringResource(R.string.library_scan_failed),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+            )
+        ScanProgress.Idle, is ScanProgress.Done -> Unit
     }
 }
 
 @Composable
-private fun ScanStatus(scan: ScanProgress) {
-    val text =
-        when (scan) {
-            ScanProgress.Idle -> return
-            is ScanProgress.Running ->
-                if (scan.total == 0) {
-                    stringResource(R.string.library_scanning)
-                } else {
-                    stringResource(R.string.library_scan_progress, scan.written, scan.total)
-                }
-            is ScanProgress.Done -> pluralStringResource(R.plurals.library_found, scan.found, scan.found)
-            ScanProgress.Failed -> stringResource(R.string.library_scan_failed)
-        }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-    )
+private fun EmptyLibrary(scanning: Boolean) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = stringResource(if (scanning) R.string.library_scanning else R.string.library_empty),
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 private fun openAppSettings(context: Context) {

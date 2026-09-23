@@ -7,7 +7,9 @@ import io.github.puflik.plinth.audio.engine.PlaybackParams
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Duration
@@ -32,8 +34,21 @@ class PlaybackController
         val progress: StateFlow<PlaybackProgress> get() = engine.progress
         val events: Flow<PlaybackEvent> get() = engine.events
 
-        /** Открывает источник и сразу играет: файл выбирают, чтобы слушать. */
-        fun open(source: AudioSource) {
+        private val openTitle = MutableStateFlow<String?>(null)
+
+        /**
+         * Название открытого трека: его показывают и плеер, и библиотека.
+         * Движку оно не нужно, поэтому живёт здесь, а не в `AudioSource`;
+         * с очередью (эпик D) переедет в её текущий элемент.
+         */
+        val title: StateFlow<String?> = openTitle.asStateFlow()
+
+        /** Открывает источник и сразу играет: трек выбирают, чтобы слушать. */
+        fun open(
+            source: AudioSource,
+            title: String?,
+        ) {
+            openTitle.value = title
             engine.prepare(source, PlaybackParams(autoPlay = true))
         }
 

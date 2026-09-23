@@ -4,8 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
-import io.github.puflik.plinth.audio.engine.AudioSource
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -14,10 +12,9 @@ import javax.inject.Inject
 import kotlin.time.Duration
 
 /**
- * Экран плеера первой вертикали (шаг 4): файл из SAF → звук.
- *
- * Название файла движку не нужно — его знает только экран, поэтому оно
- * живёт здесь, рядом с состоянием, а не в `AudioSource`.
+ * Экран плеера: то, что открыли библиотека или SAF, — звук, название,
+ * перемотка. Сам плеер ничего не открывает: название и трек знает
+ * [PlaybackController].
  */
 @HiltViewModel
 class PlayerViewModel
@@ -25,19 +22,9 @@ class PlayerViewModel
     constructor(
         private val playback: PlaybackController,
     ) : ViewModel() {
-        private val title = MutableStateFlow<String?>(null)
-
         val uiState: StateFlow<PlayerUiState> =
-            combine(playback.state, playback.progress, title, PlayerUiState::from)
+            combine(playback.state, playback.progress, playback.title, PlayerUiState::from)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), PlayerUiState.EMPTY)
-
-        fun onFilePicked(
-            uri: String,
-            name: String?,
-        ) {
-            title.value = name
-            playback.open(AudioSource.LocalFile(uri))
-        }
 
         fun onPlayPause() = playback.togglePlayPause()
 

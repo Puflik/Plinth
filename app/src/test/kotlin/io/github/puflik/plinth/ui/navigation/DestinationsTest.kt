@@ -39,6 +39,11 @@ class DestinationsTest {
     }
 
     @Test
+    fun `player and album open over the tabs`() {
+        assertThat(Destination.tabs).containsNoneOf(Destination.Player, Destination.Album)
+    }
+
+    @Test
     fun `start destination is the library`() {
         assertThat(Destination.START).isEqualTo(Destination.Library)
     }

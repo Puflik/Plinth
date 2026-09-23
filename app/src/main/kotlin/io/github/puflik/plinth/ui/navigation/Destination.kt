@@ -3,18 +3,21 @@ package io.github.puflik.plinth.ui.navigation
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_ARTIST
+import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TITLE
+import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TRACK_COUNT
 
 /**
  * Перечень экранов приложения (A2.1).
  *
- * Пока каждый экран совпадает с вкладкой нижней навигации. Когда появятся
- * экраны без вкладки (плеер, онбординг), они добавятся сюда же, а [tabs]
- * останется подмножеством.
+ * Вкладки нижней навигации — подмножество [tabs]; у них есть подпись и
+ * значок. Экраны без вкладки (плеер, альбом) открываются поверх вкладок, их
+ * [labelRes] и [iconRes] — `0`.
  */
 enum class Destination(
     val route: String,
-    @field:StringRes val labelRes: Int,
-    @field:DrawableRes val iconRes: Int,
+    @field:StringRes val labelRes: Int = 0,
+    @field:DrawableRes val iconRes: Int = 0,
 ) {
     Library(
         route = "library",
@@ -31,6 +34,10 @@ enum class Destination(
         labelRes = R.string.nav_settings,
         iconRes = R.drawable.ic_nav_settings,
     ),
+    Player(route = "player"),
+
+    /** Шаблон маршрута; сам маршрут собирает навигация из аргументов альбома. */
+    Album(route = "album?$ARG_TITLE={$ARG_TITLE}&$ARG_ARTIST={$ARG_ARTIST}&$ARG_TRACK_COUNT={$ARG_TRACK_COUNT}"),
     ;
 
     companion object {
