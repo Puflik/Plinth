@@ -9,6 +9,7 @@ import android.provider.MediaStore.Audio.AudioColumns
 import androidx.core.database.getIntOrNull
 import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
+import io.github.puflik.plinth.library.model.FolderConfig
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 

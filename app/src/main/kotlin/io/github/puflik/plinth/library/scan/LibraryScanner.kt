@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.library.scan
 
 import io.github.puflik.plinth.library.LibraryRepository
+import io.github.puflik.plinth.library.model.FolderConfig
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 

@@ -6,9 +6,11 @@ import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
+import io.github.puflik.plinth.library.sort.SearchQuery
 import io.github.puflik.plinth.library.sort.SortKeys
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -37,6 +39,16 @@ class RoomLibraryRepository(
         }
 
     override fun artists(): Flow<List<Artist>> = dao.artists()
+
+    // Поиск по нескольким тысячам треков в Kotlin занимает миллисекунды, а
+    // свёртку регистра и надстрочных знаков SQLite без своих функций не умеет.
+    override fun search(query: String): Flow<List<LibraryTrack>> {
+        val search = SearchQuery(query)
+        if (search.isBlank) return flowOf(emptyList())
+        return tracks(TrackSort.TITLE).map { tracks ->
+            tracks.filter { search.matches(it.title, it.artist, it.album, it.albumArtist) }
+        }
+    }
 
     override fun albumTracks(album: Album): Flow<List<LibraryTrack>> =
         dao.albumTracks(album.title, album.artist).toLibraryTracks()

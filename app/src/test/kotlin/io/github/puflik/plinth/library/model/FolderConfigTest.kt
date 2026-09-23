@@ -1,4 +1,4 @@
-package io.github.puflik.plinth.library.scan
+package io.github.puflik.plinth.library.model
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -59,5 +59,34 @@ class FolderConfigTest {
     fun `path outside shared storage has no folder`() {
         assertThat(FolderConfig.folderOf("/data/user/0/app/files/a.mp3")).isNull()
         assertThat(FolderConfig.folderOf("")).isNull()
+    }
+
+    @Test
+    fun `included folder is added once, in canonical form, and stops being excluded`() {
+        val config = FolderConfig(included = listOf("Music/"), excluded = listOf("Podcasts/"))
+
+        val changed = config.include("podcasts").include("/Podcasts/").include("music")
+
+        assertThat(changed.included).containsExactly("Music/", "podcasts/").inOrder()
+        assertThat(changed.excluded).isEmpty()
+    }
+
+    @Test
+    fun `excluded folder stops being included`() {
+        val changed = FolderConfig.DEFAULT.exclude("Download")
+
+        assertThat(changed.included).containsExactly("Music/")
+        assertThat(changed.excluded).containsExactly("Download/")
+        assertThat(changed.includes("Download/Telegram/")).isFalse()
+    }
+
+    @Test
+    fun `removed folder leaves both lists`() {
+        val config = FolderConfig(included = listOf("Music/", "Download/"), excluded = listOf("Music/Rain/"))
+
+        val changed = config.remove("download/").remove("Music/Rain")
+
+        assertThat(changed.included).containsExactly("Music/")
+        assertThat(changed.excluded).isEmpty()
     }
 }

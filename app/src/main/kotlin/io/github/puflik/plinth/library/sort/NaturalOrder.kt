@@ -25,10 +25,13 @@ object NaturalOrder {
 
     val comparator: Comparator<String> = compareBy(CodePointOrder, ::key)
 
-    fun key(text: String): String {
+    fun key(text: String): String = fold(text).replace(DIGITS) { padded(it.value) }
+
+    /** Без крайних и двойных пробелов, регистра и надстрочных знаков: `Beyoncé` → `beyonce`. */
+    fun fold(text: String): String {
         val lower = text.trim().replace(SPACES, " ").lowercase(Locale.ROOT)
         val folded = Normalizer.normalize(lower, Normalizer.Form.NFD).replace(MARKS, "")
-        return Normalizer.normalize(folded, Normalizer.Form.NFC).replace(DIGITS) { padded(it.value) }
+        return Normalizer.normalize(folded, Normalizer.Form.NFC)
     }
 
     private fun padded(digits: String): String = digits.trimStart('0').ifEmpty { "0" }.padStart(NUMBER_WIDTH, '0')

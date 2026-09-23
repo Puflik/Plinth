@@ -53,7 +53,7 @@ class LibraryScanWorkTest {
 
             withTimeout(TIMEOUT) {
                 scan.start()
-                library.tracks().first { titles -> titles.map(LibraryTrack::title).containsAll(fixtureTitles) }
+                library.tracks().first { tracks -> tracks.fixtureTitles().containsAll(fixtureTitles) }
                 val done = scan.progress.first { it is ScanProgress.Done || it is ScanProgress.Failed }
                 // Без разрешения приложение видит только свои файлы; с ним — ещё и чужие.
                 assertThat(done).isInstanceOf(ScanProgress.Done::class.java)
@@ -61,9 +61,17 @@ class LibraryScanWorkTest {
 
                 fixtures.removeAll()
                 scan.start()
-                library.tracks().first { tracks -> tracks.none { it.title in fixtureTitles } }
+                library.tracks().first { tracks -> tracks.fixtureTitles().isEmpty() }
             }
         }
+
+    /**
+     * Только треки из папки фикстур: с разрешением на музыку скан видит и
+     * чужие файлы, а копии фикстур в других папках (ручные проверки) носят
+     * те же названия и не пропадают вместе с фикстурами.
+     */
+    private fun List<LibraryTrack>.fixtureTitles(): List<String> =
+        filter { it.folder == TagFixtures.FOLDER }.map(LibraryTrack::title)
 
     private companion object {
         val TIMEOUT = 30.seconds

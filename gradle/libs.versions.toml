@@ -23,6 +23,7 @@ navigationCompose = "2.10.1"
 media3 = "1.11.1"
 room = "2.8.5"
 work = "2.11.2"
+datastore = "1.2.1"
 coroutines = "1.11.0"
 junit = "4.13.2"
 androidxTestRunner = "1.7.0"
@@ -56,6 +57,8 @@ androidx-media3-session = { group = "androidx.media3", name = "media3-session", 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "work" }

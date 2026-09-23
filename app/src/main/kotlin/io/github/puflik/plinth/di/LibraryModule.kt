@@ -1,6 +1,10 @@
 package io.github.puflik.plinth.di
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import androidx.work.WorkManager
 import dagger.Module
@@ -9,11 +13,13 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.puflik.plinth.library.FolderSettings
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.RoomLibraryRepository
 import io.github.puflik.plinth.library.db.PlinthDatabase
 import io.github.puflik.plinth.library.db.dao.TrackDao
+import io.github.puflik.plinth.library.scan.DataStoreFolderSettings
 import io.github.puflik.plinth.library.scan.LibraryScanner
 import io.github.puflik.plinth.library.scan.MediaStoreSource
 import io.github.puflik.plinth.library.scan.ScanSource
@@ -38,6 +44,15 @@ object LibraryModule {
     fun provideDatabase(
         @ApplicationContext context: Context,
     ): PlinthDatabase = Room.databaseBuilder(context, PlinthDatabase::class.java, PlinthDatabase.NAME).build()
+
+    @Provides
+    @Singleton
+    fun provideSettingsStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("library") }
+
+    @Provides
+    fun provideFolderSettings(store: DataStore<Preferences>): FolderSettings = DataStoreFolderSettings(store)
 
     @Provides
     fun provideTrackDao(database: PlinthDatabase): TrackDao = database.trackDao()

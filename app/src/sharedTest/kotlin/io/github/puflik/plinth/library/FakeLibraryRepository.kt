@@ -5,10 +5,12 @@ import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.CodePointOrder
+import io.github.puflik.plinth.library.sort.SearchQuery
 import io.github.puflik.plinth.library.sort.SortKeys
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
@@ -53,6 +55,14 @@ class FakeLibraryRepository(
                     Artist(name, tracksOfArtist.mapNotNull(LibraryTrack::album).distinct().size, tracksOfArtist.size)
                 }.sortedWith(keyOrder(Artist::name).thenBy(CodePointOrder, Artist::name))
         }
+
+    override fun search(query: String): Flow<List<LibraryTrack>> {
+        val search = SearchQuery(query)
+        if (search.isBlank) return flowOf(emptyList())
+        return tracks(TrackSort.TITLE).map { tracks ->
+            tracks.filter { search.matches(it.title, it.artist, it.album, it.albumArtist) }
+        }
+    }
 
     override fun albumTracks(album: Album): Flow<List<LibraryTrack>> =
         present.map { tracks ->

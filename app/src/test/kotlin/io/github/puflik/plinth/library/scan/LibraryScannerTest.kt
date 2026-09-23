@@ -2,6 +2,7 @@ package io.github.puflik.plinth.library.scan
 
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.library.FakeLibraryRepository
+import io.github.puflik.plinth.library.model.FolderConfig
 import io.github.puflik.plinth.library.model.LibraryTrack
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext

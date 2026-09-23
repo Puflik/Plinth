@@ -8,6 +8,7 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.library.RoomLibraryRepository
 import io.github.puflik.plinth.library.db.PlinthDatabase
 import io.github.puflik.plinth.library.model.Album
+import io.github.puflik.plinth.library.model.FolderConfig
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.SortKeys
 import kotlinx.coroutines.Dispatchers

@@ -6,8 +6,6 @@
     <string name="nav_library">Библиотека</string>
     <string name="nav_search">Поиск</string>
     <string name="nav_settings">Настройки</string>
-    <string name="placeholder_search">Поиск появится вместе с библиотекой.</string>
-    <string name="placeholder_settings">Настройки появятся вместе с онбордингом.</string>
     <string name="player_title">Сейчас играет</string>
     <string name="player_nothing_open">Ничего не играет. Выберите трек в библиотеке.</string>
     <string name="player_open_file">Открыть файл</string>

@@ -7,6 +7,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import io.github.puflik.plinth.library.FolderSettings
+import kotlinx.coroutines.flow.first
 
 /**
  * Скан фонотеки в фоне (C2.4): переживает уход с экрана, прогресс — через
@@ -22,11 +24,12 @@ class ScanWorker
         @Assisted context: Context,
         @Assisted params: WorkerParameters,
         private val scanner: LibraryScanner,
+        private val settings: FolderSettings,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result =
             try {
                 val result =
-                    scanner.scan(FolderConfig.DEFAULT) { written, total ->
+                    scanner.scan(settings.folders.first()) { written, total ->
                         setProgress(workDataOf(KEY_WRITTEN to written, KEY_TOTAL to total))
                     }
                 Result.success(workDataOf(KEY_FOUND to result.found))

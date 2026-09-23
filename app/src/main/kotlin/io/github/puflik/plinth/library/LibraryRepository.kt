@@ -4,6 +4,7 @@ import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
+import io.github.puflik.plinth.library.sort.SearchQuery
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.flow.Flow
 
@@ -24,6 +25,13 @@ interface LibraryRepository {
 
     /** Исполнители по имени, без артикля и в естественном порядке. */
     fun artists(): Flow<List<Artist>>
+
+    /**
+     * Треки, у которых каждое слово [query] есть в названии, исполнителе,
+     * альбоме или исполнителе альбома ([SearchQuery]); по названию, как
+     * [tracks]. Пустой запрос ничего не находит.
+     */
+    fun search(query: String): Flow<List<LibraryTrack>>
 
     /** Треки альбома по диску, затем по номеру; треки без номера — в конце диска. */
     fun albumTracks(album: Album): Flow<List<LibraryTrack>>

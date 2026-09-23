@@ -32,7 +32,7 @@
 | `diagnostics` | Логи, обход вендорских ограничений, отчёты об ошибках | — |
 | `settings`, `startup` | Настройки и первый запуск | — |
 | `di` | Проводка графа Hilt | Содержать логику |
-| `ui` | Compose: тема, навигация, экраны | Обращаться к движку иначе как через `PlaybackController`, к библиотеке — иначе как через `LibraryRepository` и `LibraryScan` |
+| `ui` | Compose: тема, навигация, экраны | Обращаться к движку иначе как через `PlaybackController`, к библиотеке — иначе как через `LibraryRepository`, `LibraryScan` и `FolderSettings` |
 | `core` | Мелочь, общая для всех: конфигурация, расширения | Зависеть от `ui` |
 | `flavor` | То, чем различаются сборки `github` и `fdroid` | Лежать в `main` |
 
@@ -110,15 +110,18 @@ ExoPlayer разрешает обращаться к себе только из 
           │  RoomLibraryRepository   FakeLibraryRepository
           │  (над library/db, Android) (тесты, чистый Kotlin)
           │
-          └──► LibraryScan (интерфейс) ◄── WorkManagerLibraryScan → ScanWorker → LibraryScanner
+          ├──► LibraryScan (интерфейс) ◄── WorkManagerLibraryScan → ScanWorker → LibraryScanner
+          │                                                            │
+          └──► FolderSettings (интерфейс) ◄── DataStoreFolderSettings ◄──┘ (какие папки)
 ```
 
 Весь эпик C временный: в v0.2 Room и сканер заменит ядро на Rust. Переживёт
 его только фасад `LibraryRepository` — и только если экраны ходят в
-библиотеку через него. Фасадов два: `LibraryRepository` — данные,
-`LibraryScan` — запуск скана и его прогресс. Правило сторожит
+библиотеку через него. Фасадов три: `LibraryRepository` — данные и поиск,
+`LibraryScan` — запуск скана и его прогресс, `FolderSettings` — какие папки
+сканировать. Правило сторожит
 `LibraryBoundaryTest`: `ui/**` не импортирует `library/db` и `library/scan`,
-а оба фасада, модель (`library/model`) и сортировка (`library/sort`) не
+а фасады, модель (`library/model`) и сортировка (`library/sort`) не
 импортируют Android. Требования к
 хранилищу — `LibraryRepositoryContractTest`, устроенный как контракт движка.
 
@@ -128,6 +131,8 @@ ExoPlayer разрешает обращаться к себе только из 
 | `Album`, `Artist` | Собираются из треков, своих записей нет. Альбом — название + владелец (исполнитель альбома, иначе трека) |
 | `LibraryFolder` | Дерево папок из `folder` треков: подпапки в естественном порядке, треки — в порядке списка; исчезнувшая папка открывается ближайшей уцелевшей |
 | `NaturalOrder`, `ArticleStripper`, `SortKeys` | Ключ сортировки: без артикля, регистра и диакритики, числа по значению. База сортирует по ключу, посчитанному при записи |
+| `FolderConfig` | Какие папки сканировать: включённые со всеми подпапками, кроме исключённых; умолчание — `Music` и `Download`; правка — `include`, `exclude`, `remove` |
+| `SearchQuery` | Поиск: каждое слово запроса — подстрока названия, исполнителя или альбома, без регистра и надстрочных знаков. Room ищет им же в Kotlin, поверх списка по названию |
 | `CodePointOrder` | Сравнение строк по кодовым точкам, как в SQLite и Rust; им сортирует всё, что сортирует ключи в Kotlin |
 | `TrackSort`, `AlbumSort` | Варианты порядка списков |
 
@@ -188,7 +193,7 @@ LibraryRepository.upsert (новые и изменённые) · markMissing (п
 
 | Файл `library/scan` | Что делает |
 |---|---|
-| `FolderConfig` | Какие папки сканировать: `Music` и `Download` со всеми подпапками, кроме исключённых; без учёта регистра |
+| `DataStoreFolderSettings` | `FolderSettings` в DataStore: два набора строк; нет ключа — умолчание, пустой набор — «ничего» |
 | `MediaStoreRow` | Строка `MediaStore` как есть, без типов Android |
 | `MediaStoreSource` | Запрос к `MediaStore`: папка из `RELATIVE_PATH` (Android 10+) или из `DATA` |
 | `TagReader` | Соглашения `MediaStore`: `<unknown>` — нет тега, `TRACK` = диск × 1000 + номер, без названия — имя файла |
@@ -198,7 +203,8 @@ LibraryRepository.upsert (новые и изменённые) · markMissing (п
 | `WorkManagerLibraryScan` | `LibraryScan` поверх уникальной работы `library-scan` (`KEEP`): состояние работы → `ScanProgress` |
 
 Скан запускает `LibraryViewModel`, когда разрешение становится выданным: при
-старте приложения и сразу после выдачи. WorkManager настраивает
+старте приложения и сразу после выдачи, — и кнопка «Rescan» на экране папок.
+Папки `ScanWorker` читает из `FolderSettings` в начале каждого скана. WorkManager настраивает
 `PlinthApplication` (`Configuration.Provider` с `HiltWorkerFactory`),
 автоматическая инициализация WorkManager в манифесте выключена.
 
@@ -220,6 +226,9 @@ LibraryScreen (стартовый) ── вкладки: TracksTab · AlbumsTab
      ├── касание трека ──► PlaybackController.open(source, title) ──► PlayerScreen
      ├── касание альбома ──► AlbumScreen (Album — аргументами навигации) ──► PlayerScreen
      └── меню: «Now playing» ──► PlayerScreen · «Open file» (SAF) ──► PlayerScreen
+
+SearchScreen (вкладка) ── SearchViewModel: запрос с задержкой 300 мс → LibraryRepository.search
+FolderSettingsScreen (вкладка «Настройки») ── FolderSettings + LibraryScan: папки, «Rescan»
 ```
 
 Плеер и альбом открываются поверх вкладок, нижняя навигация на них скрыта.
@@ -283,5 +292,5 @@ LibraryScreen (стартовый) ── вкладки: TracksTab · AlbumsTab
 `LibraryRepository` с фейком, хранилище на Room, которое проходит тот же
 контракт на эмуляторе, сканер `MediaStore`, разрешение и фоновый скан через
 WorkManager, экран библиотеки со списками треков, альбомов, исполнителей и
-папок, экран альбома и сортировка. Файл мимо библиотеки открывается через SAF
-из меню. Впереди — поиск и настройка папок (шаг 6).
+папок, экран альбома и сортировка, поиск и выбор папок для сканирования. Файл
+мимо библиотеки открывается через SAF из меню. Вертикаль пройдена.

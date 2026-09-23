@@ -10,6 +10,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
 import com.google.common.truth.Truth.assertThat
 import com.google.common.util.concurrent.Futures
+import io.github.puflik.plinth.library.FakeFolderSettings
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import kotlinx.coroutines.flow.first
@@ -24,6 +25,7 @@ import org.junit.Test
 class ScanWorkerTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val repository = FakeLibraryRepository()
+    private val folders = FakeFolderSettings()
     private val published = mutableListOf<Data>()
 
     @Test
@@ -49,6 +51,17 @@ class ScanWorkerTest {
         }
 
     @Test
+    fun excluded_folder_from_the_settings_is_not_scanned() =
+        runBlocking<Unit> {
+            folders.update { it.exclude("Download/") }
+            val worker = worker { listOf(row(id = 1, folder = "Music/"), row(id = 2, folder = "Download/")) }
+
+            worker.doWork()
+
+            assertThat(repository.tracks().first().map(LibraryTrack::id)).containsExactly(1L)
+        }
+
+    @Test
     fun lost_permission_fails_the_work() =
         runBlocking<Unit> {
             val worker = worker { throw SecurityException("разрешение отозвано") }
@@ -64,7 +77,7 @@ class ScanWorkerTest {
                         appContext: Context,
                         workerClassName: String,
                         workerParameters: WorkerParameters,
-                    ) = ScanWorker(appContext, workerParameters, LibraryScanner(source, repository))
+                    ) = ScanWorker(appContext, workerParameters, LibraryScanner(source, repository), folders)
                 },
             ).setProgressUpdater { _, _, data ->
                 published += data

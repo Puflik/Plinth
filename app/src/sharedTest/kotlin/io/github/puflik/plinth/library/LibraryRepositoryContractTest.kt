@@ -49,6 +49,53 @@ abstract class LibraryRepositoryContractTest {
         }
 
     @Test
+    fun search_finds_every_word_in_title_artist_or_album() =
+        contract { repository ->
+            val yesterday = track(id = 1, title = "Yesterday", artist = "The Beatles", album = "Help!")
+            val bohemian = track(id = 2, title = "Bohemian Rhapsody", artist = "Queen", album = "A Night at the Opera")
+            val various = track(id = 3, title = "Intro", artist = "DJ", album = "Mix", albumArtist = "Various Queens")
+            repository.upsert(listOf(yesterday, bohemian, various))
+
+            assertThat(repository.search("beat").first()).containsExactly(yesterday)
+            assertThat(repository.search("  QUEEN   opera ").first()).containsExactly(bohemian)
+            assertThat(repository.search("queen").first()).containsExactly(bohemian, various).inOrder()
+            assertThat(repository.search("queen jazz").first()).isEmpty()
+        }
+
+    @Test
+    fun search_ignores_case_and_accents() =
+        contract { repository ->
+            val halo = track(id = 1, title = "Halo", artist = "Beyoncé")
+            val tree = track(id = 2, title = "Ёлочка", artist = "Хор")
+            repository.upsert(listOf(halo, tree))
+
+            assertThat(repository.search("BEYONCE").first()).containsExactly(halo)
+            assertThat(repository.search("елочка").first()).containsExactly(tree)
+            assertThat(repository.search("ЁЛОЧ").first()).containsExactly(tree)
+        }
+
+    @Test
+    fun search_goes_by_title_and_skips_missing_tracks() =
+        contract { repository ->
+            val zebra = track(id = 1, title = "Zebra", artist = "Queen")
+            val anthem = track(id = 2, title = "Anthem", artist = "Queen")
+            val gone = track(id = 3, title = "Bicycle", artist = "Queen")
+            repository.upsert(listOf(zebra, anthem, gone))
+            repository.markMissing(listOf(gone.id))
+
+            assertThat(repository.search("queen").first()).containsExactly(anthem, zebra).inOrder()
+        }
+
+    @Test
+    fun blank_search_finds_nothing() =
+        contract { repository ->
+            repository.upsert(listOf(track(id = 1, title = "Anything")))
+
+            assertThat(repository.search("").first()).isEmpty()
+            assertThat(repository.search("   ").first()).isEmpty()
+        }
+
+    @Test
     fun upserted_tracks_are_listed() =
         contract { repository ->
             val track = track(id = 1, artist = "Queen", album = "Jazz", discNumber = 1, trackNumber = 3)
