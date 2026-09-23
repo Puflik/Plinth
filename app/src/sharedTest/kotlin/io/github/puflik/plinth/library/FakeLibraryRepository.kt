@@ -4,6 +4,7 @@ import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
+import io.github.puflik.plinth.library.sort.CodePointOrder
 import io.github.puflik.plinth.library.sort.SortKeys
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.flow.Flow
@@ -15,7 +16,8 @@ import kotlinx.coroutines.flow.update
  * Хранилище фонотеки в памяти для тестов (C3.3).
  *
  * Сортирует и группирует в Kotlin то, что Room делает запросами; совпадение
- * гарантирует общий контракт `LibraryRepositoryContractTest`.
+ * гарантирует общий контракт `LibraryRepositoryContractTest`. Строки
+ * сравниваются по кодовым точкам ([CodePointOrder]), как в SQLite.
  */
 class FakeLibraryRepository(
     private val keys: SortKeys = SortKeys(),
@@ -49,14 +51,14 @@ class FakeLibraryRepository(
                 .groupBy { checkNotNull(it.artist) }
                 .map { (name, tracksOfArtist) ->
                     Artist(name, tracksOfArtist.mapNotNull(LibraryTrack::album).distinct().size, tracksOfArtist.size)
-                }.sortedWith(compareBy<Artist> { keys.of(it.name) }.thenBy(Artist::name))
+                }.sortedWith(keyOrder(Artist::name).thenBy(CodePointOrder, Artist::name))
         }
 
     override fun albumTracks(album: Album): Flow<List<LibraryTrack>> =
         present.map { tracks ->
             tracks
                 .filter { it.album == album.title && it.albumOwner == album.artist }
-                .sortedWith(discOrder().thenBy { keys.of(it.title) }.thenBy(LibraryTrack::id))
+                .sortedWith(discOrder().thenByKey(LibraryTrack::title).thenBy(LibraryTrack::id))
         }
 
     override suspend fun knownVersions(): Map<Long, Long> =
@@ -75,18 +77,19 @@ class FakeLibraryRepository(
     private fun trackOrder(sort: TrackSort): Comparator<LibraryTrack> =
         when (sort) {
             TrackSort.TITLE ->
-                compareBy<LibraryTrack> { keys.of(it.title) }.thenByKey(LibraryTrack::artist)
+                keyOrder(LibraryTrack::title).thenByKey(LibraryTrack::artist)
             TrackSort.ARTIST ->
                 keyOrder(LibraryTrack::artist).thenByKey(LibraryTrack::album).then(discOrder())
             TrackSort.ALBUM ->
                 keyOrder(LibraryTrack::album).thenByKey(LibraryTrack::albumOwner).then(discOrder())
-        }.thenBy { keys.of(it.title) }.thenBy(LibraryTrack::id)
+        }.thenByKey(LibraryTrack::title).thenBy(LibraryTrack::id)
 
+    /** Равные по ключам — по точному названию, затем по владельцу: у альбома нет `id`. */
     private fun albumOrder(sort: AlbumSort): Comparator<Album> =
         when (sort) {
-            AlbumSort.TITLE -> compareBy<Album> { keys.of(it.title) }.thenByKey(Album::artist)
-            AlbumSort.ARTIST -> keyOrder(Album::artist).thenBy { keys.of(it.title) }
-        }
+            AlbumSort.TITLE -> keyOrder(Album::title).thenByKey(Album::artist)
+            AlbumSort.ARTIST -> keyOrder(Album::artist).thenByKey(Album::title)
+        }.thenBy(CodePointOrder, Album::title).thenBy(nullsLast(CodePointOrder), Album::artist)
 
     /** Диск без номера — первым, трек без номера — последним на своём диске. */
     private fun discOrder(): Comparator<LibraryTrack> =
@@ -95,7 +98,7 @@ class FakeLibraryRepository(
 
     /** Порядок по ключу названия; без названия — в конце. */
     private fun <T> keyOrder(text: (T) -> String?): Comparator<T> =
-        compareBy(nullsLast(naturalOrder())) { item: T -> text(item)?.let(keys::of) }
+        compareBy(nullsLast(CodePointOrder)) { item: T -> text(item)?.let(keys::of) }
 
     private fun <T> Comparator<T>.thenByKey(text: (T) -> String?): Comparator<T> = then(keyOrder(text))
 }

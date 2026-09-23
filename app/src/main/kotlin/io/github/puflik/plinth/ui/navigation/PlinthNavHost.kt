@@ -16,13 +16,14 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import io.github.puflik.plinth.R
-import io.github.puflik.plinth.ui.player.FilePlayerScreen
+import io.github.puflik.plinth.ui.library.LibraryScreen
 
 /**
  * Граф навигации (A2.1).
  *
- * Вместо библиотеки пока плеер первой вертикали («файл → звук»); поиск
- * приходит с C4, настройки с F — до тех пор заглушки. Граф заведён сейчас, чтобы им было куда встать.
+ * Библиотека пока без списков: разрешение, скан и плеер первой вертикали
+ * («файл → звук»); поиск приходит с C4, настройки с F — до тех пор
+ * заглушки. Граф заведён сейчас, чтобы им было куда встать.
  */
 @Composable
 fun PlinthNavHost(
@@ -35,8 +36,7 @@ fun PlinthNavHost(
         modifier = modifier,
     ) {
         composable(Destination.Library.route) {
-            // Библиотеки ещё нет (эпик C) — на её месте плеер первой вертикали.
-            FilePlayerScreen()
+            LibraryScreen()
         }
         composable(Destination.Search.route) {
             PlaceholderScreen(R.string.placeholder_search)

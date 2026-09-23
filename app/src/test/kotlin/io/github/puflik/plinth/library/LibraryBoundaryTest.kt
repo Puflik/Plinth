@@ -16,7 +16,7 @@ import org.junit.Test
 class LibraryBoundaryTest {
     @Test
     fun `library facade has sources to check`() {
-        assertThat(SourceTree.mainFile(FACADE).isFile).isTrue()
+        for (file in FACADE) assertThat(SourceTree.mainFile(file).isFile).isTrue()
     }
 
     @Test
@@ -24,7 +24,7 @@ class LibraryBoundaryTest {
         val files =
             SourceTree.kotlinFiles("library/model") +
                 SourceTree.kotlinFiles("library/sort") +
-                SourceTree.mainFile(FACADE)
+                FACADE.map(SourceTree::mainFile)
 
         assertThat(SourceTree.importsStartingWith(files, ANDROID_PACKAGES)).isEmpty()
     }
@@ -37,7 +37,8 @@ class LibraryBoundaryTest {
     }
 
     private companion object {
-        const val FACADE = "library/LibraryRepository.kt"
+        /** Хранилище и управление сканом — всё, что экраны знают о библиотеке. */
+        val FACADE = listOf("library/LibraryRepository.kt", "library/LibraryScan.kt")
         val ANDROID_PACKAGES = listOf("android.", "androidx.", "com.google.android")
         val LIBRARY_INTERNALS = listOf("io.github.puflik.plinth.library.db", "io.github.puflik.plinth.library.scan")
     }

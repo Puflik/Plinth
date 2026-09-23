@@ -727,3 +727,219 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
 - **Зелёный критерий шага 1:** на JBR — `ktlintCheck`, `detekt`, по 100
   JVM-тестов на flavor (+53), `assembleGithubDebug`, `assembleFdroidDebug`,
   `assembleGithubDebugAndroidTest`. На эмуляторе нового нет.
+
+### Шаг 2 вертикали «библиотека»: Room за фасадом
+
+- **Room 2.8.5** (последний стабильный 2.x, вышел 2026-09-09): `room-runtime`,
+  `room-ktx`, `room-compiler` через KSP, плагин `androidx.room` выгружает
+  схему в `app/schemas/`. Версия одна на все четыре — связка записана в
+  `libs.versions.toml`. Room 3 (`androidx.room3`, 3.0.3) не взят: это другой
+  пакет без `ktx`, а весь C3 уходит в v0.2. **KSP 2.3.12 с Kotlin 2.3.21
+  совместим** — Hilt уже шёл через него. Room 2.8.5 собран против
+  `symbol-processing-api` 2.0.10 и `kotlin-metadata-jvm` 2.2.0; в classpath
+  процессоров Gradle поднимает их до 2.3.7 (её требует Dagger) и 2.3.21 —
+  генерация и сборка проходят без ошибок.
+- **Схема v1** — одна таблица `tracks`. Первичный ключ — `media_store_id`
+  (он и есть уникальность): суррогатный `id` не нужен, а `@Upsert` Room
+  заменяет строку именно по первичному ключу. Рядом с тегами лежат готовый
+  владелец альбома (`album_owner`), четыре ключа сортировки (`title_key`,
+  `artist_key`, `album_key`, `album_owner_key`; нет тега — `NULL`) и флаг
+  `missing`. Индексы: `title_key`, (`artist_key`, `artist`), (`album_key`,
+  `album_owner_key`), (`album`, `album_owner`). `Duration` — миллисекунды,
+  через `Converters` (проверено по сгенерированному коду: Room зовёт
+  конвертер, а не разворачивает value-класс).
+- **SQL повторяет фейк один в один**: пустое — `x IS NULL, x`; диск без номера
+  первым — сам порядок SQLite (`NULL` меньше всего); равные треки — по
+  `media_store_id`; группы — по точным `album, album_owner` и `artist`;
+  владелец в экране альбома — `IS :owner`. `artists` и `albums` отдаются
+  прямо в модельные `Artist`/`Album` — отдельных строк-проекций нет.
+- **`markMissing` режет `id` на порции по 999** в одной транзакции: сканер
+  помечает пропавшей целую папку разом, а SQLite до 3.32 (Android 8–11) больше
+  999 параметров в запрос не берёт. На API 36 предел 32 766 — Room-тест
+  `marking_more_tracks_missing_than_sqlite_binds_at_once` берёт 40 000 `id`;
+  RED наблюдался (`too many SQL variables`).
+- **Контракт усилен: 22 → 25 пунктов.** Мутации SQL показали, что восемь
+  правил из `SortOption`/фейка контракт не проверял — выживали и в SQL, и
+  прошли бы незамеченными в фейке:
+  - новые тесты: `tracks_with_equal_titles_follow_artist`,
+    `albums_with_equal_keys_follow_exact_title_then_owner` (у альбома нет `id`
+    — равные по ключам идут по точному названию, затем владельцу; раньше их
+    порядок в фейке зависел от порядка записи, в SQL — от плана запроса),
+    `tracks_by_title_compare_code_points` (см. ниже);
+  - данные усилены там, где правило уже было в намерении теста:
+    `tracks_by_title_ignore_leading_article` (`The Wall` стоял на своём месте
+    и с артиклем), диск без номера и равные номера треков в
+    `album_tracks_follow_disc_then_track_number`, владелец в
+    `tracks_by_album_…` (у ABBA был диск `null` — порядок дисков разводил
+    альбомы и без владельца), ключ владельца и ключ названия в сортировке
+    альбомов (`The Kinks`, `The Album`: в ASCII-данных сырое сравнение
+    совпадало с ключевым).
+- **Порядок строк — по кодовым точкам (`CodePointOrder`).** SQLite сравнивает
+  UTF-8 побайтово, Rust (ядро v0.2) — тоже, а `String.compareTo` — единицы
+  UTF-16: символы вне BMP (эмодзи) у него раньше U+E000–U+FFFF (полуширинная
+  катакана, U+FFFD из битых тегов). Фейк и `NaturalOrder.comparator` теперь
+  сравнивают ключи по кодовым точкам — экранные тесты на фейке увидят тот же
+  порядок, что база. RED — на фейке, Room прошёл сразу.
+- **Мутации SQL: 26 из 26 убиты** (скрипт вне репозитория, по одной правке на
+  прогон Room-класса): `IS` → `=`, каждое `IS NULL` в `ORDER BY`, диск без
+  номера последним, `GROUP BY` без владельца, `COUNT` без `DISTINCT`, каждый
+  фильтр `missing = 0`, `id DESC`, выпавшие ключи и сравнение сырых значений
+  вместо ключей, ключ владельца от исполнителя трека, `markMissing` без
+  порций.
+- **`LibraryModule`**: база — синглтон (Room следит за изменениями таблиц,
+  вторая копия на тот же файл не увидела бы чужих записей), `TrackDao`,
+  `SortKeys` с артиклями по умолчанию, фасад — синглтон. **Dagger не
+  проверяет привязки без потребителя**: модуль без `SortKeys` собирался
+  молча, а `dagger.fullBindingGraphValidation` недостающие привязки намеренно
+  не сообщает (проверено — не помогло). Поэтому по образцу `AudioEntryPoint`
+  заведён `LibraryEntryPoint`, а `LibraryGraphTest` на эмуляторе — первый
+  потребитель: без `SortKeys` падает сборка (`MissingBinding`), без
+  `@Singleton` — тест. Базу тест не открывает.
+- **Страж `ui` ↛ `library/db`** проверен мутацией: импорт `PlinthDatabase` в
+  `FilePlayerScreen` роняет `LibraryBoundaryTest`. `library/scan` — на шаге 3.
+- **Зелёный критерий шага 2:** на JBR — `ktlintCheck`, `detekt`, по 108
+  JVM-тестов на flavor (+8: три пункта контракта, `CodePointOrderTest`,
+  пункт `NaturalOrderTest`), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`; `connectedGithubDebugAndroidTest` — 64,
+  0 падений: прежние 37, `RoomLibraryRepositoryContractTest` — 26
+  (25 пунктов контракта и порции `markMissing`), `LibraryGraphTest`.
+- **Осталось открытым:** миграций нет — схема v1. Кэш `MediaStore` можно
+  было бы пересоздавать при смене схемы (`fallbackToDestructiveMigration`),
+  но решать это — при v2. Список артиклей пока не хранится и ключи не
+  пересчитываются (как и на шаге 1).
+
+### Шаг 3 вертикали «библиотека»: сканер на `MediaStore`
+
+- **Устройство.** `MediaStoreSource` (единственная часть с Android) отдаёт
+  строки `IS_MUSIC` как `MediaStoreRow`; `LibraryScanner` отбирает папки по
+  `FolderConfig`, сверяет `knownVersions()` с `_ID` + `DATE_MODIFIED`
+  (`ScanDiff`), переводит изменённые строки в треки (`TagReader`) и пишет их
+  через фасад: `upsert` новых и изменённых, `markMissing` пропавших. Итог —
+  `ScanResult(found, updated, missing)`; `found` пойдёт в «Найдено N треков»
+  на шаге 4. Источник — интерфейс `ScanSource`, сканер на JVM проверяется на
+  фейке источника и `FakeLibraryRepository`.
+- **`FolderConfig`**: включённая папка берётся со всеми подпапками, кроме
+  исключённых; сравнение без учёта регистра и крайних `/` (общее хранилище
+  Android регистр не различает), только по целому имени (`Music` не
+  захватывает `MusicVideos`). Корень `/` — всё хранилище. Папка — путь от
+  корня тома: `RELATIVE_PATH` на Android 10+, на 8–9 — вырезается из `DATA`
+  (`/storage/emulated/<n>/…` или `/storage/<том>/…`; путь вне общего
+  хранилища папки не имеет и не сканируется). Хранение выбора — шаг 6.
+- **`TagReader`**: `<unknown>` и пустое — нет тега; теги обрезаются по краям;
+  `TRACK` = диск × 1000 + номер, ноль или минус в любой части — нет номера;
+  без названия — имя файла без расширения (`.mp3` остаётся целым), без имени —
+  `id`; длительность без значения — ноль.
+- **`ScanDiff`**: перечитывается файл с любым другим временем изменения, не
+  только более поздним — файл могли восстановить из копии. Сравнивается только
+  время: сменившиеся правила разбора тегов неизменённые файлы не перечитают.
+- **`album_artist`** запрашивается строкой: константа `AudioColumns.ALBUM_ARTIST`
+  открыта с API 30, колонка есть и раньше. На API 26–29 не проверено — образа
+  эмулятора ниже 36 нет.
+- **Наблюдения на API 36 (⚠️ из разбивки):**
+  - системный сканер разбирает файл синхронно, в момент снятия `IS_PENDING`:
+    строки с длительностью и тегами готовы через 5–20 мс после вставки;
+  - MP3 (ID3v2.3, кириллица в UTF-16), FLAC (Vorbis comment) и M4A (атомы
+    iTunes) доходят до трека целиком: название, исполнитель, альбом,
+    исполнитель альбома, диск и номер;
+  - **у файла без тега альбома `MediaStore` ставит альбомом имя папки.**
+    Отличить это от настоящего тега нельзя (у `Music/Artist/Album/` альбом так
+    и называется), поэтому v0.1 принимает альбом по папке; честное «нет
+    альбома» придёт с ядром, которое читает теги само. Правило контракта
+    «треки без тега альбома альбомов не образуют» остаётся верным для фасада,
+    но из `MediaStore` такие треки почти не приходят. Исполнитель без тега
+    доходит до трека пустым (`NULL` или `<unknown>` — `TagReader` сводит оба
+    к `null`; что именно отдаёт API 36, не проверялось).
+  - На API 26 время сканера и набор тегов не проверены.
+- **Фикстуры**: `tools/make_tag_fixtures.py` собирает из ffmpeg секунду тишины
+  на формат (MP3/ID3v2.3, FLAC, M4A, MP3 без тегов; 1–8 КБ, `bitexact`),
+  в `androidTest/assets/tags`. Тест кладёт их в `Music/PlinthTest/` через
+  `MediaStore` (`IS_PENDING` 1 → 0) и убирает после себя. Без разрешения на
+  чтение приложение видит только свои файлы, поэтому тестам не мешает
+  остальное содержимое устройства; разрешение не нужно ни тестам, ни пока
+  приложению.
+- **Мутации:** 12 в чистых частях (сканер без `ScanDiff`, без папок, без
+  `markMissing`; `ScanDiff` только по новизне и только по более позднему
+  времени; `FolderConfig` без исключений, с регистром, без `/`; `TagReader`
+  без `<unknown>`, без обрезки, диск из не той части, имя с расширением) и 4
+  в `MediaStoreSource` на эмуляторе (без `album_artist`, без `TRACK`, папка не
+  из той колонки, фильтр не `IS_MUSIC`) — все убиты. Страж «`ui` не
+  импортирует `library/scan`» проверен мутацией — ловит.
+- **Проводки в Hilt у сканера пока нет**: потребитель — `ScanWorker` на
+  шаге 4, там же `MediaStoreSource` получит `@IoDispatcher`.
+- **Зелёный критерий шага 3:** на JBR — `ktlintCheck`, `detekt`, по 135
+  JVM-тестов на flavor (+27), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`; `connectedGithubDebugAndroidTest` — 68,
+  0 падений (+3 `MediaStoreSourceTest`, +1 `MediaStoreScanTest`).
+
+### Шаг 4 вертикали «библиотека»: разрешение и фоновый скан
+
+- **Разрешение** (C1.1): `READ_MEDIA_AUDIO` с Android 13, раньше
+  `READ_EXTERNAL_STORAGE` (`maxSdkVersion="32"`); выбор по версии —
+  `MediaPermission.name(sdk)`. `PermissionState.of(granted, requested,
+  showRationale)` — чистая функция, таблица из шести строк на JVM. Главное:
+  без ответа на запрос «нет объяснения» не отличить от «отказано навсегда»,
+  поэтому до первого ответа состояние `NotRequested` и экран спрашивает сам;
+  отказ в прошлый запуск (`showRationale`) сразу показывает объяснение.
+  Флаг «ответ пришёл» живёт в `rememberSaveable` экрана — хранить его между
+  запусками не нужно: при отказе навсегда повторный запрос возвращает отказ
+  сразу, без диалога.
+- **Экран** (C1.2): `ui/common/PermissionRationaleScreen` — объяснение и
+  «Allow access» после первого отказа, «Open settings» после отказа навсегда
+  (`ACTION_APPLICATION_DETAILS_SETTINGS`). `ui/library/LibraryScreen` —
+  временный: статус над плеером файлов первой вертикали (SAF работает и без
+  разрешения); разрешение проверяется на каждом `ON_RESUME`. Строки —
+  английские, как остальные (`values/`), «Найдено N» — `plurals`.
+- **`LibraryScan` — второй фасад рядом с `LibraryRepository`**, а не
+  `library/scan/ScanProgress` из декомпозиции: экранам `library/scan` не
+  виден (`LibraryBoundaryTest`, файл добавлен в проверку «без Android», мутация
+  ловит). Интерфейс — `progress: Flow<ScanProgress>`, `start()`, `cancel()`;
+  `ScanProgress` — `Idle`, `Running(written, total)`, `Done(found)`, `Failed`.
+- **`ScanWorker`** (C2.4): `@HiltWorker`, уникальная работа `library-scan` с
+  `KEEP` (`WorkManagerLibraryScan`); прогресс — `setProgress` после каждой
+  порции, итог — `found` в выходных данных. `SecurityException` (разрешение
+  отозвали посреди скана) — `Result.failure()`; прочие исключения WorkManager
+  и так считает провалом. Отмена штатная для `CoroutineWorker`.
+  `PlinthApplication` — `Configuration.Provider` с `HiltWorkerFactory`,
+  `WorkManagerInitializer` убран из манифеста. Версии: WorkManager 2.11.2,
+  `hilt-work`/`hilt-compiler` 1.4.0 (вместе с `androidxHilt`);
+  `lifecycle-runtime-compose` объявлен явно (раньше приходил транзитивно).
+- **`LibraryScanner` пишет порциями по 500**: после каждой — отчёт о прогрессе
+  и `ensureActive()`. Точка отмены явная, потому что хранилище может писать,
+  не приостанавливаясь: без неё отменённый скан дописывал всё (RED
+  наблюдался на фейке — 1001 трек вместо 500). Отменённый скан оставляет
+  записанное, следующий допишет остальное.
+- **Скан запускает `LibraryViewModel`** при переходе разрешения в «выдано»: на
+  старте приложения, если оно уже есть, и сразу после выдачи.
+- **Тесты**: JVM — `PermissionStateTest`, `MediaPermissionTest`,
+  `LibraryViewModelTest` (скан один на выдачу, после отказа — нет),
+  прогресс и отмена в `LibraryScannerTest`. Эмулятор — `ScanWorkerTest`
+  (`work-testing`: итог, прогресс, отозванное разрешение) и
+  `LibraryScanWorkTest`: весь путь «Hilt → WorkManager → `HiltWorkerFactory`
+  → `ScanWorker` → `MediaStore` → база приложения», с уборкой за собой.
+  Мутация — вернуть автоинициализацию WorkManager в манифесте — роняет его:
+  воркер не строится.
+- **Проверено на живом эмуляторе (API 36):** первый запуск — системный диалог
+  сам; «Don't allow» → объяснение и «Allow access»; повторный запрос →
+  «Allow» → «Found 4 tracks»; новый файл в `Download/` и перезапуск → скан
+  при старте, «Found 5 tracks» (`WM-WorkerWrapper: SUCCESS`); сброс
+  разрешения и два отказа → «Open settings» → открывается страница Plinth в
+  настройках; перезапуск при отказе навсегда → без диалога сразу «Open
+  settings»; выдача в настройках и возврат → скан, «Found 5 tracks».
+- **Наблюдение: файлы, записанные через `adb shell`/`adb push`, на API 36 в
+  сканер сами не попадают** — строка появляется сразу, но без тегов и с
+  `IS_MUSIC = NULL`, и за 30 с не меняется. `MediaStoreSource` берёт только
+  `IS_MUSIC != 0`, так что такие файлы невидимы, пока система их не разберёт.
+  Для ручных проверок — `am broadcast -a
+  android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/…` на каждый
+  файл (в Git Bash — с `MSYS_NO_PATHCONV=1`). Пользовательские пути (MTP,
+  загрузки, приложения через `MediaStore`) проходят сканер сами. У разобранного
+  файла без тегов сырой исполнитель — `<unknown>`, альбом — имя папки.
+- **На эмуляторе оставлены** `Music/PlinthManual/` (четыре фикстуры) и
+  `Download/plinth-copy.mp3` — для ручной проверки шага 5.
+- **Зелёный критерий шага 4:** на JBR — `ktlintCheck`, `detekt`, по 145
+  JVM-тестов на flavor (+10), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`; `connectedGithubDebugAndroidTest` — 72,
+  0 падений (+3 `ScanWorkerTest`, +1 `LibraryScanWorkTest`).
+- **Не сделано:** `ScanProgress.Running` на экране виден мельком — скан
+  нескольких файлов занимает доли секунды; отмена скана с экрана не
+  выведена (кнопки нет, `cancel()` есть в фасаде).

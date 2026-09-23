@@ -32,7 +32,7 @@
 | `diagnostics` | Логи, обход вендорских ограничений, отчёты об ошибках | — |
 | `settings`, `startup` | Настройки и первый запуск | — |
 | `di` | Проводка графа Hilt | Содержать логику |
-| `ui` | Compose: тема, навигация, экраны | Обращаться к движку иначе как через `PlaybackController` |
+| `ui` | Compose: тема, навигация, экраны | Обращаться к движку иначе как через `PlaybackController`, к библиотеке — иначе как через `LibraryRepository` и `LibraryScan` |
 | `core` | Мелочь, общая для всех: конфигурация, расширения | Зависеть от `ui` |
 | `flavor` | То, чем различаются сборки `github` и `fdroid` | Лежать в `main` |
 
@@ -105,17 +105,21 @@ ExoPlayer разрешает обращаться к себе только из 
 
 ```
      ui/library ──► LibraryRepository (интерфейс) ◄── library/scan (сканер пишет)
-                            ▲
-             ┌──────────────┴──────────────┐
-     RoomLibraryRepository          FakeLibraryRepository
-       (library/db, Android)        (тесты, чистый Kotlin)
+          │                 ▲
+          │  ┌──────────────┴──────────────┐
+          │  RoomLibraryRepository   FakeLibraryRepository
+          │  (над library/db, Android) (тесты, чистый Kotlin)
+          │
+          └──► LibraryScan (интерфейс) ◄── WorkManagerLibraryScan → ScanWorker → LibraryScanner
 ```
 
 Весь эпик C временный: в v0.2 Room и сканер заменит ядро на Rust. Переживёт
 его только фасад `LibraryRepository` — и только если экраны ходят в
-библиотеку через него. Правило сторожит `LibraryBoundaryTest`: `ui/**` не
-импортирует `library/db` и `library/scan`, а фасад, модель (`library/model`)
-и сортировка (`library/sort`) не импортируют Android. Требования к
+библиотеку через него. Фасадов два: `LibraryRepository` — данные,
+`LibraryScan` — запуск скана и его прогресс. Правило сторожит
+`LibraryBoundaryTest`: `ui/**` не импортирует `library/db` и `library/scan`,
+а оба фасада, модель (`library/model`) и сортировка (`library/sort`) не
+импортируют Android. Требования к
 хранилищу — `LibraryRepositoryContractTest`, устроенный как контракт движка.
 
 | Тип | Что описывает |
@@ -123,7 +127,89 @@ ExoPlayer разрешает обращаться к себе только из 
 | `LibraryTrack` | Трек v0.1: `id` из `MediaStore`, `content://`, теги, папка, время изменения |
 | `Album`, `Artist` | Собираются из треков, своих записей нет. Альбом — название + владелец (исполнитель альбома, иначе трека) |
 | `NaturalOrder`, `ArticleStripper`, `SortKeys` | Ключ сортировки: без артикля, регистра и диакритики, числа по значению. База сортирует по ключу, посчитанному при записи |
+| `CodePointOrder` | Сравнение строк по кодовым точкам, как в SQLite и Rust; им сортирует всё, что сортирует ключи в Kotlin |
 | `TrackSort`, `AlbumSort` | Варианты порядка списков |
+
+### Как Room держит порядок контракта
+
+Контракт один на фейк и на Room, поэтому SQL повторяет компаратор фейка
+один в один, и расхождение ловят те же тесты. Всё держится на трёх приёмах:
+
+- **Ключи считаются при записи.** `RoomLibraryRepository.upsert` кладёт в
+  строку рядом с тегом его ключ (`title_key`, `artist_key`, `album_key`,
+  `album_owner_key`) — без артикля, регистра и диакритики, числа дополнены
+  нулями. SQL сортирует ключи обычным сравнением строк — побайтово в UTF-8,
+  то есть по кодовым точкам; фейк сравнивает так же (`CodePointOrder`), а не
+  `String.compareTo` по UTF-16. Нет тега — нет и ключа.
+- **Пустое — в конце: `ORDER BY x IS NULL, x`.** `NULLS LAST` появился в
+  SQLite 3.30, а на Android 8 — 3.18. Исключение — диск: без номера он идёт
+  первым, и это обычный порядок SQLite, где `NULL` меньше любого значения.
+  Равные треки — по `media_store_id`, равные альбомы — по точному названию и
+  владельцу.
+- **Группы — по точным значениям.** Альбом — `GROUP BY album, album_owner`
+  (владелец — исполнитель альбома, иначе трека, хранится готовым),
+  исполнитель — `GROUP BY artist`. Экран альбома ищет треки по
+  `album_owner IS :owner`: у альбома без исполнителей владелец `NULL`, а
+  `NULL = NULL` в SQL ложно.
+
+Пропавший трек помечается (`missing = 1`) и остаётся в таблице: его видит
+`upsert`, но не видит ни один список. `markMissing` режет список `id` на
+порции по 999 — больше параметров одним запросом SQLite до 3.32
+(Android 8–11) не примет.
+
+| Файл | Что делает |
+|---|---|
+| `library/db/PlinthDatabase` | База v1, одна таблица `tracks`; схема каждой версии — в `app/schemas/` |
+| `library/db/entity/TrackEntity` | Строка трека: теги, владелец альбома, ключи, флаг `missing`; перевод из модели и обратно |
+| `library/db/dao/TrackDao` | Запросы списков, альбомы и исполнители через `GROUP BY`, `upsert`, `markMissing` |
+| `library/db/Converters` | `Duration` ↔ миллисекунды |
+| `library/RoomLibraryRepository` | Фасад поверх `TrackDao`: выбирает запрос, переводит строки в модель |
+| `di/LibraryModule` | База — синглтон процесса, фасад поверх неё; `LibraryEntryPoint` для тестов |
+
+### Сканер
+
+```
+MediaStore (системный сканер уже прочитал теги)
+     │  MediaStoreSource: строки IS_MUSIC → MediaStoreRow
+     ▼
+LibraryScanner ── FolderConfig: только сканируемые папки
+     │          ── ScanDiff: knownVersions() против _ID + DATE_MODIFIED
+     │          ── TagReader: MediaStoreRow → LibraryTrack
+     ▼
+LibraryRepository.upsert (новые и изменённые) · markMissing (пропавшие)
+```
+
+Своей библиотеки тегов в v0.1 нет (решение C2): теги читает системный
+сканер, приложение берёт их из `MediaStore`. Сканер пишет через фасад,
+как любой клиент библиотеки, поэтому на JVM он проверяется на
+`FakeLibraryRepository` и фейковом источнике. Android знает только
+`MediaStoreSource`; остальное — чистый Kotlin.
+
+| Файл `library/scan` | Что делает |
+|---|---|
+| `FolderConfig` | Какие папки сканировать: `Music` и `Download` со всеми подпапками, кроме исключённых; без учёта регистра |
+| `MediaStoreRow` | Строка `MediaStore` как есть, без типов Android |
+| `MediaStoreSource` | Запрос к `MediaStore`: папка из `RELATIVE_PATH` (Android 10+) или из `DATA` |
+| `TagReader` | Соглашения `MediaStore`: `<unknown>` — нет тега, `TRACK` = диск × 1000 + номер, без названия — имя файла |
+| `ScanDiff` | Что перечитать и что пометить пропавшим — по `_ID` и времени изменения |
+| `LibraryScanner` | Собирает всё вместе и возвращает `ScanResult`: найдено, записано, пропало; пишет порциями по 500 с отчётом о прогрессе и точкой отмены |
+| `ScanWorker` | `CoroutineWorker` от Hilt: скан в фоне, прогресс через `setProgress`, итог — выходные данные |
+| `WorkManagerLibraryScan` | `LibraryScan` поверх уникальной работы `library-scan` (`KEEP`): состояние работы → `ScanProgress` |
+
+Скан запускает `LibraryViewModel`, когда разрешение становится выданным: при
+старте приложения и сразу после выдачи. WorkManager настраивает
+`PlinthApplication` (`Configuration.Provider` с `HiltWorkerFactory`),
+автоматическая инициализация WorkManager в манифесте выключена.
+
+### Разрешение
+
+`MediaPermission` выбирает разрешение по версии Android (`READ_MEDIA_AUDIO`
+с 13-го, раньше `READ_EXTERNAL_STORAGE`), `PermissionState.of` — чистая
+функция: выдано, не спрашивали, отказано (объяснить и спросить снова),
+отказано навсегда (только настройки). Android не говорит прямо про «навсегда»:
+это `shouldShowRequestPermissionRationale == false` после ответа на запрос.
+Экран спрашивает сам при первом показе и проверяет разрешение при каждом
+возврате — его могли выдать или отозвать в настройках.
 
 ## Поток данных первой вертикали
 
@@ -152,7 +238,8 @@ SAF: ACTION_OPEN_DOCUMENT
 | `src/main` | Приложение |
 | `src/github`, `src/fdroid` | Различия сборок: `FlavorConfig` |
 | `src/test` | JVM-тесты |
-| `src/androidTest` | Тесты на эмуляторе: всё, что требует настоящего Media3 |
+| `src/androidTest` | Тесты на эмуляторе: всё, что требует настоящего Media3 или SQLite |
+| `src/androidTest/assets/tags` | Секунда тишины с тегами на формат (MP3, FLAC, M4A, без тегов) для сканера; рецепт — `tools/make_tag_fixtures.py` |
 | `src/sharedTest` | Общее для двух предыдущих: контрактные тесты, `FakeAudioEngine`, `FakeLibraryRepository` |
 
 `sharedTest` подключён к обоим наборам в `app/build.gradle.kts`. Иначе
@@ -166,6 +253,8 @@ SAF: ACTION_OPEN_DOCUMENT
   подменить.
 - **UI — Compose + Material 3**, одна `Activity`, навигация в `ui/navigation`.
 - **Звук — Media3/ExoPlayer**, спрятан за `audio/engine`.
+- **Хранение — Room** с компилятором на KSP, спрятан за `LibraryRepository`.
+  Схема выгружается в `app/schemas/` (плагин `androidx.room`).
 - **Версии** — только в `gradle/libs.versions.toml`.
 
 ## Что уже есть
@@ -175,5 +264,8 @@ SAF: ACTION_OPEN_DOCUMENT
 фоновая служба с сессией (B3.1), `PlaybackController` и временный экран
 `ui/player/FilePlayerScreen` — выбрать файл через SAF, слушать, пауза,
 перемотка. Идёт вертикаль «библиотека на `MediaStore`» (эпик C, шаги — в
-`docs/decisions.md`): готовы модель, сортировка и контракт фасада
-`LibraryRepository` с фейком; хранилища, сканера и экранов ещё нет.
+`docs/decisions.md`): готовы модель, сортировка, контракт фасада
+`LibraryRepository` с фейком, хранилище на Room, которое проходит тот же
+контракт на эмуляторе, сканер `MediaStore`, разрешение и фоновый скан через
+WorkManager. Вместо списков экран библиотеки пока показывает «Найдено N
+треков» над плеером файлов — списки придут на шаге 5.

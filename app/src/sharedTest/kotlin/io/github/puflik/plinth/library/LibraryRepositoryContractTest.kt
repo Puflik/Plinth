@@ -76,19 +76,36 @@ abstract class LibraryRepositoryContractTest {
             assertThat(repository.titles(TrackSort.TITLE)).containsExactly("track 2", "Track 10").inOrder()
         }
 
+    /** С артиклем `The Wall` стоял бы раньше `Time`: `th` < `ti`. */
     @Test
     fun tracks_by_title_ignore_leading_article() =
         contract { repository ->
             repository.upsert(
                 listOf(
-                    track(id = 1, title = "Wish You Were Here"),
+                    track(id = 1, title = "Time"),
                     track(id = 2, title = "The Wall"),
                     track(id = 3, title = "Animals"),
                 ),
             )
 
             assertThat(repository.titles(TrackSort.TITLE))
-                .containsExactly("Animals", "The Wall", "Wish You Were Here")
+                .containsExactly("Animals", "Time", "The Wall")
+                .inOrder()
+        }
+
+    @Test
+    fun tracks_with_equal_titles_follow_artist() =
+        contract { repository ->
+            repository.upsert(
+                listOf(
+                    track(id = 1, title = "Intro"),
+                    track(id = 2, title = "Intro", artist = "Coldplay"),
+                    track(id = 3, title = "Intro", artist = "The Beatles"),
+                ),
+            )
+
+            assertThat(repository.tracks(TrackSort.TITLE).first().map(LibraryTrack::artist))
+                .containsExactly("The Beatles", "Coldplay", null)
                 .inOrder()
         }
 
@@ -98,6 +115,20 @@ abstract class LibraryRepositoryContractTest {
             repository.upsert(listOf(track(id = 2, title = "Intro"), track(id = 1, title = "intro")))
 
             assertThat(repository.tracks().first().map(LibraryTrack::id)).containsExactly(1L, 2L).inOrder()
+        }
+
+    /**
+     * Ключи сравниваются по кодовым точкам, как в SQLite и Rust, а не по UTF-16,
+     * как `String.compareTo`: эмодзи (вне BMP) — после полуширинной катаканы U+FF76.
+     */
+    @Test
+    fun tracks_by_title_compare_code_points() =
+        contract { repository ->
+            val kana = "ｶ Kana"
+            val smile = "😀 Smile"
+            repository.upsert(listOf(track(id = 1, title = smile), track(id = 2, title = kana)))
+
+            assertThat(repository.titles(TrackSort.TITLE)).containsExactly(kana, smile).inOrder()
         }
 
     @Test
@@ -124,6 +155,7 @@ abstract class LibraryRepositoryContractTest {
             assertThat(repository.titles(TrackSort.ARTIST)).containsExactly("known", "unknown").inOrder()
         }
 
+    /** Одноимённые альбомы не перемешиваются: первый диск ABBA целиком раньше первого диска Queen. */
     @Test
     fun tracks_by_album_keep_discs_and_same_named_albums_apart() =
         contract { repository ->
@@ -131,15 +163,15 @@ abstract class LibraryRepositoryContractTest {
                 id: Long,
                 title: String,
                 artist: String,
-                disc: Int?,
+                disc: Int,
                 number: Int,
             ) = track(id, title, artist, "Greatest Hits", discNumber = disc, trackNumber = number)
             repository.upsert(
                 listOf(
                     hit(id = 1, title = "q-d2-t1", artist = "Queen", disc = 2, number = 1),
-                    hit(id = 2, title = "a-t1", artist = "ABBA", disc = null, number = 1),
+                    hit(id = 2, title = "a-t1", artist = "ABBA", disc = 1, number = 1),
                     hit(id = 3, title = "q-d1-t2", artist = "Queen", disc = 1, number = 2),
-                    hit(id = 4, title = "a-t2", artist = "ABBA", disc = null, number = 2),
+                    hit(id = 4, title = "a-t2", artist = "ABBA", disc = 1, number = 2),
                     track(id = 5, title = "no-album", artist = "ABBA"),
                     hit(id = 6, title = "q-d1-t1", artist = "Queen", disc = 1, number = 1),
                 ),
@@ -150,19 +182,20 @@ abstract class LibraryRepositoryContractTest {
                 .inOrder()
         }
 
+    /** Одноимённые альбомы — по владельцу, и тоже без артикля: The Kinks под «K». */
     @Test
     fun albums_group_tracks_by_title_and_owner() =
         contract { repository ->
             repository.upsert(
                 listOf(
                     track(id = 1, artist = "Queen", album = "Greatest Hits"),
-                    track(id = 2, artist = "ABBA", album = "Greatest Hits"),
+                    track(id = 2, artist = "The Kinks", album = "Greatest Hits"),
                     track(id = 3, artist = "Queen", album = "Greatest Hits"),
                 ),
             )
 
             assertThat(repository.albums().first())
-                .containsExactly(Album("Greatest Hits", "ABBA", 1), Album("Greatest Hits", "Queen", 2))
+                .containsExactly(Album("Greatest Hits", "The Kinks", 1), Album("Greatest Hits", "Queen", 2))
                 .inOrder()
         }
 
@@ -204,6 +237,7 @@ abstract class LibraryRepositoryContractTest {
                 .inOrder()
         }
 
+    /** Внутри владельца — по названию без артикля: The Album раньше Arrival. */
     @Test
     fun albums_by_artist_put_unknown_owner_last() =
         contract { repository ->
@@ -213,14 +247,41 @@ abstract class LibraryRepositoryContractTest {
                     track(id = 2, artist = "The Beatles", album = "Abbey Road"),
                     track(id = 3, artist = "ABBA", album = "Waterloo"),
                     track(id = 4, artist = "ABBA", album = "Arrival"),
+                    track(id = 5, artist = "ABBA", album = "The Album"),
                 ),
             )
 
             assertThat(repository.albums(AlbumSort.ARTIST).first().map(Album::title))
-                .containsExactly("Arrival", "Waterloo", "Abbey Road", "Bootleg")
+                .containsExactly("The Album", "Arrival", "Waterloo", "Abbey Road", "Bootleg")
                 .inOrder()
         }
 
+    /** У альбома нет `id`: равные по ключам идут по точному названию, затем по владельцу. */
+    @Test
+    fun albums_with_equal_keys_follow_exact_title_then_owner() =
+        contract { repository ->
+            repository.upsert(
+                listOf(
+                    track(id = 1, artist = "The Beatles", album = "Abbey Road"),
+                    track(id = 2, artist = "Beatles", album = "abbey road"),
+                    track(id = 3, artist = "Beatles", album = "Abbey Road"),
+                ),
+            )
+            val exactOrder =
+                listOf(
+                    Album("Abbey Road", "Beatles", 1),
+                    Album("Abbey Road", "The Beatles", 1),
+                    Album("abbey road", "Beatles", 1),
+                )
+
+            assertThat(repository.albums(AlbumSort.TITLE).first()).containsExactlyElementsIn(exactOrder).inOrder()
+            assertThat(repository.albums(AlbumSort.ARTIST).first()).containsExactlyElementsIn(exactOrder).inOrder()
+        }
+
+    /**
+     * Диск без номера — первым: у однодисковых альбомов тега диска обычно нет.
+     * Трек без номера — последним на диске, равные номера — по названию.
+     */
     @Test
     fun album_tracks_follow_disc_then_track_number() =
         contract { repository ->
@@ -230,7 +291,7 @@ abstract class LibraryRepositoryContractTest {
             fun side(
                 id: Long,
                 title: String,
-                disc: Int,
+                disc: Int?,
                 number: Int?,
             ) = track(id, title, artist, album, discNumber = disc, trackNumber = number)
             repository.upsert(
@@ -240,13 +301,15 @@ abstract class LibraryRepositoryContractTest {
                     side(id = 3, title = "d1-t10", disc = 1, number = 10),
                     side(id = 4, title = "d1-t2", disc = 1, number = 2),
                     track(id = 5, title = "other", artist = "Other", album = album, trackNumber = 1),
+                    side(id = 6, title = "none-t5", disc = null, number = 5),
+                    side(id = 7, title = "d1-bonus", disc = 1, number = null),
                 ),
             )
 
-            val tracks = repository.albumTracks(Album(album, artist, trackCount = 4)).first()
+            val tracks = repository.albumTracks(Album(album, artist, trackCount = 6)).first()
 
             assertThat(tracks.map(LibraryTrack::title))
-                .containsExactly("d1-t2", "d1-t10", "d1-none", "d2-t1")
+                .containsExactly("none-t5", "d1-t2", "d1-t10", "d1-bonus", "d1-none", "d2-t1")
                 .inOrder()
         }
 

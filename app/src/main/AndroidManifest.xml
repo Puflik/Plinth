@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Чтение музыки для библиотеки (C1.1): с Android 13 — только аудио,
+      раньше — всё общее хранилище. Файл через SAF по-прежнему открывается
+      без разрешений.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <!--
       Разрешения фонового воспроизведения. Нужны эпику B3 (шаг 4 вертикали);
       объявлены здесь, потому что состав разрешений — ответственность A2.1.
-      Библиотеки и чтения медиатеки (READ_MEDIA_AUDIO) в v0.1 нет:
-      первая вертикаль берёт файл через SAF, разрешений не требующий.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -46,6 +55,21 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!--
+          WorkManager настраивает PlinthApplication (воркеры строит Hilt),
+          поэтому автоматическая инициализация при старте выключена.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
     </application>
 

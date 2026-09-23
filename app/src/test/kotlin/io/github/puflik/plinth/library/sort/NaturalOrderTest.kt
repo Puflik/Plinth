@@ -62,6 +62,14 @@ class NaturalOrderTest {
     }
 
     @Test
+    fun `comparator compares keys by code point, as the database does`() {
+        // U+1F600 (эмодзи) в UTF-16 — суррогатная пара и для compareTo меньше U+FF76.
+        val sorted = listOf("😀", "ｶ").sortedWith(NaturalOrder.comparator)
+
+        assertThat(sorted).containsExactly("ｶ", "😀").inOrder()
+    }
+
+    @Test
     fun `comparator agrees with keys`() {
         val names = listOf("b10", "B9", "a", "Ä", "10", "9")
 

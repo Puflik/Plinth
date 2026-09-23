@@ -16,4 +16,17 @@
     <string name="player_error_format">This format is not supported.</string>
     <string name="player_error_network">Network error. Check the connection and try again.</string>
     <string name="player_error_unknown">Playback failed.</string>
+
+    <string name="library_permission_title">Access to your music</string>
+    <string name="library_permission_rationale">Plinth reads the music on this device to build your library. Nothing leaves the device.</string>
+    <string name="library_permission_allow">Allow access</string>
+    <string name="library_permission_denied">Access to music is turned off. Turn it on in the app settings to see your library.</string>
+    <string name="library_permission_open_settings">Open settings</string>
+    <string name="library_scanning">Scanning your music…</string>
+    <string name="library_scan_progress">Scanning your music: %1$d of %2$d</string>
+    <plurals name="library_found">
+        <item quantity="one">Found %d track</item>
+        <item quantity="other">Found %d tracks</item>
+    </plurals>
+    <string name="library_scan_failed">Could not scan your music.</string>
 </resources>
