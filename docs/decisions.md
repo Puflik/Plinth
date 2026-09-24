@@ -1892,3 +1892,47 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
 - **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 371 JVM-тесту на
   flavor (+17), `assembleGithubDebug`, `assembleFdroidDebug`,
   `assembleGithubDebugAndroidTest`.
+
+### Шаг G1b: сбои и обратная связь
+
+- **`CrashHandler`** — обработчик необработанных исключений процесса
+  (`install` в `PlinthApplication` сразу после логгера): отчёт — время,
+  поток, `AppInfo.line` и очищенный `LogRedactor` стектрейс — синхронно в
+  `filesDir/crash/last.txt` (`CrashStore`), дальше сбой уходит прежнему
+  системному обработчику. Лог пишется в фоне и при падении может не
+  успеть — поэтому отдельный файл. Не удалось сохранить — сбой всё равно
+  уходит дальше.
+- **`AppInfo`** — версия, flavor, Android и API, производитель и модель; из
+  неё строка запуска в логе, шапка отчёта и шаблон issue.
+- **Предложение после сбоя** (`ui/settings/CrashReportOffer` в `PlinthMain`):
+  диалог «Plinth closed unexpectedly» — «Save report» / «Not now». Сохранение —
+  системный «Создать файл» (`plinth-report.txt`): шапка, раздел «Crash»,
+  лог от старого файла к новому (`LogExporter`). Сохранили — внизу «Report
+  saved» с действием «Report on GitHub»; только оно открывает шаблон issue
+  (решение автора: шаблон — если человек сам захотел обратную связь).
+  Любой ответ снимает отчёт — предложение не повторяется. Отказ в диалоге
+  выбора файла — не ответ: диалог о сбое остаётся.
+- **Раздел «Diagnostics» в настройках** вместо отдельного экрана
+  `DiagnosticsScreen` из декомпозиции: «Save log» (тот же файл; если сбой не
+  разобран — с ним) и «Report a problem» (шаблон issue).
+- **`IssueTemplate`**: `…/issues/new?body=` — заготовка «What happened /
+  Steps to reproduce / Environment» со сборкой и устройством, пробелы —
+  `%20`. Лога в адресе нет: сохранённый отчёт человек прикладывает сам,
+  увидев его.
+- **Тесты (JVM):** `CrashReportsTest` (6: отчёт очищен и сбой дошёл до
+  системного обработчика; неудачное сохранение сбой не глотает; отчёт ждёт до
+  очистки; выгрузка — шапка, сбой, лог по порядку; без сбоя — без раздела;
+  шаблон — окружение без лога), `DiagnosticsViewModelTest` (4). RED — 7
+  падений из 10.
+- **Проверено на живом эмуляторе (API 36):** `am crash` → в
+  `files/crash/last.txt` «Crash at … on thread main», строка сборки и
+  стектрейс `CrashedByAdbException`; запуск → диалог; «Save report» →
+  `Download/plinth-report.txt` (шапка, «== Crash ==», лог: запуск, служба,
+  «Scan: done: 10 tracks»), внизу «Report saved» / «Report on GitHub»; отчёт
+  о сбое снят. «Settings» → «Report a problem» → браузер с
+  `github.com/Puflik/Plinth/issues/new?body=**What%20happened**…`.
+  Действие «Report on GitHub» во всплывающем сообщении вживую не нажато —
+  сообщение ушло раньше, чем до него дошли команды; адрес у него тот же.
+- **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 381 JVM-тесту на
+  flavor (+10), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`.

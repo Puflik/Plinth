@@ -40,6 +40,7 @@ import io.github.puflik.plinth.ui.onboarding.OnboardingViewModel
 import io.github.puflik.plinth.ui.player.MiniPlayer
 import io.github.puflik.plinth.ui.player.MiniPlayerActions
 import io.github.puflik.plinth.ui.player.PlayerViewModel
+import io.github.puflik.plinth.ui.settings.CrashReportOffer
 import io.github.puflik.plinth.ui.start.StartViewModel
 import io.github.puflik.plinth.ui.start.explanationText
 import io.github.puflik.plinth.ui.theme.PlinthTheme
@@ -123,6 +124,9 @@ private fun PlinthMain(
     val player: PlayerViewModel = hiltViewModel()
     val playerState by player.uiState.collectAsState()
     val showMiniPlayer = playerState.hasTrack && currentRoute != Destination.Player.route
+
+    // Прошлый запуск закончился сбоем — предложить сохранить отчёт (G1.3).
+    CrashReportOffer(snackbar)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },

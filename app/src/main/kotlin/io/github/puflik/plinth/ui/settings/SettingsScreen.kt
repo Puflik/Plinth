@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -37,7 +38,7 @@ import io.github.puflik.plinth.library.model.FolderConfig
 
 /**
  * Вкладка «Настройки»: стартовый экран (F3), язык приложения (12.12, только
- * Android 13+) и папки фонотеки (C2.5).
+ * Android 13+), папки фонотеки (C2.5) и диагностика (G1.3).
  *
  * Папки — что сканировать и что пропускать; выбираются системным диалогом
  * (`OpenDocumentTree`), до библиотеки доходят после «Пересканировать».
@@ -47,6 +48,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: FolderSettingsViewModel = hiltViewModel(),
     start: StartScreenSettingViewModel = hiltViewModel(),
+    diagnostics: DiagnosticsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val startState by start.uiState.collectAsState()
@@ -54,6 +56,8 @@ fun SettingsScreen(
     val exclude = rememberFolderPicker(viewModel::onExclude)
     val language = rememberAppLanguage()
     val context = LocalContext.current
+    val saveLog = rememberLogSaver(diagnostics)
+    val uriHandler = LocalUriHandler.current
     LazyColumn(modifier = modifier.fillMaxSize()) {
         startScreenChoice(startState, onChoose = start::onChoose)
         if (language != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -68,6 +72,7 @@ fun SettingsScreen(
             ) { Text(stringResource(R.string.folders_reset)) }
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
+        diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
     }
 }
 
