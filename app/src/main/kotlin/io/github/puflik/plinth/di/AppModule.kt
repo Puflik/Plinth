@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Qualifier
 import javax.inject.Singleton
+import kotlin.time.Clock
 
 /** Диспетчер для блокирующего ввода-вывода: файлы, база, сеть. */
 @Qualifier
@@ -51,4 +52,8 @@ object AppModule {
     @Singleton
     @ApplicationScope
     fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Системные часы; тесты подставляют свои, чтобы «30 минут назад» не зависело от настоящего времени. */
+    @Provides
+    fun provideClock(): Clock = Clock.System
 }

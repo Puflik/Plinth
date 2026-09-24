@@ -14,6 +14,7 @@ import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /** Очередь переживает перезапуск (D1.5, D2.1): файл в памяти приложения. */
 class FileQueueStoreTest {
@@ -117,6 +118,38 @@ class FileQueueStoreTest {
             }
 
             assertThat(parallel.load()?.queue).isEqualTo(queue)
+        }
+
+    @Test
+    fun `last play time comes back and survives a new queue`() =
+        runTest {
+            store.saveQueue(PlaybackQueue.EMPTY.play(QueueContext.Tracks, album, start = 0))
+            store.savePlayedAt(Instant.fromEpochMilliseconds(1_800_000_000_123))
+
+            store.saveQueue(PlaybackQueue.EMPTY.play(QueueContext.Tracks, album, start = 2))
+
+            assertThat(store.load()?.playedAt).isEqualTo(Instant.fromEpochMilliseconds(1_800_000_000_123))
+        }
+
+    @Test
+    fun `queue saved before play times were kept still comes back`() =
+        runTest {
+            val queue = PlaybackQueue.EMPTY.play(QueueContext.Tracks, album, start = 1)
+            store.saveQueue(queue)
+            store.savePosition(12.seconds)
+
+            assertThat(store.load()).isEqualTo(SavedQueue(queue, 12.seconds, playedAt = null))
+        }
+
+    @Test
+    fun `damaged play time does not lose the queue`() =
+        runTest {
+            val queue = PlaybackQueue.EMPTY.play(QueueContext.Tracks, album, start = 1)
+            store.saveQueue(queue)
+            store.savePlayedAt(Instant.fromEpochMilliseconds(1_800_000_000_000))
+            temp.root.resolve("queue/played.bin").writeBytes(byteArrayOf(1, 2, 3))
+
+            assertThat(store.load()).isEqualTo(SavedQueue(queue, Duration.ZERO, playedAt = null))
         }
 
     @Test

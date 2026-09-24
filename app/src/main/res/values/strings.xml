@@ -77,6 +77,35 @@
     <string name="folders_reset">Reset to Music and Download</string>
     <string name="folders_not_local">Pick a folder on this device.</string>
 
+    <string name="settings_start_title">Start screen</string>
+    <string name="settings_start_auto">Auto</string>
+    <string name="settings_start_auto_hint">The player if you listened in the last 30 minutes, otherwise the library.</string>
+    <string name="settings_start_library">Library</string>
+    <string name="settings_start_library_hint">Always the library.</string>
+    <string name="settings_start_continue">Continue</string>
+    <string name="settings_start_continue_hint">Always the player, with the same queue and position.</string>
+    <string name="settings_start_why">This launch: %1$s</string>
+    <string name="start_explain_empty">Showing the library: it has no music yet.</string>
+    <string name="start_explain_recent">Continuing where you left off: you listened %1$s ago.</string>
+    <string name="start_explain_recent_now">Continuing where you left off: you were listening a moment ago.</string>
+    <string name="start_explain_break">Showing the library: you last listened %1$s ago.</string>
+    <string name="start_explain_never">Showing the library: nothing has played yet.</string>
+    <string name="start_explain_fixed">The start screen is set to %1$s.</string>
+    <string name="start_explain_nothing_to_continue">The start screen is set to Continue, but nothing has played yet, so here is the library.</string>
+    <string name="start_explain_settings">Settings</string>
+    <plurals name="time_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="time_hours">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="time_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+
     <string name="onboarding_welcome">Welcome to Plinth</string>
     <string name="onboarding_step">Step %1$d of %2$d</string>
     <string name="onboarding_folders_title">Where is your music?</string>

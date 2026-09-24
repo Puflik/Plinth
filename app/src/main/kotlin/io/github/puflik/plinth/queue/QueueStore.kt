@@ -1,11 +1,17 @@
 package io.github.puflik.plinth.queue
 
 import kotlin.time.Duration
+import kotlin.time.Instant
 
-/** Очередь и место в текущем треке, как их сохранили (D2.1). */
+/**
+ * Очередь и место в текущем треке, как их сохранили (D2.1).
+ *
+ * @property playedAt когда последний раз играло (F3); `null` — неизвестно.
+ */
 data class SavedQueue(
     val queue: PlaybackQueue,
     val position: Duration,
+    val playedAt: Instant? = null,
 )
 
 /**
@@ -20,4 +26,7 @@ interface QueueStore {
     suspend fun saveQueue(queue: PlaybackQueue)
 
     suspend fun savePosition(position: Duration)
+
+    /** Когда последний раз играло (F3); новая очередь его не сбрасывает. */
+    suspend fun savePlayedAt(at: Instant)
 }

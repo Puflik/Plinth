@@ -10,13 +10,18 @@ import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.QueueStore
 import io.github.puflik.plinth.queue.SavedQueue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /** Восстановление очереди при старте и её сохранение по ходу (D1.5, D2.1, D2.2). */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -89,15 +94,82 @@ class QueueKeeperTest {
             assertThat(store.positionWrites).isEqualTo(3)
         }
 
+    @Test
+    fun `last play time comes back with the queue`() =
+        runTest(UnconfinedTestDispatcher()) {
+            store.saved = SavedQueue(saved, 42.seconds, playedAt = Instant.fromEpochSeconds(1_700_000_000))
+            val (_, keeper) = keeper()
+
+            keeper.start()
+
+            assertThat(keeper.lastPlayed.first()).isEqualTo(Instant.fromEpochSeconds(1_700_000_000))
+        }
+
+    @Test
+    fun `nothing played before is known as never`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (_, keeper) = keeper()
+
+            keeper.start()
+
+            assertThat(keeper.lastPlayed.first()).isNull()
+        }
+
+    @Test
+    fun `restored paused queue is not a play`() =
+        runTest(UnconfinedTestDispatcher()) {
+            store.saved = SavedQueue(saved, 42.seconds, playedAt = Instant.fromEpochSeconds(1_700_000_000))
+            val (_, keeper) = keeper()
+
+            keeper.start()
+            advanceTimeBy(5.minutes)
+
+            assertThat(store.playedAt).isNull()
+            assertThat(keeper.lastPlayed.first()).isEqualTo(Instant.fromEpochSeconds(1_700_000_000))
+        }
+
+    @Test
+    fun `playing marks the time every minute and pause marks the moment`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (controller, keeper) = keeper()
+            keeper.start()
+
+            advanceTimeBy(10.seconds)
+            controller.play(QueueContext.Tracks, tracks, start = 0)
+            assertThat(store.playedAt).isEqualTo(at(10.seconds))
+
+            advanceTimeBy(80.seconds)
+            assertThat(store.playedAt).isEqualTo(at(70.seconds))
+
+            controller.togglePlayPause()
+            assertThat(store.playedAt).isEqualTo(at(90.seconds))
+            assertThat(keeper.lastPlayed.first()).isEqualTo(at(90.seconds))
+
+            advanceTimeBy(10.minutes)
+            assertThat(store.playedAt).isEqualTo(at(90.seconds))
+        }
+
+    private fun at(time: Duration) = Instant.fromEpochMilliseconds(time.inWholeMilliseconds)
+
     private fun TestScope.keeper(): Pair<PlaybackController, QueueKeeper> {
         val controller = PlaybackController(engine, backgroundScope)
-        return controller to QueueKeeper(controller, store, backgroundScope)
+        // Часы теста — виртуальное время планировщика от нуля эпохи.
+        val clock =
+            object : Clock {
+                override fun now() = Instant.fromEpochMilliseconds(testScheduler.currentTime)
+            }
+        return controller to QueueKeeper(controller, store, backgroundScope, clock)
     }
 
     /** Хранилище в памяти; считает записи позиции. */
     private class MemoryQueueStore : QueueStore {
         var saved: SavedQueue? = null
         var positionWrites = 0
+        var playedAt: Instant? = null
+
+        override suspend fun savePlayedAt(at: Instant) {
+            playedAt = at
+        }
 
         override suspend fun load(): SavedQueue? = saved
 

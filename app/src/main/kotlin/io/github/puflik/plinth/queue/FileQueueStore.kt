@@ -11,9 +11,12 @@ import java.io.File
 import java.io.IOException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 /**
- * [QueueStore] в двух файлах папки [directory]: очередь и позиция.
+ * [QueueStore] в трёх файлах папки [directory]: очередь, позиция и время
+ * последней игры. Время — отдельно: позиция обнуляется с каждой новой
+ * очередью, а время последней игры от смены трека не зависит.
  *
  * Формат — свой, двоичный, с версией в начале: таблица в базе ради одной
  * очереди не нужна, а Room и сканер в v0.2 уходят в ядро. Файл, который не
@@ -31,6 +34,7 @@ class FileQueueStore(
 ) : QueueStore {
     private val queueFile = File(directory, "queue.bin")
     private val positionFile = File(directory, "position.bin")
+    private val playedFile = File(directory, "played.bin")
     private val lock = Mutex()
 
     override suspend fun load(): SavedQueue? =
@@ -45,7 +49,7 @@ class FileQueueStore(
                     } else {
                         0L
                     }
-                SavedQueue(queue, position.milliseconds)
+                SavedQueue(queue, position.milliseconds, readPlayedAt())
             } catch (expected: IOException) {
                 null
             } catch (expected: IllegalArgumentException) {
@@ -65,6 +69,23 @@ class FileQueueStore(
     override suspend fun savePosition(position: Duration) =
         exclusive {
             write(positionFile) { writeLong(position.inWholeMilliseconds) }
+        }
+
+    override suspend fun savePlayedAt(at: Instant) =
+        exclusive {
+            write(playedFile) { writeLong(at.toEpochMilliseconds()) }
+        }
+
+    /** Время последней игры; не читается — неизвестно, но очередь из-за него не теряется. */
+    private fun readPlayedAt(): Instant? =
+        try {
+            if (playedFile.exists()) {
+                DataInputStream(playedFile.inputStream()).use { Instant.fromEpochMilliseconds(it.readLong()) }
+            } else {
+                null
+            }
+        } catch (expected: IOException) {
+            null
         }
 
     private suspend fun <T> exclusive(block: () -> T): T = lock.withLock { withContext(io) { block() } }

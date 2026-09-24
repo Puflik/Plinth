@@ -35,19 +35,23 @@ import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
 
 /**
- * Экран папок (C2.5): что сканировать и что пропускать; папки выбираются
- * системным диалогом (`OpenDocumentTree`). Изменения доходят до библиотеки
- * после «Пересканировать».
+ * Вкладка «Настройки»: стартовый экран (F3) и папки фонотеки (C2.5).
+ *
+ * Папки — что сканировать и что пропускать; выбираются системным диалогом
+ * (`OpenDocumentTree`), до библиотеки доходят после «Пересканировать».
  */
 @Composable
-fun FolderSettingsScreen(
+fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: FolderSettingsViewModel = hiltViewModel(),
+    start: StartScreenSettingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val startState by start.uiState.collectAsState()
     val include = rememberFolderPicker(viewModel::onInclude)
     val exclude = rememberFolderPicker(viewModel::onExclude)
     LazyColumn(modifier = modifier.fillMaxSize()) {
+        startScreenChoice(startState, onChoose = start::onChoose)
         folderChoice(state.folders, onRemove = viewModel::onRemove, onInclude = include, onExclude = exclude)
         item(key = "reset") {
             TextButton(

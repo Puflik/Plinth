@@ -8,12 +8,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -21,6 +28,8 @@ import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.puflik.plinth.artwork.ArtworkLoader
 import io.github.puflik.plinth.audio.media3.PlaybackServiceConnection
+import io.github.puflik.plinth.startup.StartDecision
+import io.github.puflik.plinth.startup.StartDestination
 import io.github.puflik.plinth.ui.common.LocalArtworkLoader
 import io.github.puflik.plinth.ui.navigation.BottomNavigationBar
 import io.github.puflik.plinth.ui.navigation.Destination
@@ -31,6 +40,8 @@ import io.github.puflik.plinth.ui.onboarding.OnboardingViewModel
 import io.github.puflik.plinth.ui.player.MiniPlayer
 import io.github.puflik.plinth.ui.player.MiniPlayerActions
 import io.github.puflik.plinth.ui.player.PlayerViewModel
+import io.github.puflik.plinth.ui.start.StartViewModel
+import io.github.puflik.plinth.ui.start.explanationText
 import io.github.puflik.plinth.ui.theme.PlinthTheme
 import javax.inject.Inject
 
@@ -65,16 +76,46 @@ private fun PlinthApp() {
         // Первый ли это запуск, ещё не прочитано — доли секунды виден фон темы.
         OnboardingUiState.Loading -> Unit
         is OnboardingUiState.Step -> OnboardingScreen(step = state.step, viewModel = onboarding)
-        OnboardingUiState.Finished -> PlinthMain()
+        OnboardingUiState.Finished -> StartedApp()
     }
 }
 
-/** Приложение: вкладки, экраны поверх них и мини-плеер. */
+/**
+ * Куда открыться (F3): решение принимается за доли секунды — настройка,
+ * библиотека и время последней игры, — до него виден фон темы.
+ */
 @Composable
-private fun PlinthMain() {
+private fun StartedApp() {
+    val start: StartViewModel = hiltViewModel()
+    val decision = start.decision.collectAsState().value
+    if (decision != null) PlinthMain(decision = decision, takeDecision = start::take)
+}
+
+/**
+ * Приложение: вкладки, экраны поверх них и мини-плеер. Стартовое решение
+ * применяется один раз: плеер открывается поверх библиотеки, и если его
+ * выбрало «Авто», снизу объяснение со ссылкой на настройку (12.2, 12.6).
+ */
+@Composable
+private fun PlinthMain(
+    decision: StartDecision,
+    takeDecision: () -> StartDecision?,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val snackbar = remember { SnackbarHostState() }
+    val explanation = explanationText(decision.explanation)
+    val toSettings = stringResource(R.string.start_explain_settings)
+    LaunchedEffect(Unit) {
+        val taken = takeDecision() ?: return@LaunchedEffect
+        if (taken.destination != StartDestination.PLAYER) return@LaunchedEffect
+        navController.openPlayer()
+        if (taken.explanation.automatic) {
+            val result = snackbar.showSnackbar(explanation, actionLabel = toSettings, duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) navController.navigateToTab(Destination.Settings)
+        }
+    }
 
     // Плеер и альбом открываются поверх вкладок — без нижней навигации.
     val onTab = currentRoute == null || Destination.tabs.any { it.route == currentRoute }
@@ -84,6 +125,7 @@ private fun PlinthMain() {
     val showMiniPlayer = playerState.hasTrack && currentRoute != Destination.Player.route
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             Column {
                 if (showMiniPlayer) {

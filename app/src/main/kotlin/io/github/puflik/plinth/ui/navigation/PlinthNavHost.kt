@@ -16,7 +16,7 @@ import io.github.puflik.plinth.ui.library.artist.ArtistScreen
 import io.github.puflik.plinth.ui.library.artist.ArtistViewModel
 import io.github.puflik.plinth.ui.player.PlayerScreen
 import io.github.puflik.plinth.ui.search.SearchScreen
-import io.github.puflik.plinth.ui.settings.FolderSettingsScreen
+import io.github.puflik.plinth.ui.settings.SettingsScreen
 
 /**
  * Граф навигации (A2.1).
@@ -24,7 +24,8 @@ import io.github.puflik.plinth.ui.settings.FolderSettingsScreen
  * Библиотека — стартовый экран; плеер, альбом и исполнитель открываются
  * поверх вкладок. Из плеера к альбому и исполнителю — вместо плеера: он
  * сворачивается в мини-плеер, «назад» ведёт туда, откуда плеер открыли.
- * Из настроек пока есть только папки фонотеки (C2.5), остальное придёт с F.
+ * В настройках — стартовый экран (F3) и папки фонотеки (C2.5). Куда
+ * открыться при запуске, решает `MainActivity`: плеер — поверх библиотеки.
  */
 @Composable
 fun PlinthNavHost(
@@ -66,7 +67,7 @@ fun PlinthNavHost(
             SearchScreen(onOpenPlayer = openPlayer)
         }
         composable(Destination.Settings.route) {
-            FolderSettingsScreen()
+            SettingsScreen()
         }
     }
 }
