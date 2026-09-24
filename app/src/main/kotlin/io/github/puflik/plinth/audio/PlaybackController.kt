@@ -108,6 +108,23 @@ class PlaybackController
             if (progress.value.position > RESTART_THRESHOLD || back == current) restart() else start(back)
         }
 
+        /**
+         * Убрать [item] с места [index] среди следующих треков (E4). Если там
+         * уже другой трек — очередь сдвинулась, пока палец был на экране, —
+         * ничего не делает: убрать не тот трек хуже, чем не убрать никакого.
+         */
+        fun removeUpcoming(
+            index: Int,
+            item: QueueItem,
+        ) = editUpcoming(index, item) { it.remove(index) }
+
+        /** Переставить [item] с места [from] на место [to]; устаревший жест, как в [removeUpcoming], пропускается. */
+        fun moveUpcoming(
+            from: Int,
+            to: Int,
+            item: QueueItem,
+        ) = editUpcoming(from, item) { queue -> if (to in queue.upcoming.indices) queue.move(from, to) else queue }
+
         fun toggleShuffle() = mutableQueue.update { it.withShuffle(!it.shuffle) }
 
         /** Повтор по кругу: выключен → всё → один трек → выключен. */
@@ -142,6 +159,13 @@ class PlaybackController
         }
 
         private fun restart() = seekTo(Duration.ZERO)
+
+        /** Правка того, что сыграет дальше; текущий трек она не трогает, поэтому движок не нужен. */
+        private fun editUpcoming(
+            index: Int,
+            item: QueueItem,
+            edit: (PlaybackQueue) -> PlaybackQueue,
+        ) = mutableQueue.update { queue -> if (queue.upcoming.getOrNull(index) == item) edit(queue) else queue }
 
         private fun start(queue: PlaybackQueue) {
             mutableQueue.value = queue

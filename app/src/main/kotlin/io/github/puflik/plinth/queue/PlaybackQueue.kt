@@ -116,6 +116,67 @@ data class PlaybackQueue(
 
     fun withRepeat(mode: RepeatMode): PlaybackQueue = copy(repeat = mode)
 
+    /**
+     * Убрать трек с места [index] в [upcoming] (E4). Трек контекста уходит из
+     * контекста совсем: «назад» к нему уже не вернёт.
+     */
+    fun remove(index: Int): PlaybackQueue {
+        require(index in upcoming.indices) { "места $index нет среди ${upcoming.size} следующих треков" }
+        return if (index < upNext.size) copy(upNext = upNext.withoutAt(index)) else withoutContextAt(orderIndex(index))
+    }
+
+    /**
+     * Переставить трек с места [from] на место [to] в [upcoming] (E4). Место
+     * внутри ручного блока (меньше его длины) делает трек ручным, место за ним
+     * — треком контекста. Перестановка внутри контекста меняет порядок обхода,
+     * а не сами треки: без shuffle альбом вернётся к своему порядку.
+     */
+    fun move(
+        from: Int,
+        to: Int,
+    ): PlaybackQueue {
+        require(from in upcoming.indices && to in upcoming.indices) {
+            "перенос $from → $to вне ${upcoming.size} следующих треков"
+        }
+        val fromManual = from < upNext.size
+        val toManual = to < upNext.size
+        val item = upcoming[from]
+        return when {
+            fromManual && toManual -> copy(upNext = upNext.withoutAt(from).withAt(to, item))
+            !fromManual && !toManual -> {
+                val moved = order[orderIndex(from)]
+                copy(order = order.withoutAt(orderIndex(from)).withAt(orderIndex(to), moved))
+            }
+            toManual -> withoutContextAt(orderIndex(from)).let { it.copy(upNext = it.upNext.withAt(to, item)) }
+            // Ручной трек уходит из ручного блока: блок стал на один короче.
+            else ->
+                copy(
+                    upNext = upNext.withoutAt(from),
+                    contextItems = contextItems + item,
+                    order = order.withAt(position + 1 + to - (upNext.size - 1), contextItems.size),
+                )
+        }
+    }
+
+    /** Место в [order] трека контекста, стоящего на месте [index] в [upcoming]. */
+    private fun orderIndex(index: Int): Int = position + 1 + index - upNext.size
+
+    /** Без трека контекста, что стоит в [order] на месте [orderIndex]; индексы после него сдвигаются. */
+    private fun withoutContextAt(orderIndex: Int): PlaybackQueue {
+        val removed = order[orderIndex]
+        return copy(
+            contextItems = contextItems.withoutAt(removed),
+            order = order.withoutAt(orderIndex).map { if (it > removed) it - 1 else it },
+        )
+    }
+
+    private fun <T> List<T>.withoutAt(index: Int): List<T> = toMutableList().apply { removeAt(index) }
+
+    private fun <T> List<T>.withAt(
+        index: Int,
+        element: T,
+    ): List<T> = toMutableList().apply { add(index, element) }
+
     companion object {
         val EMPTY = PlaybackQueue()
     }

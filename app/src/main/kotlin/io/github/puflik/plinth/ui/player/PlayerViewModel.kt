@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
+import io.github.puflik.plinth.queue.QueueItem
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -35,6 +36,17 @@ class PlayerViewModel
         fun onPrevious() = playback.previous()
 
         fun onShuffle() = playback.toggleShuffle()
+
+        fun onRemoveUpcoming(
+            index: Int,
+            item: QueueItem,
+        ) = playback.removeUpcoming(index, item)
+
+        fun onMoveUpcoming(
+            from: Int,
+            to: Int,
+            item: QueueItem,
+        ) = playback.moveUpcoming(from, to, item)
 
         fun onRepeat() = playback.cycleRepeat()
 

@@ -97,6 +97,20 @@ class PlayerViewModelTest {
             assertThat(viewModel.uiState.value.repeat).isEqualTo(RepeatMode.ALL)
         }
 
+    @Test
+    fun `queue panel removes and moves upcoming tracks`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            val third = item("third")
+            playback.play(album, listOf(song, second, third), start = 0)
+
+            viewModel.onMoveUpcoming(from = 1, to = 0, item = third)
+            assertThat(viewModel.uiState.value.upcoming).containsExactly(third, second).inOrder()
+
+            viewModel.onRemoveUpcoming(index = 0, item = third)
+            assertThat(viewModel.uiState.value.upcoming).containsExactly(second)
+        }
+
     /** Мини-плеер виден, когда есть что показать, — и после восстановления на паузе тоже. */
     @Test
     fun `there is a track once the queue has one`() =

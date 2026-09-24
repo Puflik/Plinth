@@ -11,14 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -41,7 +39,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.artwork.ArtworkSize
 import io.github.puflik.plinth.audio.engine.PlaybackError
-import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
 import io.github.puflik.plinth.ui.common.ArtworkImage
 import io.github.puflik.plinth.ui.common.formatRemaining
@@ -51,7 +48,7 @@ import kotlin.time.Duration
 /**
  * Полноэкранный плеер, слой D1 (E1, раскладка 12.13 плана): свернуть,
  * обложка, название и исполнитель, прогресс, shuffle · ⏮ · ▶ · ⏭ · repeat.
- * Под ним — что дальше, пока у очереди нет своей панели (E3.2).
+ * На месте обложки открываются панели D2 (E4) — точками-табы под ней.
  */
 @Composable
 fun PlayerScreen(
@@ -60,30 +57,49 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    LazyColumn(modifier = modifier.fillMaxSize()) {
-        item(key = "top") {
-            IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
-                Icon(
-                    painterResource(R.drawable.ic_collapse),
-                    contentDescription = stringResource(R.string.player_collapse),
-                )
-            }
-        }
-        item(key = "core") {
-            PlayerCore(
-                state = state,
-                controls =
-                    PlayerControls(
-                        onPlayPause = viewModel::onPlayPause,
-                        onSeek = viewModel::onSeek,
-                        onPrevious = viewModel::onPrevious,
-                        onNext = viewModel::onNext,
-                        onShuffle = viewModel::onShuffle,
-                        onRepeat = viewModel::onRepeat,
-                    ),
+    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
+            Icon(
+                painterResource(R.drawable.ic_collapse),
+                contentDescription = stringResource(R.string.player_collapse),
             )
         }
-        upNext(state.upcoming)
+        PlayerCore(
+            state = state,
+            controls =
+                PlayerControls(
+                    onPlayPause = viewModel::onPlayPause,
+                    onSeek = viewModel::onSeek,
+                    onPrevious = viewModel::onPrevious,
+                    onNext = viewModel::onNext,
+                    onShuffle = viewModel::onShuffle,
+                    onRepeat = viewModel::onRepeat,
+                ),
+            edits = QueueEdits(onRemove = viewModel::onRemoveUpcoming, onMove = viewModel::onMoveUpcoming),
+        )
+    }
+}
+
+/** Обложка или открытая панель — в одной и той же квадратной рамке. */
+@Composable
+private fun PanelArea(
+    panel: PlayerPanel,
+    state: PlayerUiState,
+    edits: QueueEdits,
+    modifier: Modifier,
+) {
+    when (panel) {
+        PlayerPanel.COVER ->
+            ArtworkImage(
+                uri = state.artworkUri,
+                size = ArtworkSize.FULL,
+                placeholder = R.drawable.ic_music_note,
+                modifier = modifier,
+            )
+        PlayerPanel.QUEUE -> QueuePanel(state.upcoming, edits, modifier)
+        PlayerPanel.LYRICS -> PanelPlaceholder(R.string.player_lyrics_later, modifier)
+        PlayerPanel.SIMILAR -> PanelPlaceholder(R.string.player_similar_later, modifier)
+        PlayerPanel.INFO -> PanelPlaceholder(R.string.player_info_later, modifier)
     }
 }
 
@@ -101,22 +117,27 @@ private class PlayerControls(
 private fun PlayerCore(
     state: PlayerUiState,
     controls: PlayerControls,
+    edits: QueueEdits,
 ) {
+    var panel by rememberSaveable { mutableStateOf(PlayerPanel.COVER) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ArtworkImage(
-            uri = state.artworkUri,
-            size = ArtworkSize.FULL,
-            placeholder = R.drawable.ic_music_note,
-            modifier =
-                Modifier
-                    .fillMaxWidth(ARTWORK_WIDTH)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp)),
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            PanelArea(
+                panel = panel,
+                state = state,
+                edits = edits,
+                modifier =
+                    Modifier
+                        .fillMaxWidth(ARTWORK_WIDTH)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(12.dp)),
+            )
+            PanelDots(selected = panel, onSelect = { panel = it })
+        }
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = state.title ?: stringResource(R.string.player_nothing_open),
@@ -234,25 +255,6 @@ private fun TransportButton(
             painter = painterResource(icon),
             contentDescription = stringResource(label),
             tint = if (active) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-        )
-    }
-}
-
-/** Что сыграет дальше (E3.2 без правки): ручной блок, затем остаток контекста. */
-private fun LazyListScope.upNext(upcoming: List<QueueItem>) {
-    if (upcoming.isEmpty()) return
-    item(key = "up-next") {
-        Text(
-            text = stringResource(R.string.player_up_next),
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
-        )
-    }
-    // Один трек может стоять в очереди дважды — ключ по месту, а не по треку.
-    itemsIndexed(upcoming) { _, item ->
-        ListItem(
-            headlineContent = { Text(item.title.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            supportingContent = item.artist?.let { artist -> { Text(artist, maxLines = 1) } },
         )
     }
 }

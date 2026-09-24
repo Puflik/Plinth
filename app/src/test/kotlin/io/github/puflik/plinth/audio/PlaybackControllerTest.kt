@@ -61,6 +61,36 @@ class PlaybackControllerTest {
         }
 
     @Test
+    fun `upcoming tracks can be removed and moved`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.moveUpcoming(from = 1, to = 0, item = tracks[2])
+            assertThat(controller.queue.value.upcoming).containsExactly(tracks[2], tracks[1]).inOrder()
+
+            controller.removeUpcoming(index = 1, item = tracks[1])
+            assertThat(controller.queue.value.upcoming).containsExactly(tracks[2])
+            assertThat(engine.preparedSources).containsExactly(tracks[0].source)
+        }
+
+    /** Очередь сдвинулась, пока палец был на экране: на этом месте уже другой трек. */
+    @Test
+    fun `edit of a track that is no longer there does nothing`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+            val before = controller.queue.value
+
+            controller.removeUpcoming(index = 0, item = tracks[2])
+            controller.moveUpcoming(from = 0, to = 1, item = tracks[2])
+            controller.removeUpcoming(index = 5, item = tracks[1])
+            controller.moveUpcoming(from = 0, to = 5, item = tracks[1])
+
+            assertThat(controller.queue.value).isEqualTo(before)
+        }
+
+    @Test
     fun `finished track makes way for the next one`() =
         runTest(UnconfinedTestDispatcher()) {
             val controller = controller()
