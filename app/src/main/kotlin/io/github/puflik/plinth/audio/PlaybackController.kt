@@ -1,56 +1,125 @@
 package io.github.puflik.plinth.audio
 
 import io.github.puflik.plinth.audio.engine.AudioEngine
-import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackParams
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
+import io.github.puflik.plinth.di.ApplicationScope
+import io.github.puflik.plinth.queue.PlaybackQueue
+import io.github.puflik.plinth.queue.QueueAction
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.queue.RepeatMode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
- * Фасад воспроизведения для UI (B2–B4) — единственная точка, через которую
- * экраны управляют звуком.
+ * Фасад воспроизведения для UI (B2–B4, D) — единственная точка, через которую
+ * экраны управляют звуком и очередью.
  *
  * Движок строг: команда без источника — исключение. Экрану такая строгость
- * ни к чему — кнопка, нажатая до выбора файла, не должна ронять приложение.
- * Фасад переводит намерения пользователя («переключить», «перемотать») в
+ * ни к чему — кнопка, нажатая до выбора трека, не должна ронять приложение.
+ * Фасад переводит намерения пользователя («переключить», «дальше») в
  * команды, допустимые в текущем состоянии, а недопустимые молча пропускает.
- * Очередь (эпик D) встанет сюда же.
+ *
+ * Очередь ([PlaybackQueue]) живёт здесь: доигравший трек сменяется
+ * следующим по событию движка, которое фасад слушает в [scope] всё время
+ * жизни процесса.
  */
 @Singleton
 class PlaybackController
     @Inject
     constructor(
         private val engine: AudioEngine,
+        @ApplicationScope scope: CoroutineScope,
     ) {
         val state: StateFlow<PlaybackState> get() = engine.state
         val progress: StateFlow<PlaybackProgress> get() = engine.progress
         val events: Flow<PlaybackEvent> get() = engine.events
 
-        private val openTitle = MutableStateFlow<String?>(null)
+        private val mutableQueue = MutableStateFlow(PlaybackQueue.EMPTY)
+
+        /** Что играет, что дальше, shuffle и повтор. */
+        val queue: StateFlow<PlaybackQueue> = mutableQueue.asStateFlow()
+
+        init {
+            scope.launch {
+                engine.events.collect { event -> if (event == PlaybackEvent.TrackEnded) advance(auto = true) }
+            }
+        }
+
+        /** Играть [items] контекстом [context] с трека [start]; вручную добавленное остаётся в очереди. */
+        fun play(
+            context: QueueContext,
+            items: List<QueueItem>,
+            start: Int,
+        ) = start(queue.value.play(context, items, start))
+
+        /** «Заменить очередь»: как [play], но без вручную добавленного. */
+        fun replace(
+            context: QueueContext,
+            items: List<QueueItem>,
+            start: Int,
+        ) = start(queue.value.replace(context, items, start))
 
         /**
-         * Название открытого трека: его показывают и плеер, и библиотека.
-         * Движку оно не нужно, поэтому живёт здесь, а не в `AudioSource`;
-         * с очередью (эпик D) переедет в её текущий элемент.
+         * Вернуть сохранённую очередь на паузе на [position] (D2.2). Если
+         * пользователь успел включить что-то сам — ничего не делает.
          */
-        val title: StateFlow<String?> = openTitle.asStateFlow()
-
-        /** Открывает источник и сразу играет: трек выбирают, чтобы слушать. */
-        fun open(
-            source: AudioSource,
-            title: String?,
+        fun restore(
+            saved: PlaybackQueue,
+            position: Duration,
         ) {
-            openTitle.value = title
-            engine.prepare(source, PlaybackParams(autoPlay = true))
+            if (queue.value != PlaybackQueue.EMPTY) return
+            mutableQueue.value = saved
+            saved.current?.let { engine.prepare(it.source, PlaybackParams(startPosition = position, autoPlay = false)) }
         }
+
+        /** Добавить трек в ручной блок; если ничего не играло — он и заиграет. */
+        fun perform(
+            action: QueueAction,
+            item: QueueItem,
+        ) {
+            val added = queue.value.perform(action, item)
+            if (added.current == null) added.next()?.let(::start) else mutableQueue.value = added
+        }
+
+        fun next() = advance(auto = false)
+
+        /**
+         * Назад: в первые [RESTART_THRESHOLD] трека — к предыдущему, позже — к
+         * началу этого же. С первого трека без повтора — тоже к началу.
+         */
+        fun previous() {
+            val current = queue.value
+            if (current.current == null) return
+            val back = current.previous()
+            if (progress.value.position > RESTART_THRESHOLD || back == current) restart() else start(back)
+        }
+
+        fun toggleShuffle() = mutableQueue.update { it.withShuffle(!it.shuffle) }
+
+        /** Повтор по кругу: выключен → всё → один трек → выключен. */
+        fun cycleRepeat() =
+            mutableQueue.update {
+                it.withRepeat(
+                    when (it.repeat) {
+                        RepeatMode.OFF -> RepeatMode.ALL
+                        RepeatMode.ALL -> RepeatMode.ONE
+                        RepeatMode.ONE -> RepeatMode.OFF
+                    },
+                )
+            }
 
         /** Кнопка play/pause; после конца трека играет его заново. */
         fun togglePlayPause() {
@@ -66,6 +135,23 @@ class PlaybackController
             if (engine.state.value.hasSource) engine.seekTo(position.coerceAtLeast(Duration.ZERO))
         }
 
+        private fun advance(auto: Boolean) {
+            val current = queue.value
+            if (current.current != null) current.next(auto)?.let(::start)
+        }
+
+        private fun restart() = seekTo(Duration.ZERO)
+
+        private fun start(queue: PlaybackQueue) {
+            mutableQueue.value = queue
+            queue.current?.let { engine.prepare(it.source, PlaybackParams(autoPlay = true)) }
+        }
+
         private val PlaybackState.hasSource: Boolean
             get() = this != PlaybackState.Idle && this !is PlaybackState.Error
+
+        companion object {
+            /** Сколько должно сыграть, чтобы «назад» вернуло к началу трека, а не к предыдущему. */
+            val RESTART_THRESHOLD: Duration = 3.seconds
+        }
     }

@@ -15,6 +15,9 @@ import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.PermissionState
 import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.TrackSort
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.settings.SortSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -60,10 +64,11 @@ class LibraryViewModel
         private val scan: LibraryScan,
         repository: LibraryRepository,
         private val playback: PlaybackController,
+        private val sorts: SortSettings,
     ) : ViewModel() {
         private val permission = MutableStateFlow(PermissionState.NotRequested)
-        private val trackSort = MutableStateFlow(TrackSort.TITLE)
-        private val albumSort = MutableStateFlow(AlbumSort.TITLE)
+        private val trackSort = sorts.trackSort
+        private val albumSort = sorts.albumSort
 
         // Какую папку открыли. Показывается ближайшая уцелевшая на этом пути — см. LibraryFolder.open.
         private val folderPath = MutableStateFlow("")
@@ -96,21 +101,35 @@ class LibraryViewModel
             if (state == PermissionState.Granted && !wasGranted) scan.start()
         }
 
+        /** Порядок сохраняется и переживает перезапуск; список перестроится, когда он запишется. */
         fun onTrackSort(sort: TrackSort) {
-            trackSort.value = sort
+            viewModelScope.launch { sorts.setTrackSort(sort) }
         }
 
         fun onAlbumSort(sort: AlbumSort) {
-            albumSort.value = sort
+            viewModelScope.launch { sorts.setAlbumSort(sort) }
         }
 
-        fun play(track: LibraryTrack) = playback.open(AudioSource.LocalFile(track.uri), track.title)
+        /** Трек со вкладки «Треки»: контекст — весь список в выбранном порядке. */
+        fun onTrack(
+            track: LibraryTrack,
+            action: TrackAction,
+        ) = playback.act(action, QueueContext.Tracks, uiState.value.tracks, track)
 
-        /** Файл, выбранный через SAF: играет и без разрешения на музыку. */
+        /** Трек со вкладки «Папки»: контекст — треки открытой папки. */
+        fun onFolderTrack(
+            track: LibraryTrack,
+            action: TrackAction,
+        ) {
+            val folder = uiState.value.folder
+            playback.act(action, QueueContext.Folder(folder.path), folder.tracks, track)
+        }
+
+        /** Файл, выбранный через SAF: играет и без разрешения на музыку — контекстом из себя одного. */
         fun openFile(
             uri: String,
             name: String?,
-        ) = playback.open(AudioSource.LocalFile(uri), name)
+        ) = playback.play(QueueContext.File, listOf(QueueItem(AudioSource.LocalFile(uri), title = name)), start = 0)
 
         fun openFolder(path: String) {
             folderPath.value = path

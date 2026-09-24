@@ -24,6 +24,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.library.components.TrackRow
+import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
 
 /** Поиск по фонотеке (C4.4): название, исполнитель, альбом. Касание — звук и плеер. */
 @Composable
@@ -33,6 +34,7 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val feedback = rememberTrackActionFeedback(onOpenPlayer)
     Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
@@ -48,9 +50,9 @@ fun SearchScreen(
                     items(state.results, key = LibraryTrack::id) { track ->
                         TrackRow(
                             track = track,
-                            onClick = {
-                                viewModel.play(track)
-                                onOpenPlayer()
+                            onAction = { action ->
+                                viewModel.onTrack(track, action)
+                                feedback(action)
                             },
                         )
                     }

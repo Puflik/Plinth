@@ -61,6 +61,29 @@ class FolderSettingsViewModelTest {
         }
 
     @Test
+    fun `reset brings back the default folders`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onRemove("Download/")
+            viewModel.onExclude("Music/Rain/")
+
+            viewModel.onReset()
+
+            assertThat(viewModel.uiState.value.folders).isEqualTo(FolderConfig.DEFAULT)
+            assertThat(viewModel.uiState.value.isDefault).isTrue()
+        }
+
+    @Test
+    fun `changed folders are not the default`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            viewModel.onRemove("Download/")
+
+            assertThat(viewModel.uiState.value.isDefault).isFalse()
+        }
+
+    @Test
     fun `changing folders does not scan by itself, rescan does`() =
         runTest(UnconfinedTestDispatcher()) {
             viewModel.onExclude("Download/")

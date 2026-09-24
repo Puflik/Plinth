@@ -7,6 +7,9 @@ import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.ui.library.TrackAction
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -28,7 +31,7 @@ class SearchViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val library = CountingRepository(FakeLibraryRepository())
     private val engine = FakeAudioEngine()
-    private val playback = PlaybackController(engine)
+    private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val viewModel by lazy { SearchViewModel(library, playback) }
 
     private val yesterday = track(1, "Yesterday", "The Beatles")
@@ -102,12 +105,22 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `tapped result plays with its title`() =
+    fun `tapped result plays the results from it`() =
         runTest(dispatcher) {
-            viewModel.play(bohemian)
+            library.upsert(listOf(yesterday, bohemian))
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onQuery("e")
+            advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
+            runCurrent()
+
+            viewModel.onTrack(bohemian, TrackAction.PLAY)
 
             assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(bohemian.uri))
-            assertThat(playback.title.value).isEqualTo("Bohemian Rhapsody")
+            assertThat(playback.queue.value.context).isEqualTo(QueueContext.Search("e"))
+            assertThat(
+                playback.queue.value.upcoming
+                    .map { it.title },
+            ).containsExactly("Yesterday")
         }
 
     /** Запоминает, с чем библиотеку спрашивали. */

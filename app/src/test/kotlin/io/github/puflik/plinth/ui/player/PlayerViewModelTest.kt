@@ -5,6 +5,10 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackError
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.queue.RepeatMode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -18,12 +22,15 @@ import org.junit.Test
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/** Экран плеера: то, что открыли библиотека или SAF, — звук, название, перемотка. */
+/** Экран плеера: что открыли библиотека или SAF — звук, название, очередь. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerViewModelTest {
     private val engine = FakeAudioEngine().apply { trackDuration = 4.minutes }
-    private val playback = PlaybackController(engine)
+    private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val viewModel by lazy { PlayerViewModel(playback) }
+    private val album = QueueContext.Album("Jazz", "Queen")
+    private val song = item("song", artist = "Queen")
+    private val second = item("second")
 
     @Before
     fun setUp() {
@@ -44,24 +51,26 @@ class PlayerViewModelTest {
         }
 
     @Test
-    fun `track opened elsewhere plays with its title and length`() =
+    fun `track opened elsewhere plays with its title, artist and length`() =
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
 
-            playback.open(AudioSource.LocalFile("content://plinth.test/song.flac"), "song.flac")
+            playback.play(album, listOf(song, second), start = 0)
 
             val state = viewModel.uiState.value
-            assertThat(state.title).isEqualTo("song.flac")
+            assertThat(state.title).isEqualTo("song")
+            assertThat(state.artist).isEqualTo("Queen")
             assertThat(state.isPlaying).isTrue()
             assertThat(state.canControl).isTrue()
             assertThat(state.duration).isEqualTo(4.minutes)
+            assertThat(state.upcoming).containsExactly(second)
         }
 
     @Test
     fun `play pause and seek reach the engine`() =
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
-            playback.open(AudioSource.LocalFile("content://plinth.test/song.flac"), "song.flac")
+            playback.play(album, listOf(song), start = 0)
 
             viewModel.onPlayPause()
             viewModel.onSeek(90.seconds)
@@ -71,15 +80,38 @@ class PlayerViewModelTest {
         }
 
     @Test
+    fun `next previous shuffle and repeat reach the queue`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            playback.play(album, listOf(song, second), start = 0)
+
+            viewModel.onNext()
+            assertThat(viewModel.uiState.value.title).isEqualTo("second")
+            viewModel.onPrevious()
+            assertThat(viewModel.uiState.value.title).isEqualTo("song")
+
+            viewModel.onShuffle()
+            viewModel.onRepeat()
+            assertThat(viewModel.uiState.value.shuffle).isTrue()
+            assertThat(viewModel.uiState.value.repeat).isEqualTo(RepeatMode.ALL)
+        }
+
+    @Test
     fun `unavailable file is reported and controls go off`() =
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
-            engine.markUnavailable(AudioSource.LocalFile("content://plinth.test/gone.flac"))
+            val gone = item("gone")
+            engine.markUnavailable(gone.source)
 
-            playback.open(AudioSource.LocalFile("content://plinth.test/gone.flac"), "gone.flac")
+            playback.play(QueueContext.File, listOf(gone), start = 0)
 
             val state = viewModel.uiState.value
             assertThat(state.error).isInstanceOf(PlaybackError.SourceUnavailable::class.java)
             assertThat(state.canControl).isFalse()
         }
+
+    private fun item(
+        name: String,
+        artist: String? = null,
+    ) = QueueItem(AudioSource.LocalFile("content://plinth.test/$name.flac"), title = name, artist = artist)
 }

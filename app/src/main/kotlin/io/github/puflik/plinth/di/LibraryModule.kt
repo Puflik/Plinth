@@ -25,6 +25,8 @@ import io.github.puflik.plinth.library.scan.MediaStoreSource
 import io.github.puflik.plinth.library.scan.ScanSource
 import io.github.puflik.plinth.library.scan.WorkManagerLibraryScan
 import io.github.puflik.plinth.library.sort.SortKeys
+import io.github.puflik.plinth.settings.DataStoreSortSettings
+import io.github.puflik.plinth.settings.SortSettings
 import kotlinx.coroutines.CoroutineDispatcher
 import javax.inject.Singleton
 
@@ -50,6 +52,9 @@ object LibraryModule {
     fun provideSettingsStore(
         @ApplicationContext context: Context,
     ): DataStore<Preferences> = PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("library") }
+
+    @Provides
+    fun provideSortSettings(store: DataStore<Preferences>): SortSettings = DataStoreSortSettings(store)
 
     @Provides
     fun provideFolderSettings(store: DataStore<Preferences>): FolderSettings = DataStoreFolderSettings(store)

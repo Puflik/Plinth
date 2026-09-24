@@ -13,7 +13,7 @@ import kotlin.time.Duration
 
 /**
  * Экран плеера: то, что открыли библиотека или SAF, — звук, название,
- * перемотка. Сам плеер ничего не открывает: название и трек знает
+ * перемотка, очередь. Сам плеер ничего не открывает: трек и очередь знает
  * [PlaybackController].
  */
 @HiltViewModel
@@ -23,12 +23,20 @@ class PlayerViewModel
         private val playback: PlaybackController,
     ) : ViewModel() {
         val uiState: StateFlow<PlayerUiState> =
-            combine(playback.state, playback.progress, playback.title, PlayerUiState::from)
+            combine(playback.state, playback.progress, playback.queue, PlayerUiState::from)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), PlayerUiState.EMPTY)
 
         fun onPlayPause() = playback.togglePlayPause()
 
         fun onSeek(position: Duration) = playback.seekTo(position)
+
+        fun onNext() = playback.next()
+
+        fun onPrevious() = playback.previous()
+
+        fun onShuffle() = playback.toggleShuffle()
+
+        fun onRepeat() = playback.cycleRepeat()
 
         private companion object {
             // Переживает поворот экрана, не держит подписку в фоне.

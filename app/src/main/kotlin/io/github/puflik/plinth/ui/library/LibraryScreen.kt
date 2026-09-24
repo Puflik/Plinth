@@ -41,6 +41,7 @@ import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.library.permission.PermissionState
 import io.github.puflik.plinth.ui.common.PermissionRationaleScreen
+import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
 import io.github.puflik.plinth.ui.library.tabs.AlbumsTab
 import io.github.puflik.plinth.ui.library.tabs.ArtistsTab
 import io.github.puflik.plinth.ui.library.tabs.FoldersTab
@@ -72,9 +73,14 @@ fun LibraryScreen(
             viewModel.openFile(uri, name)
             onOpenPlayer()
         }
-    val play = { track: LibraryTrack ->
-        viewModel.play(track)
-        onOpenPlayer()
+    val feedback = rememberTrackActionFeedback(onOpenPlayer)
+    val onTrack = { track: LibraryTrack, action: TrackAction ->
+        viewModel.onTrack(track, action)
+        feedback(action)
+    }
+    val onFolderTrack = { track: LibraryTrack, action: TrackAction ->
+        viewModel.onFolderTrack(track, action)
+        feedback(action)
     }
     BackHandler(enabled = tab == LibraryTab.FOLDERS && state.folder.parentPath != null) { viewModel.folderUp() }
 
@@ -89,29 +95,17 @@ fun LibraryScreen(
             onNowPlaying = onOpenPlayer,
         )
         when (state.permission) {
-            PermissionState.Granted -> {
-                ScanStatus(state.scan)
-                PrimaryTabRow(selectedTabIndex = tab.ordinal) {
-                    LibraryTab.entries.forEach { entry ->
-                        Tab(
-                            selected = entry == tab,
-                            onClick = { tab = entry },
-                            text = { Text(stringResource(entry.labelRes)) },
-                        )
-                    }
-                }
-                if (state.tracks.isEmpty()) {
-                    EmptyLibrary(scanning = state.scan is ScanProgress.Running)
-                } else {
-                    when (tab) {
-                        LibraryTab.TRACKS -> TracksTab(state.tracks, onPlay = play)
-                        LibraryTab.ALBUMS -> AlbumsTab(state.albums, onOpen = onOpenAlbum)
-                        LibraryTab.ARTISTS -> ArtistsTab(state.artists)
-                        LibraryTab.FOLDERS ->
-                            FoldersTab(state.folder, viewModel::openFolder, onUp = viewModel::folderUp, onPlay = play)
-                    }
-                }
-            }
+            PermissionState.Granted ->
+                LibraryContent(
+                    state = state,
+                    tab = tab,
+                    onTab = { tab = it },
+                    onTrack = onTrack,
+                    onFolderTrack = onFolderTrack,
+                    onOpenAlbum = onOpenAlbum,
+                    onOpenFolder = viewModel::openFolder,
+                    onFolderUp = viewModel::folderUp,
+                )
             PermissionState.Denied, PermissionState.PermanentlyDenied ->
                 PermissionRationaleScreen(
                     permanentlyDenied = state.permission == PermissionState.PermanentlyDenied,
@@ -120,6 +114,40 @@ fun LibraryScreen(
                 )
             PermissionState.NotRequested -> Unit
         }
+    }
+}
+
+/** Выданное разрешение: статус скана, вкладки и открытая вкладка. */
+@Composable
+private fun LibraryContent(
+    state: LibraryUiState,
+    tab: LibraryTab,
+    onTab: (LibraryTab) -> Unit,
+    onTrack: (LibraryTrack, TrackAction) -> Unit,
+    onFolderTrack: (LibraryTrack, TrackAction) -> Unit,
+    onOpenAlbum: (Album) -> Unit,
+    onOpenFolder: (String) -> Unit,
+    onFolderUp: () -> Unit,
+) {
+    ScanStatus(state.scan)
+    PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+        LibraryTab.entries.forEach { entry ->
+            Tab(
+                selected = entry == tab,
+                onClick = { onTab(entry) },
+                text = { Text(stringResource(entry.labelRes)) },
+            )
+        }
+    }
+    if (state.tracks.isEmpty()) {
+        EmptyLibrary(scanning = state.scan is ScanProgress.Running)
+        return
+    }
+    when (tab) {
+        LibraryTab.TRACKS -> TracksTab(state.tracks, onAction = onTrack)
+        LibraryTab.ALBUMS -> AlbumsTab(state.albums, onOpen = onOpenAlbum)
+        LibraryTab.ARTISTS -> ArtistsTab(state.artists)
+        LibraryTab.FOLDERS -> FoldersTab(state.folder, onOpenFolder, onUp = onFolderUp, onAction = onFolderTrack)
     }
 }
 

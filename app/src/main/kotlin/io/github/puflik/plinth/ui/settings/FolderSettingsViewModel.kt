@@ -18,7 +18,10 @@ import javax.inject.Inject
 data class FolderSettingsUiState(
     val folders: FolderConfig,
     val scan: ScanProgress,
-)
+) {
+    /** Выбор совпадает с умолчанием — сбрасывать нечего. */
+    val isDefault: Boolean get() = folders == FolderConfig.DEFAULT
+}
 
 /**
  * Экран папок (C2.5): какие папки сканировать, какие пропускать. Выбор
@@ -41,6 +44,12 @@ class FolderSettingsViewModel
         fun onExclude(folder: String) = change { it.exclude(folder) }
 
         fun onRemove(folder: String) = change { it.remove(folder) }
+
+        /**
+         * Назад к `Music` и `Download`. Другого пути вернуть `Download` нет:
+         * на Android 11+ `OpenDocumentTree` не даёт выбрать её саму.
+         */
+        fun onReset() = change { FolderConfig.DEFAULT }
 
         fun onRescan() = scan.start()
 

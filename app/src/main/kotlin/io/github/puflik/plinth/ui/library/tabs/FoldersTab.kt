@@ -14,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.model.LibraryFolder
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.ui.library.TrackAction
 import io.github.puflik.plinth.ui.library.components.TrackRow
 
 /**
@@ -25,7 +26,7 @@ fun FoldersTab(
     folder: LibraryFolder,
     onOpenFolder: (String) -> Unit,
     onUp: () -> Unit,
-    onPlay: (LibraryTrack) -> Unit,
+    onAction: (LibraryTrack, TrackAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
@@ -42,7 +43,7 @@ fun FoldersTab(
                 modifier = Modifier.clickable { onOpenFolder(child.path) },
             )
         }
-        items(folder.tracks, key = LibraryTrack::id) { track -> TrackRow(track, onClick = { onPlay(track) }) }
+        items(folder.tracks, key = LibraryTrack::id) { track -> TrackRow(track, onAction = { onAction(track, it) }) }
     }
 }
 

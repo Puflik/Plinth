@@ -45,6 +45,17 @@ class DataStoreFolderSettingsTest {
         }
 
     @Test
+    fun `default chosen again reads back exactly as the default`() =
+        runTest {
+            val settings = settingsIn(backgroundScope)
+            settings.update { it.remove("Download/") }
+
+            settings.update { FolderConfig.DEFAULT }
+
+            assertThat(settings.folders.first()).isEqualTo(FolderConfig.DEFAULT)
+        }
+
+    @Test
     fun `removing every folder is kept, not replaced by the default`() =
         runTest {
             val settings = settingsIn(backgroundScope)

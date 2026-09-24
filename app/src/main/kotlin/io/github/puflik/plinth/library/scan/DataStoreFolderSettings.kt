@@ -26,8 +26,14 @@ class DataStoreFolderSettings
         override suspend fun update(transform: (FolderConfig) -> FolderConfig) {
             store.edit { preferences ->
                 val next = transform(read(preferences))
-                preferences[INCLUDED] = next.included.toSet()
-                preferences[EXCLUDED] = next.excluded.toSet()
+                if (next == FolderConfig.DEFAULT) {
+                    // Умолчание — это отсутствие выбора, а не выбор, равный умолчанию.
+                    preferences.remove(INCLUDED)
+                    preferences.remove(EXCLUDED)
+                } else {
+                    preferences[INCLUDED] = next.included.toSet()
+                    preferences[EXCLUDED] = next.excluded.toSet()
+                }
             }
         }
 

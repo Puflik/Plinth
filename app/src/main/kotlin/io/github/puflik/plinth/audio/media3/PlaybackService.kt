@@ -6,6 +6,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.audio.PlaybackController
 import javax.inject.Inject
 
 /**
@@ -25,6 +26,9 @@ class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var player: ExoPlayer
 
+    @Inject
+    lateinit var playback: PlaybackController
+
     private var session: MediaSession? = null
 
     override fun onCreate() {
@@ -36,7 +40,9 @@ class PlaybackService : MediaSessionService() {
                 .setChannelName(R.string.notification_channel_playback)
                 .build(),
         )
-        session = MediaSession.Builder(this, player).build()
+        // Соседние треки знает очередь приложения, а не ExoPlayer с его единственным треком.
+        val sessionPlayer = QueueCommandsPlayer(player, onNext = playback::next, onPrevious = playback::previous)
+        session = MediaSession.Builder(this, sessionPlayer).build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session

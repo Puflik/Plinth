@@ -8,6 +8,9 @@ import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.ui.library.TrackAction
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -25,7 +28,7 @@ import kotlin.time.Duration.Companion.minutes
 class AlbumViewModelTest {
     private val repository = FakeLibraryRepository()
     private val engine = FakeAudioEngine()
-    private val playback = PlaybackController(engine)
+    private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
 
     @Before
     fun setUp() {
@@ -70,15 +73,23 @@ class AlbumViewModelTest {
         }
 
     @Test
-    fun `tapped track plays with its title`() {
-        val song = track(1, "Bohemian Rhapsody", "A Night at the Opera", "Queen", number = 11)
-        val viewModel = viewModelFor(Album("A Night at the Opera", "Queen", 1))
+    fun `tapped track plays the album from it`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val first = track(1, "Death on Two Legs", "A Night at the Opera", "Queen", number = 1)
+            val second = track(2, "Bohemian Rhapsody", "A Night at the Opera", "Queen", number = 11)
+            repository.upsert(listOf(first, second))
+            val viewModel = viewModelFor(Album("A Night at the Opera", "Queen", 2))
+            backgroundScope.launch { viewModel.tracks.collect {} }
 
-        viewModel.play(song)
+            viewModel.onTrack(first, TrackAction.PLAY)
 
-        assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(song.uri))
-        assertThat(playback.title.value).isEqualTo("Bohemian Rhapsody")
-    }
+            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(first.uri))
+            assertThat(playback.queue.value.context).isEqualTo(QueueContext.Album("A Night at the Opera", "Queen"))
+            assertThat(
+                playback.queue.value.upcoming
+                    .map { it.title },
+            ).containsExactly("Bohemian Rhapsody")
+        }
 
     private fun viewModelFor(album: Album): AlbumViewModel {
         val arguments = AlbumViewModel.arguments(album)

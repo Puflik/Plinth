@@ -4,76 +4,232 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackState
+import io.github.puflik.plinth.queue.QueueAction
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.queue.RepeatMode
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
 
-/** Фасад воспроизведения для UI (B2–B4) на `FakeAudioEngine`. */
+/** Фасад воспроизведения для UI (B2–B4, D) на `FakeAudioEngine`: звук и очередь. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackControllerTest {
     private val engine = FakeAudioEngine()
-    private val controller = PlaybackController(engine)
-    private val track = AudioSource.LocalFile("content://plinth.test/track.flac")
+    private val album = QueueContext.Album("Jazz", "Queen")
+    private val tracks = (0 until 3).map { item("track-$it") }
+    private val manual = item("manual")
 
     @Test
-    fun `opened file starts playing at once`() {
-        controller.open(track, title = null)
+    fun `played context starts at the chosen track at once`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
 
-        assertThat(engine.preparedSources).containsExactly(track)
-        assertThat(engine.lastParams?.autoPlay).isTrue()
-        assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
-    }
+            controller.play(album, tracks, start = 1)
 
-    @Test
-    fun `opened track shows its title until the next one opens`() {
-        assertThat(controller.title.value).isNull()
-
-        controller.open(track, title = "Bohemian Rhapsody")
-        assertThat(controller.title.value).isEqualTo("Bohemian Rhapsody")
-
-        controller.open(AudioSource.LocalFile("content://plinth.test/untitled.flac"), title = null)
-        assertThat(controller.title.value).isNull()
-    }
+            assertThat(engine.preparedSources).containsExactly(tracks[1].source)
+            assertThat(engine.lastParams?.autoPlay).isTrue()
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+            assertThat(controller.queue.value.current).isEqualTo(tracks[1])
+        }
 
     @Test
-    fun `toggle pauses playing track and resumes paused one`() {
-        controller.open(track, title = null)
+    fun `finished track makes way for the next one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
 
-        controller.togglePlayPause()
-        assertThat(controller.state.value).isEqualTo(PlaybackState.Paused)
+            engine.completeTrack()
 
-        controller.togglePlayPause()
-        assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
-    }
-
-    @Test
-    fun `toggle after the end plays the track again`() {
-        controller.open(track, title = null)
-        engine.completeTrack()
-
-        controller.togglePlayPause()
-
-        assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
-    }
+            assertThat(engine.preparedSources).containsExactly(tracks[0].source, tracks[1].source).inOrder()
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+            assertThat(controller.queue.value.current).isEqualTo(tracks[1])
+        }
 
     @Test
-    fun `toggle without a track does nothing`() {
-        controller.togglePlayPause()
+    fun `queue stops after its last track`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 2)
 
-        assertThat(controller.state.value).isEqualTo(PlaybackState.Idle)
-    }
+            engine.completeTrack()
 
-    @Test
-    fun `seek moves within the open track`() {
-        controller.open(track, title = null)
-
-        controller.seekTo(30.seconds)
-
-        assertThat(controller.progress.value.position).isEqualTo(30.seconds)
-    }
+            assertThat(engine.preparedSources).hasSize(1)
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Ended)
+        }
 
     @Test
-    fun `seek without a track is ignored instead of crashing the screen`() {
-        controller.seekTo(30.seconds)
+    fun `repeat one plays the finished track again`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.cycleRepeat()
+            controller.cycleRepeat()
+            controller.play(album, tracks, start = 0)
 
-        assertThat(controller.progress.value.position).isEqualTo(0.seconds)
-    }
+            engine.completeTrack()
+
+            assertThat(controller.queue.value.repeat).isEqualTo(RepeatMode.ONE)
+            assertThat(engine.preparedSources).containsExactly(tracks[0].source, tracks[0].source)
+        }
+
+    @Test
+    fun `next and previous move through the queue`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.next()
+            assertThat(controller.queue.value.current).isEqualTo(tracks[1])
+
+            controller.previous()
+            assertThat(controller.queue.value.current).isEqualTo(tracks[0])
+            assertThat(engine.preparedSources.last()).isEqualTo(tracks[0].source)
+        }
+
+    @Test
+    fun `previous a few seconds into a track starts it over`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 1)
+            controller.seekTo(PlaybackController.RESTART_THRESHOLD + 1.seconds)
+
+            controller.previous()
+
+            assertThat(controller.queue.value.current).isEqualTo(tracks[1])
+            assertThat(controller.progress.value.position).isEqualTo(0.seconds)
+            assertThat(engine.preparedSources).hasSize(1)
+        }
+
+    @Test
+    fun `previous on the first track starts it over`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.previous()
+
+            assertThat(engine.preparedSources).hasSize(1)
+            assertThat(controller.progress.value.position).isEqualTo(0.seconds)
+        }
+
+    @Test
+    fun `next at the end of the queue does nothing`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 2)
+
+            controller.next()
+
+            assertThat(engine.preparedSources).hasSize(1)
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+        }
+
+    @Test
+    fun `manual track waits for the current one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.perform(QueueAction.PLAY_NEXT, manual)
+            assertThat(engine.preparedSources).hasSize(1)
+
+            engine.completeTrack()
+            assertThat(controller.queue.value.current).isEqualTo(manual)
+        }
+
+    @Test
+    fun `manual track added to a silent player starts playing`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+
+            controller.perform(QueueAction.ADD_TO_QUEUE, manual)
+
+            assertThat(engine.preparedSources).containsExactly(manual.source)
+            assertThat(controller.queue.value.current).isEqualTo(manual)
+        }
+
+    @Test
+    fun `replacing the queue drops manual tracks and plays at once`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+            controller.perform(QueueAction.ADD_TO_QUEUE, manual)
+
+            controller.replace(QueueContext.Tracks, tracks, start = 2)
+
+            assertThat(controller.queue.value.current).isEqualTo(tracks[2])
+            assertThat(controller.queue.value.upcoming).isEmpty()
+            assertThat(engine.preparedSources.last()).isEqualTo(tracks[2].source)
+        }
+
+    @Test
+    fun `shuffle and repeat switch in the queue`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.toggleShuffle()
+            assertThat(controller.queue.value.shuffle).isTrue()
+            assertThat(controller.queue.value.current).isEqualTo(tracks[0])
+
+            val modes = List(3) { controller.cycleRepeat().let { controller.queue.value.repeat } }
+            assertThat(modes).containsExactly(RepeatMode.ALL, RepeatMode.ONE, RepeatMode.OFF).inOrder()
+        }
+
+    @Test
+    fun `toggle pauses playing track and resumes paused one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.togglePlayPause()
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Paused)
+
+            controller.togglePlayPause()
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+        }
+
+    @Test
+    fun `toggle after the end plays the last track again`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 2)
+            engine.completeTrack()
+
+            controller.togglePlayPause()
+
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+        }
+
+    @Test
+    fun `controls without a track do nothing`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+
+            controller.togglePlayPause()
+            controller.seekTo(30.seconds)
+            controller.next()
+            controller.previous()
+
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Idle)
+            assertThat(engine.preparedSources).isEmpty()
+        }
+
+    @Test
+    fun `seek moves within the open track`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 0)
+
+            controller.seekTo(30.seconds)
+
+            assertThat(controller.progress.value.position).isEqualTo(30.seconds)
+        }
+
+    private fun TestScope.controller() = PlaybackController(engine, backgroundScope)
+
+    private fun item(name: String) = QueueItem(AudioSource.LocalFile("content://plinth.test/$name.flac"), title = name)
 }

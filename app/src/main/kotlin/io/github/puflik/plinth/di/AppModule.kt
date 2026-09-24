@@ -5,7 +5,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -19,6 +21,11 @@ annotation class IoDispatcher
 @Retention(AnnotationRetention.BINARY)
 annotation class DefaultDispatcher
 
+/** Scope на всё время жизни процесса, в главном потоке: в нём фасады слушают движок. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ApplicationScope
+
 /**
  * Общий граф зависимостей приложения (A2.4).
  *
@@ -26,6 +33,7 @@ annotation class DefaultDispatcher
  * иначе в тестах их нечем подменить на `TestDispatcher`.
  * Аудиограф — в `AudioModule`, фонотека — в `LibraryModule`.
  */
+
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
@@ -38,4 +46,9 @@ object AppModule {
     @Singleton
     @DefaultDispatcher
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 }

@@ -19,6 +19,7 @@ import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.common.BackTopBar
 import io.github.puflik.plinth.ui.library.components.TrackRow
+import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
 
 /**
  * Минимальный экран альбома (C4.1): исполнитель, число треков и сами треки
@@ -32,6 +33,7 @@ fun AlbumScreen(
     viewModel: AlbumViewModel = hiltViewModel(),
 ) {
     val tracks by viewModel.tracks.collectAsState()
+    val feedback = rememberTrackActionFeedback(onOpenPlayer)
     val album = viewModel.album
     Column(modifier = modifier.fillMaxSize()) {
         BackTopBar(title = album.title, onBack = onBack)
@@ -48,9 +50,9 @@ fun AlbumScreen(
             items(tracks, key = LibraryTrack::id) { track ->
                 TrackRow(
                     track = track,
-                    onClick = {
-                        viewModel.play(track)
-                        onOpenPlayer()
+                    onAction = { action ->
+                        viewModel.onTrack(track, action)
+                        feedback(action)
                     },
                 )
             }

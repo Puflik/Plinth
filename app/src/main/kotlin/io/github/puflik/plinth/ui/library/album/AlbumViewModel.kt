@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
-import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.ui.library.TrackAction
+import io.github.puflik.plinth.ui.library.act
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -40,7 +42,11 @@ class AlbumViewModel
                 .albumTracks(album)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
-        fun play(track: LibraryTrack) = playback.open(AudioSource.LocalFile(track.uri), track.title)
+        /** Трек альбома: контекст — альбом по диску и номеру. */
+        fun onTrack(
+            track: LibraryTrack,
+            action: TrackAction,
+        ) = playback.act(action, QueueContext.Album(album.title, album.artist), tracks.value, track)
 
         companion object {
             const val ARG_TITLE = "title"

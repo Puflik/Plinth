@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
-import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.ui.library.TrackAction
+import io.github.puflik.plinth.ui.library.act
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +71,14 @@ class SearchViewModel
             query.value = text
         }
 
-        fun play(track: LibraryTrack) = playback.open(AudioSource.LocalFile(track.uri), track.title)
+        /** Найденный трек: контекст — результаты поиска. */
+        fun onTrack(
+            track: LibraryTrack,
+            action: TrackAction,
+        ) {
+            val state = uiState.value
+            playback.act(action, QueueContext.Search(state.query.trim()), state.results, track)
+        }
 
         private data class Found(
             val results: List<LibraryTrack>,

@@ -9,9 +9,14 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioEngine
 import io.github.puflik.plinth.audio.media3.ExoPlayerFactory
 import io.github.puflik.plinth.audio.media3.Media3Engine
+import io.github.puflik.plinth.queue.FileQueueStore
+import io.github.puflik.plinth.queue.QueueStore
+import kotlinx.coroutines.CoroutineDispatcher
+import java.io.File
 import javax.inject.Singleton
 
 /**
@@ -35,6 +40,13 @@ object AudioModule {
     @Provides
     @Singleton
     fun provideAudioEngine(player: ExoPlayer): AudioEngine = Media3Engine(player)
+
+    @Provides
+    @Singleton
+    fun provideQueueStore(
+        @ApplicationContext context: Context,
+        @IoDispatcher io: CoroutineDispatcher,
+    ): QueueStore = FileQueueStore(File(context.filesDir, "queue"), io)
 }
 
 /**
@@ -45,4 +57,6 @@ object AudioModule {
 @InstallIn(SingletonComponent::class)
 interface AudioEntryPoint {
     fun audioEngine(): AudioEngine
+
+    fun playbackController(): PlaybackController
 }

@@ -26,11 +26,11 @@
 |---|---|---|
 | `audio/engine` | Абстракция воспроизведения: интерфейс, модели состояния, событий и ошибок | **Любой импорт Android**, включая `androidx.media3` |
 | `audio/media3` | Реализация движка на ExoPlayer, `MediaSessionService`, уведомление, аудиофокус | Знать об экранах |
-| `audio` | `PlaybackController` — фасад для UI | — |
+| `audio` | `PlaybackController` — фасад для UI и хозяин очереди; `QueueKeeper` — её сохранение | — |
 | `library` | Локальная фонотека: разрешения, сканер, база, сортировка | Знать об экранах |
-| `queue` | Очередь воспроизведения, порядок, повтор | Знать об экранах |
+| `queue` | Очередь воспроизведения, порядок, повтор, её файл | **Любой импорт Android**; знать об экранах и библиотеке |
 | `diagnostics` | Логи, обход вендорских ограничений, отчёты об ошибках | — |
-| `settings`, `startup` | Настройки и первый запуск | — |
+| `settings`, `startup` | Настройки и первый запуск; пока — `SortSettings`, порядок списков библиотеки в DataStore | — |
 | `di` | Проводка графа Hilt | Содержать логику |
 | `ui` | Compose: тема, навигация, экраны | Обращаться к движку иначе как через `PlaybackController`, к библиотеке — иначе как через `LibraryRepository`, `LibraryScan` и `FolderSettings` |
 | `core` | Мелочь, общая для всех: конфигурация, расширения | Зависеть от `ui` |
@@ -193,7 +193,7 @@ LibraryRepository.upsert (новые и изменённые) · markMissing (п
 
 | Файл `library/scan` | Что делает |
 |---|---|
-| `DataStoreFolderSettings` | `FolderSettings` в DataStore: два набора строк; нет ключа — умолчание, пустой набор — «ничего» |
+| `DataStoreFolderSettings` | `FolderSettings` в DataStore: два набора строк; нет ключа — умолчание (выбор, равный умолчанию, пишется так же), пустой набор — «ничего» |
 | `MediaStoreRow` | Строка `MediaStore` как есть, без типов Android |
 | `MediaStoreSource` | Запрос к `MediaStore`: папка из `RELATIVE_PATH` (Android 10+) или из `DATA` |
 | `TagReader` | Соглашения `MediaStore`: `<unknown>` — нет тега, `TRACK` = диск × 1000 + номер, без названия — имя файла |
@@ -235,6 +235,37 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 Строка трека одна на все списки (`components/TrackRow`), карточка альбома —
 пока без обложки (`components/AlbumCard`). Название играющего хранит
 `PlaybackController.title`: его видят и библиотека, и плеер.
+
+## Очередь
+
+```
+экран: касание / долгое нажатие ──► TrackAction ──► PlaybackController.act
+                                                        │ play · replace · perform
+                                                        ▼
+            PlaybackQueue (queue/, неизменяемая) ◄── next/previous: кнопки плеера,
+                    │ current                         уведомление, гарнитура
+                    ▼                                 (QueueCommandsPlayer в сессии)
+            AudioEngine.prepare ── TrackEnded ──► PlaybackController: следующий
+                    │
+            QueueKeeper ──► FileQueueStore (filesDir/queue): очередь и позиция
+```
+
+Очередь = контекст (видимый список: треки, альбом, папка, поиск или один
+файл) плюс ручной блок, который переживает смену контекста; shuffle — порядок
+обхода, а не перестановка. ExoPlayer держит один трек: соседей знает только
+очередь, поэтому сессия стоит на `QueueCommandsPlayer`, который объявляет
+«следующий/предыдущий» и отправляет их в `PlaybackController`. При старте
+процесса `QueueKeeper` возвращает сохранённую очередь на паузе на той же
+секунде.
+
+| Файл | Что делает |
+|---|---|
+| `queue/PlaybackQueue` | Контекст, порядок обхода, позиция, ручной блок; `play`, `replace`, `perform`, `next`, `previous`, shuffle, repeat |
+| `queue/QueueItem`, `QueueContext`, `QueueAction`, `ShuffleOrder` | Элемент (источник и подписи), откуда контекст, действия долгого нажатия и повтор, порядок обхода |
+| `queue/QueueStore`, `FileQueueStore` | Сохранённая очередь и позиция; свой двоичный формат с версией |
+| `audio/QueueKeeper` | Восстановление при старте и сохранение по ходу |
+| `audio/media3/QueueCommandsPlayer` | Плеер сессии: next/prev — в очередь, слушатели видят эти команды |
+| `ui/library/TrackAction` | Действие над треком списка и перевод `LibraryTrack` в `QueueItem` |
 
 ## Поток данных первой вертикали
 
@@ -293,4 +324,6 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 контракт на эмуляторе, сканер `MediaStore`, разрешение и фоновый скан через
 WorkManager, экран библиотеки со списками треков, альбомов, исполнителей и
 папок, экран альбома и сортировка, поиск и выбор папок для сканирования. Файл
-мимо библиотеки открывается через SAF из меню. Вертикаль пройдена.
+мимо библиотеки открывается через SAF из меню. Вертикаль «очередь» (эпик D)
+тоже пройдена: контексты с ручным блоком, shuffle и повтор, next/prev из
+уведомления и гарнитуры, очередь переживает перезапуск.

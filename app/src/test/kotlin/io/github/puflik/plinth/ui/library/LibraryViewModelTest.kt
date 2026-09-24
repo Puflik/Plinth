@@ -13,6 +13,9 @@ import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.PermissionState
 import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.TrackSort
+import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.settings.FakeSortSettings
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +35,9 @@ class LibraryViewModelTest {
     private val scan = FakeLibraryScan()
     private val repository = FakeLibraryRepository()
     private val engine = FakeAudioEngine()
-    private val playback = PlaybackController(engine)
-    private val viewModel by lazy { LibraryViewModel(scan, repository, playback) }
+    private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
+    private val sorts = FakeSortSettings()
+    private val viewModel by lazy { LibraryViewModel(scan, repository, playback, sorts) }
 
     private val bohemian = track(1, "Bohemian Rhapsody", "Queen", "A Night at the Opera", "Music/Queen/")
     private val yesterday = track(2, "Yesterday", "The Beatles", "Rubber Soul", "Music/Beatles/")
@@ -115,6 +119,22 @@ class LibraryViewModelTest {
         }
 
     @Test
+    fun `order chosen earlier is there from the start and is saved`() =
+        runTest(UnconfinedTestDispatcher()) {
+            sorts.trackSort.value = TrackSort.ARTIST
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            repository.upsert(listOf(yesterday, bohemian, anthem))
+
+            assertThat(viewModel.uiState.value.tracks).containsExactly(yesterday, anthem, bohemian).inOrder()
+
+            viewModel.onTrackSort(TrackSort.TITLE)
+            viewModel.onAlbumSort(AlbumSort.ARTIST)
+
+            assertThat(sorts.trackSort.value).isEqualTo(TrackSort.TITLE)
+            assertThat(sorts.albumSort.value).isEqualTo(AlbumSort.ARTIST)
+        }
+
+    @Test
     fun `albums have an order of their own`() =
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -144,13 +164,46 @@ class LibraryViewModelTest {
         }
 
     @Test
-    fun `tapped track plays with its title`() =
+    fun `tapped track plays the track list from it`() =
         runTest(UnconfinedTestDispatcher()) {
-            viewModel.play(bohemian)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            repository.upsert(listOf(yesterday, bohemian, anthem))
 
+            viewModel.onTrack(bohemian, TrackAction.PLAY)
+
+            val queue = playback.queue.value
             assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(bohemian.uri))
-            assertThat(engine.lastParams?.autoPlay).isTrue()
-            assertThat(playback.title.value).isEqualTo("Bohemian Rhapsody")
+            assertThat(queue.context).isEqualTo(QueueContext.Tracks)
+            assertThat(queue.current?.title).isEqualTo("Bohemian Rhapsody")
+            assertThat(queue.current?.artist).isEqualTo("Queen")
+            assertThat(queue.upcoming.map { it.title }).containsExactly("Yesterday")
+        }
+
+    @Test
+    fun `track from a folder plays that folder`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            repository.upsert(listOf(yesterday, bohemian, anthem))
+            viewModel.openFolder("Download/")
+
+            viewModel.onFolderTrack(anthem, TrackAction.PLAY)
+
+            assertThat(playback.queue.value.context).isEqualTo(QueueContext.Folder("Download/"))
+            assertThat(playback.queue.value.upcoming).isEmpty()
+        }
+
+    @Test
+    fun `long press adds a track without interrupting the current one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            repository.upsert(listOf(yesterday, bohemian, anthem))
+            viewModel.onTrack(anthem, TrackAction.PLAY)
+
+            viewModel.onTrack(yesterday, TrackAction.PLAY_NEXT)
+
+            assertThat(engine.preparedSources).hasSize(1)
+            val upNext = playback.queue.value.upcoming
+            assertThat(upNext.first().title).isEqualTo("Yesterday")
         }
 
     @Test
@@ -159,7 +212,11 @@ class LibraryViewModelTest {
             viewModel.openFile("content://plinth.test/song.flac", "song.flac")
 
             assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile("content://plinth.test/song.flac"))
-            assertThat(playback.title.value).isEqualTo("song.flac")
+            assertThat(playback.queue.value.context).isEqualTo(QueueContext.File)
+            assertThat(
+                playback.queue.value.current
+                    ?.title,
+            ).isEqualTo("song.flac")
         }
 
     @Test

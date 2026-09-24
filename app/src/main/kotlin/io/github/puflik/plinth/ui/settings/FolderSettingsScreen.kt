@@ -58,6 +58,13 @@ fun FolderSettingsScreen(
                 OutlinedButton(onClick = exclude) { Text(stringResource(R.string.folders_exclude)) }
             }
         }
+        item(key = "reset") {
+            TextButton(
+                onClick = viewModel::onReset,
+                enabled = !state.isDefault,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text(stringResource(R.string.folders_reset)) }
+        }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
     }
 }
