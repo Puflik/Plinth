@@ -15,9 +15,22 @@ peer, and synchronisation is an optional layer on top of an operation log.
 
 **Pre-alpha. Nothing to install yet.**
 
-Current wave is **v0.1 "Sound"** — the audio core: a player abstraction, a Media3
-implementation behind it, background playback with a media session. The library,
-the queue and the online sources come in later waves.
+Current wave is **v0.1 "Sound"** — a player for local files. Done so far:
+
+- the audio core: a player abstraction with a Media3 implementation behind it,
+  background playback with a media session, notification and headset controls;
+- a library built from the system media index: tracks, albums, artists and
+  folders, search, the choice of folders to scan;
+- a queue with shuffle, repeat and manual additions that survives a restart;
+- the player screen, a mini-player, queue editing and gestures;
+- a first-run wizard and an adaptive start screen;
+- English and Russian;
+- reliability: a local log with personal data removed, crash reports you
+  choose to save, help when the phone's firmware kills background playback,
+  and skipping files that can't be played.
+
+Left before the first release: acceptance testing. Online sources, one track
+from several sources and sync between devices come in later waves.
 
 | | |
 |---|---|
@@ -52,6 +65,13 @@ Two product flavors are built from the same source:
 ```
 
 `ktlintFormat` fixes formatting in place.
+
+## Contributing and documentation
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build, what is welcome, how the
+  code is written.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — packages, boundaries and data
+  flow; [docs/adr/](docs/adr/) — the key decisions and why (both in Russian).
 
 ## Licence
 

@@ -4,9 +4,11 @@
 доходит от файла до динамика. Документ короткий намеренно — подробности живут
 в других местах:
 
-- **зачем так** — [docs/decisions.md](decisions.md);
+- **зачем так** — [docs/adr/](adr/) (ключевые решения, выжимкой) и
+  [docs/decisions.md](decisions.md) (весь журнал);
 - **что делаем** — [plan.md](../plan.md) и [tasks-v0.1.md](../tasks-v0.1.md);
-- **как собрать** — [README.ru.md](../README.ru.md).
+- **как собрать и что принимается в PR** — [README.ru.md](../README.ru.md) и
+  [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Обновляется при появлении каждого нового модуля (A3.1).
 
@@ -385,13 +387,18 @@ ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<Image
 
 ## Зависимости
 
-- **DI — Hilt.** Граф собирается в `di/`; диспетчеры корутин выдаются через
-  граф (`@IoDispatcher`, `@DefaultDispatcher`), чтобы в тестах их можно было
-  подменить.
+- **DI — Hilt** ([ADR 0004](adr/0004-di-framework.md)). Граф собирается в
+  `di/`; диспетчеры корутин выдаются через граф (`@IoDispatcher`,
+  `@DefaultDispatcher`), чтобы в тестах их можно было подменить. Лог —
+  исключение: глобальный фасад `AppLog`.
 - **UI — Compose + Material 3**, одна `Activity`, навигация в `ui/navigation`.
-- **Звук — Media3/ExoPlayer**, спрятан за `audio/engine`.
+- **Звук — Media3/ExoPlayer и `media3-session`**, спрятан за `audio/engine`
+  ([ADR 0001](adr/0001-stack.md), [0002](adr/0002-audio-engine-abstraction.md)).
 - **Хранение — Room** с компилятором на KSP, спрятан за `LibraryRepository`.
-  Схема выгружается в `app/schemas/` (плагин `androidx.room`).
+  Схема выгружается в `app/schemas/` (плагин `androidx.room`). Настройки —
+  **DataStore** (Preferences), очередь — свой файл в `filesDir/queue`.
+- **Фон — WorkManager** для скана библиотеки (`ScanWorker` строит Hilt).
+- **Тесты** — JUnit 4, Truth, `kotlinx-coroutines-test`, `work-testing`.
 - **Версии** — только в `gradle/libs.versions.toml`.
 
 ## Что уже есть
