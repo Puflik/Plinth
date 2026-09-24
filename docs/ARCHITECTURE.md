@@ -379,6 +379,7 @@ ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<Image
 | `src/androidTest` | Тесты на эмуляторе: всё, что требует настоящего Media3 или SQLite |
 | `src/androidTest/…/acceptance` | Приёмочные замеры (H3: скан 5 000 треков); из обычного прогона исключены, запуск — `-Pacceptance` |
 | `src/androidTest/assets/tags` | Секунда тишины с тегами на формат (MP3, FLAC, M4A, без тегов) для сканера; рецепт — `tools/make_tag_fixtures.py` |
+| `src/androidTest/assets/formats` | Секунда тишины в семи форматах (MP3, AAC, FLAC, ALAC, Vorbis, Opus, WAV) для `FormatSupportTest`; рецепт — `tools/make_format_fixtures.py` |
 | `src/androidTest/assets/artwork` | MP3 со встроенной обложкой 1400×1400; рецепт — `tools/make_artwork_fixtures.py` |
 | `src/sharedTest` | Общее для двух предыдущих: контрактные тесты, `FakeAudioEngine`, `FakeLibraryRepository` |
 
