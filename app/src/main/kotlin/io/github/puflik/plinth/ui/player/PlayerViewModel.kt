@@ -31,6 +31,8 @@ class PlayerViewModel
 
         fun onSeek(position: Duration) = playback.seekTo(position)
 
+        fun onSeekBy(delta: Duration) = playback.seekBy(delta)
+
         fun onNext() = playback.next()
 
         fun onPrevious() = playback.previous()

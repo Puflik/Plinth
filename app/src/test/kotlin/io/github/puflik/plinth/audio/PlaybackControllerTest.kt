@@ -60,6 +60,23 @@ class PlaybackControllerTest {
             assertThat(engine.lastParams?.info).isEqualTo(TrackInfo("track-1"))
         }
 
+    /** Двойной тап и удержание ⏮/⏭ (E5): перемотка на сдвиг, не за края трека. */
+    @Test
+    fun `seek by moves within the track and stops at its edges`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            engine.trackDuration = 60.seconds
+            controller.play(album, tracks, start = 0)
+            controller.seekTo(30.seconds)
+
+            controller.seekBy(10.seconds)
+            assertThat(controller.progress.value.position).isEqualTo(40.seconds)
+            controller.seekBy((-50).seconds)
+            assertThat(controller.progress.value.position).isEqualTo(0.seconds)
+            controller.seekBy(90.seconds)
+            assertThat(controller.progress.value.position).isEqualTo(60.seconds)
+        }
+
     @Test
     fun `upcoming tracks can be removed and moved`() =
         runTest(UnconfinedTestDispatcher()) {

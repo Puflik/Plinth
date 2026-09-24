@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -53,6 +51,8 @@ import kotlin.time.Duration
  * Полноэкранный плеер, слой D1 (E1, раскладка 12.13 плана): свернуть,
  * обложка, название и исполнитель, прогресс, shuffle · ⏮ · ▶ · ⏭ · repeat.
  * На месте обложки открываются панели D2 (E4) — точками-табы под ней.
+ * Жесты (E5) — по таблице [PlayerGesture]: что велит жест, решает
+ * [GestureAction.command], а исполняет экран.
  */
 @Composable
 fun PlayerScreen(
@@ -63,7 +63,20 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    var panel by rememberSaveable { mutableStateOf(PlayerPanel.COVER) }
+    val gesture = { gesture: PlayerGesture, forward: Boolean ->
+        viewModel.perform(gesture.default.command(forward, panel), showPanel = { panel = it }, collapse = onBack)
+    }
+    Column(
+        modifier =
+            modifier.fillMaxSize().playerSwipes { swipe ->
+                when (swipe) {
+                    Swipe.UP -> gesture(PlayerGesture.SWIPE_UP, true)
+                    Swipe.DOWN -> gesture(PlayerGesture.SWIPE_DOWN, false)
+                    Swipe.LEFT, Swipe.RIGHT -> Unit
+                }
+            },
+    ) {
         Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             IconButton(onClick = onBack) {
                 Icon(
@@ -83,10 +96,39 @@ fun PlayerScreen(
                     onNext = viewModel::onNext,
                     onShuffle = viewModel::onShuffle,
                     onRepeat = viewModel::onRepeat,
+                    onHoldSkip = { forward -> gesture(PlayerGesture.HOLD_SKIP, forward) },
                 ),
-            edits = QueueEdits(onRemove = viewModel::onRemoveUpcoming, onMove = viewModel::onMoveUpcoming),
+            panels =
+                PanelControls(
+                    panel = panel,
+                    onPanel = { panel = it },
+                    edits = QueueEdits(onRemove = viewModel::onRemoveUpcoming, onMove = viewModel::onMoveUpcoming),
+                    cover =
+                        CoverActions(
+                            onTap = { gesture(PlayerGesture.COVER_TAP, true) },
+                            onDoubleTap = { forward -> gesture(PlayerGesture.DOUBLE_TAP, forward) },
+                            onSwipe = { forward -> gesture(PlayerGesture.COVER_SWIPE, forward) },
+                        ),
+                ),
             onOpenArtist = onOpenArtist,
         )
+    }
+}
+
+/** Исполняет команду жеста: звук — через модель, панель и сворачивание — на экране. */
+private fun PlayerViewModel.perform(
+    command: PlayerCommand?,
+    showPanel: (PlayerPanel) -> Unit,
+    collapse: () -> Unit,
+) {
+    when (command) {
+        PlayerCommand.Next -> onNext()
+        PlayerCommand.Previous -> onPrevious()
+        is PlayerCommand.Show -> showPanel(command.panel)
+        PlayerCommand.Collapse -> collapse()
+        PlayerCommand.PlayPause -> onPlayPause()
+        is PlayerCommand.SeekBy -> onSeekBy(command.delta)
+        null -> Unit
     }
 }
 
@@ -125,14 +167,28 @@ private fun PlayerMenu(
     }
 }
 
-/** Обложка или открытая панель — в одной и той же квадратной рамке. */
+/** Открытая панель и всё, что с ней делают жесты и точки-табы. */
+private class PanelControls(
+    val panel: PlayerPanel,
+    val onPanel: (PlayerPanel) -> Unit,
+    val edits: QueueEdits,
+    val cover: CoverActions,
+)
+
+/**
+ * Обложка или открытая панель — в одной и той же квадратной рамке. Жесты
+ * обложки работают и на заглушках панелей (касание возвращает обложку), но не
+ * в очереди: там свои перетаскивание и свайп строки.
+ */
 @Composable
 private fun PanelArea(
-    panel: PlayerPanel,
+    panels: PanelControls,
     state: PlayerUiState,
-    edits: QueueEdits,
-    modifier: Modifier,
+    frame: Modifier,
 ) {
+    val panel = panels.panel
+    val modifier =
+        if (panel == PlayerPanel.QUEUE) frame else frame.coverGestures(panel == PlayerPanel.COVER, panels.cover)
     when (panel) {
         PlayerPanel.COVER ->
             ArtworkImage(
@@ -141,14 +197,14 @@ private fun PanelArea(
                 placeholder = R.drawable.ic_music_note,
                 modifier = modifier,
             )
-        PlayerPanel.QUEUE -> QueuePanel(state.upcoming, edits, modifier)
+        PlayerPanel.QUEUE -> QueuePanel(state.upcoming, panels.edits, modifier)
         PlayerPanel.LYRICS -> PanelPlaceholder(R.string.player_lyrics_later, modifier)
         PlayerPanel.SIMILAR -> PanelPlaceholder(R.string.player_similar_later, modifier)
         PlayerPanel.INFO -> PanelPlaceholder(R.string.player_info_later, modifier)
     }
 }
 
-/** Команды плеера одним значением: раскладке их нужно шесть. */
+/** Команды плеера одним значением: раскладке их нужно семь. */
 private class PlayerControls(
     val onPlayPause: () -> Unit,
     val onSeek: (Duration) -> Unit,
@@ -156,16 +212,16 @@ private class PlayerControls(
     val onNext: () -> Unit,
     val onShuffle: () -> Unit,
     val onRepeat: () -> Unit,
+    val onHoldSkip: (forward: Boolean) -> Unit,
 )
 
 @Composable
 private fun PlayerCore(
     state: PlayerUiState,
     controls: PlayerControls,
-    edits: QueueEdits,
+    panels: PanelControls,
     onOpenArtist: (String) -> Unit,
 ) {
-    var panel by rememberSaveable { mutableStateOf(PlayerPanel.COVER) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -173,16 +229,15 @@ private fun PlayerCore(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             PanelArea(
-                panel = panel,
+                panels = panels,
                 state = state,
-                edits = edits,
-                modifier =
+                frame =
                     Modifier
                         .fillMaxWidth(ARTWORK_WIDTH)
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(12.dp)),
             )
-            PanelDots(selected = panel, onSelect = { panel = it })
+            PanelDots(selected = panels.panel, onSelect = panels.onPanel)
         }
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -269,7 +324,12 @@ private fun Transport(
     ) {
         val shuffleLabel = if (state.shuffle) R.string.player_shuffle_on else R.string.player_shuffle_off
         TransportButton(R.drawable.ic_shuffle, shuffleLabel, active = state.shuffle, onClick = controls.onShuffle)
-        TransportButton(R.drawable.ic_skip_previous, R.string.player_previous, onClick = controls.onPrevious)
+        SkipButton(
+            icon = R.drawable.ic_skip_previous,
+            label = R.string.player_previous,
+            onClick = controls.onPrevious,
+            onHold = { controls.onHoldSkip(false) },
+        )
         FilledIconButton(
             onClick = controls.onPlayPause,
             enabled = state.canControl,
@@ -283,7 +343,12 @@ private fun Transport(
                     ),
             )
         }
-        TransportButton(R.drawable.ic_skip_next, R.string.player_next, onClick = controls.onNext)
+        SkipButton(
+            icon = R.drawable.ic_skip_next,
+            label = R.string.player_next,
+            onClick = controls.onNext,
+            onHold = { controls.onHoldSkip(true) },
+        )
         TransportButton(
             icon = if (state.repeat == RepeatMode.ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
             label =

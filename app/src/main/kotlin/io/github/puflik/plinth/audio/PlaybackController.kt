@@ -153,6 +153,13 @@ class PlaybackController
             if (engine.state.value.hasSource) engine.seekTo(position.coerceAtLeast(Duration.ZERO))
         }
 
+        /** Перемотка на [delta] от текущей позиции — не раньше начала и не дальше конца трека. */
+        fun seekBy(delta: Duration) {
+            val progress = progress.value
+            val target = (progress.position + delta).coerceAtLeast(Duration.ZERO)
+            seekTo(progress.duration?.let(target::coerceAtMost) ?: target)
+        }
+
         private fun advance(auto: Boolean) {
             val current = queue.value
             if (current.current != null) current.next(auto)?.let(::start)

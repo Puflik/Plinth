@@ -47,7 +47,8 @@ import kotlin.math.roundToInt
 /**
  * Мини-плеер, слой D0 (E3, 12.10): обложка, название и исполнитель,
  * play/pause, тонкая полоса прогресса. Касание и свайп вверх открывают плеер,
- * свайп вбок меняет трек ([MiniPlayerSwipe]); пока палец ведёт, карточка идёт
+ * свайп вбок — по таблице жестов ([PlayerGesture.MINI_PLAYER_SWIPE], умолчание —
+ * смена трека); пока палец ведёт, карточка идёт
  * за ним и возвращается на место, когда его отпустили. TalkBack свайпов не
  * делает — «следующий» и «предыдущий» у него в действиях элемента.
  */
@@ -149,11 +150,17 @@ private fun Modifier.miniPlayerGestures(actions: MiniPlayerActions): Modifier {
                     dy = 0f
                 },
                 onDragEnd = {
-                    when (MiniPlayerSwipe.of(dx, dy, threshold)) {
-                        MiniPlayerSwipe.NEXT -> current.onNext()
-                        MiniPlayerSwipe.PREVIOUS -> current.onPrevious()
-                        MiniPlayerSwipe.EXPAND -> current.onExpand()
-                        null -> Unit
+                    when (val swipe = Swipe.of(dx, dy, threshold)) {
+                        Swipe.UP -> current.onExpand()
+                        Swipe.LEFT, Swipe.RIGHT -> {
+                            val action = PlayerGesture.MINI_PLAYER_SWIPE.default
+                            when (action.command(swipe.forward, PlayerPanel.COVER)) {
+                                PlayerCommand.Next -> current.onNext()
+                                PlayerCommand.Previous -> current.onPrevious()
+                                else -> Unit
+                            }
+                        }
+                        Swipe.DOWN, null -> Unit
                     }
                     settle()
                 },
