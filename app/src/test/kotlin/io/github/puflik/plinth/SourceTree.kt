@@ -4,10 +4,12 @@ import java.io.File
 
 /**
  * Исходники `src/main` для тестов-стражей, которые читают код, а не байт-код:
- * импорт заметнее и понятнее в диагностике.
+ * импорт заметнее и понятнее в диагностике. Ресурсы — тоже отсюда: страж
+ * перевода сверяет `strings.xml` на диске.
  */
 object SourceTree {
     private const val MAIN_ROOT = "src/main/kotlin/io/github/puflik/plinth"
+    private const val RES_ROOT = "src/main/res"
 
     /** Файлы `.kt` пакета `io.github.puflik.plinth.<packagePath>` со всеми подпакетами. */
     fun kotlinFiles(packagePath: String): List<File> =
@@ -15,6 +17,9 @@ object SourceTree {
 
     /** Один файл `src/main` по пути от корневого пакета. */
     fun mainFile(path: String): File = File(mainDir(""), path)
+
+    /** Файл ресурсов по пути от `src/main/res`: `values/strings.xml`. */
+    fun resourceFile(path: String): File = File(find(RES_ROOT), path)
 
     /** Строки импорта, начинающиеся с одного из префиксов, в виде «файл: импорт». */
     fun importsStartingWith(
@@ -34,8 +39,10 @@ object SourceTree {
      * (Gradle — каталог модуля, IDE — корень проекта), поэтому каталог
      * исходников ищется подъёмом вверх.
      */
-    private fun mainDir(packagePath: String): File {
-        val path = if (packagePath.isEmpty()) MAIN_ROOT else "$MAIN_ROOT/$packagePath"
+    private fun mainDir(packagePath: String): File =
+        find(if (packagePath.isEmpty()) MAIN_ROOT else "$MAIN_ROOT/$packagePath")
+
+    private fun find(path: String): File {
         var directory: File? = File("").absoluteFile
         while (directory != null) {
             for (candidate in listOf(File(directory, path), File(directory, "app/$path"))) {

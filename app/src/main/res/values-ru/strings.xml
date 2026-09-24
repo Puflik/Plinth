@@ -15,4 +15,148 @@
     <string name="player_error_format">Этот формат не поддерживается.</string>
     <string name="player_error_network">Ошибка сети. Проверьте соединение и попробуйте снова.</string>
     <string name="player_error_unknown">Не удалось воспроизвести.</string>
+
+    <string name="library_permission_title">Доступ к музыке</string>
+    <string name="library_permission_rationale">Plinth читает музыку на этом устройстве, чтобы собрать библиотеку. Ничего не покидает устройство.</string>
+    <string name="library_permission_allow">Разрешить доступ</string>
+    <string name="library_permission_denied">Доступ к музыке выключен. Включите его в настройках приложения, чтобы увидеть библиотеку.</string>
+    <string name="library_permission_open_settings">Открыть настройки</string>
+    <string name="library_scanning">Ищу музыку…</string>
+    <string name="library_scan_progress">Ищу музыку: %1$d из %2$d</string>
+    <plurals name="library_found">
+        <item quantity="one">Найден %d трек</item>
+        <item quantity="few">Найдено %d трека</item>
+        <item quantity="many">Найдено %d треков</item>
+        <item quantity="other">Найдено %d трека</item>
+    </plurals>
+    <string name="library_scan_failed">Не удалось просканировать музыку.</string>
+    <string name="library_empty_title">Музыка не найдена</string>
+    <string name="library_empty_looked_in">Где Plinth искал музыку: %1$s.</string>
+    <string name="library_empty_no_folders">Пока не сканируется ни одна папка.</string>
+    <string name="library_empty_pick">Выбрать папку</string>
+    <string name="library_prompt_folders_title">Вы пропустили выбор папок</string>
+    <string name="library_prompt_folders_text">Plinth искал только здесь: %1$s — и музыки не нашёл. Покажите, где она лежит.</string>
+    <string name="library_prompt_not_now">Не сейчас</string>
+    <string name="library_next_title">Что дальше</string>
+    <string name="library_next_text">Онлайн-поиск появится в версии 0.2: музыка не только с этого устройства — прямо в Plinth.</string>
+    <string name="library_next_releases">Релизы на GitHub</string>
+
+    <string name="action_back">Назад</string>
+    <string name="library_sort">Сортировка</string>
+    <string name="library_more">Ещё</string>
+    <string name="library_tab_tracks">Треки</string>
+    <string name="library_tab_albums">Альбомы</string>
+    <string name="library_tab_artists">Исполнители</string>
+    <string name="library_tab_folders">Папки</string>
+    <string name="library_sort_title">Название</string>
+    <string name="library_sort_artist">Исполнитель</string>
+    <string name="library_sort_album">Альбом</string>
+    <string name="library_unknown_artist">Неизвестный исполнитель</string>
+    <string name="library_folder_up">Наверх, в %1$s</string>
+    <string name="library_folder_root">Все папки</string>
+    <string name="library_artist_summary">%1$s · %2$s</string>
+    <plurals name="library_track_count">
+        <item quantity="one">%d трек</item>
+        <item quantity="few">%d трека</item>
+        <item quantity="many">%d треков</item>
+        <item quantity="other">%d трека</item>
+    </plurals>
+    <plurals name="library_album_count">
+        <item quantity="one">%d альбом</item>
+        <item quantity="few">%d альбома</item>
+        <item quantity="many">%d альбомов</item>
+        <item quantity="other">%d альбома</item>
+    </plurals>
+
+    <string name="search_hint">Название, исполнитель или альбом</string>
+    <string name="search_prompt">Начните вводить, чтобы искать в библиотеке.</string>
+    <string name="search_nothing_found">Ничего не найдено.</string>
+
+    <string name="folders_included">Сканируемые папки</string>
+    <string name="folders_excluded">Пропускаемые папки</string>
+    <string name="folders_none">Нет</string>
+    <string name="folders_whole_storage">Всё хранилище</string>
+    <string name="folders_add">Добавить папку</string>
+    <string name="folders_exclude">Пропустить папку</string>
+    <string name="folders_remove">Убрать</string>
+    <string name="folders_rescan">Пересканировать</string>
+    <string name="folders_reset">Вернуть Music и Download</string>
+    <string name="folders_not_local">Выберите папку на этом устройстве.</string>
+
+    <string name="settings_start_title">Стартовый экран</string>
+    <string name="settings_start_auto">Авто</string>
+    <string name="settings_start_auto_hint">Плеер, если музыка играла в последние 30 минут, иначе библиотека.</string>
+    <string name="settings_start_library">Библиотека</string>
+    <string name="settings_start_library_hint">Всегда библиотека.</string>
+    <string name="settings_start_continue">Продолжить</string>
+    <string name="settings_start_continue_hint">Всегда плеер — с той же очередью и позицией.</string>
+    <string name="settings_start_why">В этот запуск: %1$s</string>
+    <string name="start_explain_empty">Показываю библиотеку: в ней пока нет музыки.</string>
+    <string name="start_explain_recent">Продолжаю с того же места: музыка играла %1$s назад.</string>
+    <string name="start_explain_recent_now">Продолжаю с того же места: музыка только что играла.</string>
+    <string name="start_explain_break">Показываю библиотеку: музыка последний раз играла %1$s назад.</string>
+    <string name="start_explain_never">Показываю библиотеку: ещё ничего не играло.</string>
+    <string name="start_explain_fixed">В настройках выбран стартовый экран «%1$s».</string>
+    <string name="start_explain_nothing_to_continue">В настройках выбрано «Продолжить», но ещё ничего не играло, поэтому — библиотека.</string>
+    <string name="start_explain_settings">Настройки</string>
+    <!-- Формы винительного падежа: строки стоят перед «назад» — «1 минуту назад». -->
+    <plurals name="time_minutes">
+        <item quantity="one">%d минуту</item>
+        <item quantity="few">%d минуты</item>
+        <item quantity="many">%d минут</item>
+        <item quantity="other">%d минуты</item>
+    </plurals>
+    <plurals name="time_hours">
+        <item quantity="one">%d час</item>
+        <item quantity="few">%d часа</item>
+        <item quantity="many">%d часов</item>
+        <item quantity="other">%d часа</item>
+    </plurals>
+    <plurals name="time_days">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дня</item>
+    </plurals>
+
+    <string name="onboarding_welcome">Добро пожаловать в Plinth</string>
+    <string name="onboarding_step">Шаг %1$d из %2$d</string>
+    <string name="onboarding_folders_title">Где ваша музыка?</string>
+    <string name="onboarding_folders_text">Plinth ищет музыку в этих папках. Добавьте другие или пропустите ненужные — это можно изменить позже в настройках.</string>
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_skip_all">Пропустить всё</string>
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_done">Готово</string>
+
+    <string name="player_collapse">Свернуть</string>
+    <string name="player_time_toggle">Переключить прошедшее и оставшееся время</string>
+    <string name="player_previous">Предыдущий</string>
+    <string name="player_next">Следующий</string>
+    <string name="player_shuffle_on">Перемешивание: вкл.</string>
+    <string name="player_shuffle_off">Перемешивание: выкл.</string>
+    <string name="player_repeat_off">Повтор: выкл.</string>
+    <string name="player_repeat_all">Повтор: всё</string>
+    <string name="player_repeat_one">Повтор: один трек</string>
+    <string name="player_panel_cover">Обложка</string>
+    <string name="player_panel_lyrics">Текст</string>
+    <string name="player_panel_queue">Очередь</string>
+    <string name="player_panel_similar">Похожее</string>
+    <string name="player_panel_info">О треке</string>
+    <string name="player_lyrics_later">Текст песни появится здесь в одной из следующих версий.</string>
+    <string name="player_similar_later">Похожие треки появятся здесь в одной из следующих версий.</string>
+    <string name="player_info_later">Сведения о треке появятся здесь в одной из следующих версий.</string>
+    <string name="player_queue_empty">Больше в очереди ничего нет.</string>
+    <string name="player_queue_remove">Убрать из очереди</string>
+    <string name="player_queue_move_up">Выше</string>
+    <string name="player_queue_move_down">Ниже</string>
+    <string name="player_go_album">К альбому</string>
+    <string name="player_go_artist">К исполнителю</string>
+    <string name="player_cover_tap">Переключить текст и обложку</string>
+    <string name="player_seek_back">Назад на 10 секунд</string>
+    <string name="player_seek_forward">Вперёд на 10 секунд</string>
+    <string name="player_expand">Открыть плеер</string>
+    <string name="track_play_next">Играть следующим</string>
+    <string name="track_add_to_queue">Добавить в очередь</string>
+    <string name="track_replace_queue">Заменить очередь</string>
+    <string name="queue_added">Добавлено в очередь</string>
 </resources>
