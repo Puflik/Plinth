@@ -91,6 +91,9 @@
     <string name="settings_start_continue">Продолжить</string>
     <string name="settings_start_continue_hint">Всегда плеер — с той же очередью и позицией.</string>
     <string name="settings_start_why">В этот запуск: %1$s</string>
+    <string name="settings_language_title">Язык</string>
+    <string name="settings_language_app">Язык приложения</string>
+    <string name="settings_language_system">Как в системе</string>
     <string name="start_explain_empty">Показываю библиотеку: в ней пока нет музыки.</string>
     <string name="start_explain_recent">Продолжаю с того же места: музыка играла %1$s назад.</string>
     <string name="start_explain_recent_now">Продолжаю с того же места: музыка только что играла.</string>

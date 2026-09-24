@@ -85,6 +85,9 @@
     <string name="settings_start_continue">Continue</string>
     <string name="settings_start_continue_hint">Always the player, with the same queue and position.</string>
     <string name="settings_start_why">This launch: %1$s</string>
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_app">App language</string>
+    <string name="settings_language_system">Same as the system</string>
     <string name="start_explain_empty">Showing the library: it has no music yet.</string>
     <string name="start_explain_recent">Continuing where you left off: you listened %1$s ago.</string>
     <string name="start_explain_recent_now">Continuing where you left off: you were listening a moment ago.</string>

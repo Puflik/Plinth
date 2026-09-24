@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.ui.settings
 
 import android.net.Uri
+import android.os.Build
 import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,7 +36,8 @@ import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
 
 /**
- * Вкладка «Настройки»: стартовый экран (F3) и папки фонотеки (C2.5).
+ * Вкладка «Настройки»: стартовый экран (F3), язык приложения (12.12, только
+ * Android 13+) и папки фонотеки (C2.5).
  *
  * Папки — что сканировать и что пропускать; выбираются системным диалогом
  * (`OpenDocumentTree`), до библиотеки доходят после «Пересканировать».
@@ -50,8 +52,13 @@ fun SettingsScreen(
     val startState by start.uiState.collectAsState()
     val include = rememberFolderPicker(viewModel::onInclude)
     val exclude = rememberFolderPicker(viewModel::onExclude)
+    val language = rememberAppLanguage()
+    val context = LocalContext.current
     LazyColumn(modifier = modifier.fillMaxSize()) {
         startScreenChoice(startState, onChoose = start::onChoose)
+        if (language != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            languageChoice(language, onOpen = { openLanguageSettings(context) })
+        }
         folderChoice(state.folders, onRemove = viewModel::onRemove, onInclude = include, onExclude = exclude)
         item(key = "reset") {
             TextButton(

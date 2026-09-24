@@ -1793,3 +1793,34 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
 - **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 351 JVM-тесту на
   flavor (+4), `assembleGithubDebug`, `assembleFdroidDebug`,
   `assembleGithubDebugAndroidTest`.
+
+### Язык приложения в настройках
+
+- **Выбор языка — системный (Android 13+), не свой.** `generateLocaleConfig`
+  в `androidResources`: AGP собирает список языков из `values-*` (`en-US` —
+  язык `values/`, задан в `res/resources.properties`; `ru`) и прописывает
+  `android:localeConfig` в манифест. С ним Plinth есть в «Настройки →
+  Приложения → Plinth → Язык приложения», выбор хранит и применяет система,
+  экран пересоздаётся сам.
+- **Во вкладке «Settings»** — раздел «Language»: «App language» с текущим
+  языком («Same as the system» или название языка на нём самом — «Русский»);
+  касание открывает системный экран (`ACTION_APP_LOCALE_SETTINGS`). Текущий
+  язык — `LocaleManager.applicationLocales`, модель — `settings/AppLanguage`
+  (чистый Kotlin), перечитывается при смене конфигурации.
+- **На Android 8–12 раздела нет:** там у приложения нет своего языка в
+  системе, только язык устройства. Свой выбор внутри приложения потребовал бы
+  AppCompat (`AppCompatActivity`, тема AppCompat) или ручной подмены
+  контекста в `attachBaseContext` — не сделано; по умолчанию Plinth следует
+  языку устройства.
+- **Тесты (JVM):** `AppLanguageTest` (3: пустой список — системный; название
+  на самом языке с заглавной — «Русский», «English»; действует первый язык
+  списка). RED — 2 падения из 3.
+- **Проверено на живом эмуляторе (API 36):** в собранном манифесте
+  `localeConfig` со списком `en-US`, `ru`; «Settings» → «App language — Same as
+  the system» → системный экран Plinth: «System default», English, Русский →
+  «Русский» → регион «Россия» → система вернула в Plinth, всё по-русски,
+  строка — «Язык приложения — Русский»; `force-stop` и запуск — по-русски.
+  Сброс (`cmd locale set-app-locales … --locales ""`) → «Same as the system».
+- **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 354 JVM-теста на
+  flavor (+3), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`.

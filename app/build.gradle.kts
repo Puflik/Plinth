@@ -80,6 +80,13 @@ android {
         buildConfig = true
     }
 
+    // 12.12: список языков приложения собирает AGP из values-*; с ним Plinth
+    // есть в «Язык приложения» настроек Android 13+. Язык values/ — в
+    // res/resources.properties.
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
