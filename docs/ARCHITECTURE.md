@@ -377,9 +377,14 @@ ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<Image
 | `src/github`, `src/fdroid` | Различия сборок: `FlavorConfig` |
 | `src/test` | JVM-тесты |
 | `src/androidTest` | Тесты на эмуляторе: всё, что требует настоящего Media3 или SQLite |
+| `src/androidTest/…/acceptance` | Приёмочные замеры (H3: скан 5 000 треков); из обычного прогона исключены, запуск — `-Pacceptance` |
 | `src/androidTest/assets/tags` | Секунда тишины с тегами на формат (MP3, FLAC, M4A, без тегов) для сканера; рецепт — `tools/make_tag_fixtures.py` |
 | `src/androidTest/assets/artwork` | MP3 со встроенной обложкой 1400×1400; рецепт — `tools/make_artwork_fixtures.py` |
 | `src/sharedTest` | Общее для двух предыдущих: контрактные тесты, `FakeAudioEngine`, `FakeLibraryRepository` |
+
+Проверка фоновой игры на установленном приложении — `tools/background_check.py`
+(adb, эмулятор или телефон); ручной чек-лист приёмки —
+`docs/testing/v0.1-checklist.md`.
 
 `sharedTest` подключён к обоим наборам в `app/build.gradle.kts`. Иначе
 контракт пришлось бы писать дважды: фейки проверяются на JVM, настоящие

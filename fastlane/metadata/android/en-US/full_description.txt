@@ -1,0 +1,22 @@
+Plinth is an open-source music player for Android that treats a track as the
+music itself, not as a file. This first release plays the music files on your
+phone; online sources, playlists and sync between devices come later.
+
+<b>What it does now</b>
+<ul>
+<li>Plays your local music in the background, with notification, lock-screen and headset controls.</li>
+<li>Builds a library of tracks, albums, artists and folders from Android's media index, in natural order.</li>
+<li>Searches by title, artist and album.</li>
+<li>Keeps a queue with shuffle, repeat and tracks you add by hand, and restores it after a restart.</li>
+<li>Skips files that can't be played and tells you once.</li>
+<li>Explains what to do when your phone's firmware stops background playback.</li>
+<li>English and Russian.</li>
+</ul>
+
+<b>What it doesn't do</b>
+<ul>
+<li>No accounts, no ads, no analytics or telemetry.</li>
+<li>Nothing leaves the device unless you save a log or open a bug report yourself.</li>
+</ul>
+
+Plinth is free software under the GNU AGPLv3.

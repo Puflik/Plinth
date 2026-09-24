@@ -34,9 +34,13 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = 1
-        versionName = "0.1.0-alpha01"
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Приёмочные замеры (H) идут минуты — только по запросу: `-Pacceptance`.
+        if (!project.hasProperty("acceptance")) {
+            testInstrumentationRunnerArguments["notPackage"] = "io.github.puflik.plinth.acceptance"
+        }
     }
 
     // A1.3 📌 Два flavor закладываются сразу: добавить их позже — значит
@@ -69,8 +73,9 @@ android {
         }
         release {
             signingConfig = signingConfigs.findByName("release")
-            // Минификация включается в эпике H вместе с правилами R8.
-            isMinifyEnabled = false
+            // R8 (H5): сжатие и обфускация; mapping.txt уходит в релиз рядом с APK.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

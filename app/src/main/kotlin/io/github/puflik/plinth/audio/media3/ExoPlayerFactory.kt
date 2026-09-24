@@ -17,7 +17,10 @@ import androidx.media3.exoplayer.ExoPlayer
  * - буферы — значения ExoPlayer по умолчанию; для локальных файлов их
  *   хватает с запасом, под сеть (v0.2) их придётся пересмотреть;
  * - gapless внутри трека ExoPlayer делает сам по метаданным энкодера
- *   (LAME, iTunSMPB); переход между треками — `PlaybackParams.gaplessNext`, позже.
+ *   (LAME, iTunSMPB); переход между треками — `PlaybackParams.gaplessNext`, позже;
+ * - wake lock: пока режим не задан явно, Media3 1.11 сам держит
+ *   `WAKE_MODE_LOCAL`, пока звук идёт (его требует обнаружение зависаний).
+ *   Страж — `ExoPlayerFactoryTest`; потокам в v0.2 понадобится `WAKE_MODE_NETWORK`.
  *
  * Что настроено здесь — ядро B4.1 и B4.3, которое ExoPlayer делает сам:
  * - аудиофокус: плеер берёт его при старте, встаёт на паузу, когда фокус

@@ -1,0 +1,1 @@
+First release, "Sound": plays the music on your phone in the background, with a library of tracks, albums, artists and folders, search, a queue that survives restarts, and help when the firmware stops playback. Early pre-release.

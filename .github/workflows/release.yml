@@ -1,6 +1,6 @@
-# Тег вида v0.1.0 → подписанный APK flavor `github` → GitHub Release.
-# Написан сейчас (A1.5), включается в работу в H5: до тех пор в репозитории
-# нет ни тегов, ни секретов с ключом подписи.
+# Тег вида v0.1.0 → подписанный APK flavor `github` → GitHub Release (A1.5, H5).
+# Заметки — раздел этой версии из CHANGELOG.md; версии 0.x — pre-release.
+# Рядом с APK — mapping.txt: по нему читаются стектрейсы релизной сборки.
 name: Release
 
 on:
@@ -49,14 +49,32 @@ jobs:
           PLINTH_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleGithubRelease
 
+      - name: Release notes from CHANGELOG
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$version]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::В CHANGELOG.md нет раздела ## [$version]."
+            exit 1
+          fi
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file CHANGELOG.md \
-            app/build/outputs/apk/github/release/*.apk
+          prerelease=""
+          case "$GITHUB_REF_NAME" in v0.*) prerelease="--prerelease" ;; esac
+          mapping="$RUNNER_TEMP/mapping-$GITHUB_REF_NAME.txt.gz"
+          gzip -c app/build/outputs/mapping/githubRelease/mapping.txt > "$mapping"
+          gh release create "$GITHUB_REF_NAME" $prerelease \
+            --title "Plinth $GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            app/build/outputs/apk/github/release/*.apk \
+            "$mapping"
 
       - name: Drop keystore
         if: always()
