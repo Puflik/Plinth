@@ -30,6 +30,7 @@ import io.github.puflik.plinth.artwork.ArtworkLoader
 import io.github.puflik.plinth.audio.media3.PlaybackServiceConnection
 import io.github.puflik.plinth.startup.StartDecision
 import io.github.puflik.plinth.startup.StartDestination
+import io.github.puflik.plinth.ui.common.ErrorNotices
 import io.github.puflik.plinth.ui.common.LocalArtworkLoader
 import io.github.puflik.plinth.ui.navigation.BottomNavigationBar
 import io.github.puflik.plinth.ui.navigation.Destination
@@ -130,6 +131,8 @@ private fun PlinthMain(
     CrashReportOffer(snackbar)
     // Прошлую игру убила прошивка — один раз объяснить, что с этим делать (G2).
     VendorGuidePrompt()
+    // Очередь пропустила треки или остановилась на ошибке (G3).
+    ErrorNotices(snackbar, playerOpen = currentRoute == Destination.Player.route)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },

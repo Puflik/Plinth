@@ -13,6 +13,7 @@ import io.github.puflik.plinth.diagnostics.log.LogRedactor
 import io.github.puflik.plinth.diagnostics.log.Logger
 import io.github.puflik.plinth.diagnostics.vendor.KillReport
 import io.github.puflik.plinth.diagnostics.vendor.KillWatch
+import io.github.puflik.plinth.library.UnavailableRescan
 import javax.inject.Inject
 import kotlin.time.Clock
 
@@ -55,6 +56,9 @@ class PlinthApplication :
     @Inject
     lateinit var killWatch: KillWatch
 
+    @Inject
+    lateinit var unavailableRescan: UnavailableRescan
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -65,6 +69,8 @@ class PlinthApplication :
         // Убили ли прошлую игру — до того, как метка начнёт следить за новой (G2).
         killReport.get()
         killWatch.start()
+        // Недоступный трек — повод пересканировать; слушать до восстановления очереди: её трек мог пропасть (G3).
+        unavailableRescan.start()
         // Очередь возвращается при старте процесса, а не экрана: её ждёт и служба воспроизведения.
         queueKeeper.start()
     }

@@ -136,8 +136,7 @@ internal fun Player.toPlaybackProgress(): PlaybackProgress =
  * Код ошибки ExoPlayer → тип [PlaybackError].
  *
  * Битый файл (`PARSING_CONTAINER_MALFORMED`) — не «неподдержанный формат»:
- * формат мы знаем, файл повреждён. Отдельного типа для этого пока нет,
- * поэтому он уходит в [PlaybackError.Unknown] с кодом в подробностях.
+ * формат мы знаем, файл повреждён — [PlaybackError.Malformed].
  */
 internal fun PlaybackException.toPlaybackError(): PlaybackError {
     val detail = listOfNotNull(errorCodeName, message).joinToString(": ")
@@ -145,6 +144,7 @@ internal fun PlaybackException.toPlaybackError(): PlaybackError {
         in SOURCE_UNAVAILABLE -> PlaybackError.SourceUnavailable(detail)
         in NETWORK -> PlaybackError.Network(detail)
         in UNSUPPORTED_FORMAT -> PlaybackError.UnsupportedFormat(detail)
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> PlaybackError.Malformed(detail)
         else -> PlaybackError.Unknown(detail)
     }
 }

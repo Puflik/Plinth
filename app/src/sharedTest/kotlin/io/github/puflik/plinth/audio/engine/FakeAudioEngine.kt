@@ -31,7 +31,7 @@ class FakeAudioEngine : AudioEngine {
     private val mutableEvents = MutableSharedFlow<PlaybackEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val events: Flow<PlaybackEvent> = mutableEvents.asSharedFlow()
 
-    private val unavailable = mutableSetOf<String>()
+    private val failing = mutableMapOf<String, PlaybackError>()
     private val prepared = mutableListOf<AudioSource>()
     private val states = mutableListOf<PlaybackState>(PlaybackState.Idle)
     private var hasSource = false
@@ -63,8 +63,15 @@ class FakeAudioEngine : AudioEngine {
     var trackDuration: Duration = DEFAULT_TRACK_DURATION
 
     /** Объявляет источник недоступным: [prepare] на нём закончится ошибкой. */
-    fun markUnavailable(source: AudioSource) {
-        unavailable += source.key
+    fun markUnavailable(source: AudioSource) =
+        markBroken(source, PlaybackError.SourceUnavailable("источник недоступен: ${source.key}"))
+
+    /** [prepare] на [source] закончится ошибкой [error]: битый файл, чужой формат, обрыв сети. */
+    fun markBroken(
+        source: AudioSource,
+        error: PlaybackError,
+    ) {
+        failing[source.key] = error
     }
 
     /** Доигрывает текущий трек до конца. */
@@ -94,8 +101,8 @@ class FakeAudioEngine : AudioEngine {
         hasSource = false
         moveTo(PlaybackState.Buffering)
         emit(PlaybackEvent.BufferingChanged(buffering = true))
-        if (source.key in unavailable) {
-            fail(PlaybackError.SourceUnavailable("источник недоступен: ${source.key}"))
+        failing[source.key]?.let {
+            fail(it)
             return
         }
         hasSource = true

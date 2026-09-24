@@ -1,11 +1,13 @@
 package io.github.puflik.plinth.audio
 
 import io.github.puflik.plinth.audio.engine.AudioEngine
+import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackParams
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.audio.engine.TrackInfo
+import io.github.puflik.plinth.core.AppError
 import io.github.puflik.plinth.di.ApplicationScope
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueAction
@@ -14,8 +16,11 @@ import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,7 +40,8 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Очередь ([PlaybackQueue]) живёт здесь: доигравший трек сменяется
  * следующим по событию движка, которое фасад слушает в [scope] всё время
- * жизни процесса.
+ * жизни процесса. Там же — трек, который не сыграл (G3): очередь его
+ * пропускает или останавливается и сообщает об этом в [errors].
  */
 @Singleton
 class PlaybackController
@@ -53,9 +59,27 @@ class PlaybackController
         /** Что играет, что дальше, shuffle и повтор. */
         val queue: StateFlow<PlaybackQueue> = mutableQueue.asStateFlow()
 
+        private val mutableErrors = MutableSharedFlow<AppError>(extraBufferCapacity = ERROR_BUFFER)
+
+        /** Пропущенные треки и остановки на ошибке (G3); подписчик видит только то, что случилось после подписки. */
+        val errors: SharedFlow<AppError> = mutableErrors.asSharedFlow()
+
+        private val failedRun = FailedRun()
+
+        /** Последний трек просили играть сразу; пропуск идёт так же — после восстановления он на паузе. */
+        private var autoPlay = false
+
         init {
             scope.launch {
-                engine.events.collect { event -> if (event == PlaybackEvent.TrackEnded) advance(auto = true) }
+                engine.events.collect { event ->
+                    when (event) {
+                        PlaybackEvent.TrackEnded -> advance(auto = true)
+                        is PlaybackEvent.Failed -> skipOrStop(event.error)
+                        // Позиция приходит, когда источник готов: серия неудач кончилась.
+                        is PlaybackEvent.PositionChanged -> failedRun.played(!autoPlay)?.let(mutableErrors::tryEmit)
+                        is PlaybackEvent.BufferingChanged -> Unit
+                    }
+                }
             }
         }
 
@@ -167,6 +191,18 @@ class PlaybackController
 
         private fun restart() = seekTo(Duration.ZERO)
 
+        /** Трек не сыграл (G3): пропустить или остановиться — решает [FailedRun]. */
+        private fun skipOrStop(error: PlaybackError) {
+            when (val step = failedRun.failed(queue.value, error, whileRestoring = !autoPlay)) {
+                is FailedRun.Step.Skip -> {
+                    mutableQueue.value = step.queue
+                    prepare(step.item, PlaybackParams(autoPlay = autoPlay))
+                }
+                is FailedRun.Step.Stop -> mutableErrors.tryEmit(step.error)
+                null -> Unit
+            }
+        }
+
         /** Правка того, что сыграет дальше; текущий трек она не трогает, поэтому движок не нужен. */
         private fun editUpcoming(
             index: Int,
@@ -183,7 +219,10 @@ class PlaybackController
         private fun prepare(
             item: QueueItem,
             params: PlaybackParams,
-        ) = engine.prepare(item.source, params.copy(info = TrackInfo(item.title, item.artist, item.album)))
+        ) {
+            autoPlay = params.autoPlay
+            engine.prepare(item.source, params.copy(info = TrackInfo(item.title, item.artist, item.album)))
+        }
 
         private val PlaybackState.hasSource: Boolean
             get() = this != PlaybackState.Idle && this !is PlaybackState.Error
@@ -191,5 +230,7 @@ class PlaybackController
         companion object {
             /** Сколько должно сыграть, чтобы «назад» вернуло к началу трека, а не к предыдущему. */
             val RESTART_THRESHOLD: Duration = 3.seconds
+
+            private const val ERROR_BUFFER = 16
         }
     }

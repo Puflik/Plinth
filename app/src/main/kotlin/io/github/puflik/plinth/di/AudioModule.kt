@@ -13,9 +13,12 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioEngine
 import io.github.puflik.plinth.audio.media3.ExoPlayerFactory
 import io.github.puflik.plinth.audio.media3.Media3Engine
+import io.github.puflik.plinth.library.LibraryScan
+import io.github.puflik.plinth.library.UnavailableRescan
 import io.github.puflik.plinth.queue.FileQueueStore
 import io.github.puflik.plinth.queue.QueueStore
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import javax.inject.Singleton
 
@@ -47,6 +50,15 @@ object AudioModule {
         @ApplicationContext context: Context,
         @IoDispatcher io: CoroutineDispatcher,
     ): QueueStore = FileQueueStore(File(context.filesDir, "queue"), io)
+
+    /** Недоступный трек библиотеки — один скан за запуск (G3); запускает `PlinthApplication`. */
+    @Provides
+    @Singleton
+    fun provideUnavailableRescan(
+        playback: PlaybackController,
+        scan: LibraryScan,
+        @ApplicationScope scope: CoroutineScope,
+    ): UnavailableRescan = UnavailableRescan(playback.errors, scan, scope)
 }
 
 /**

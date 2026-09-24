@@ -48,6 +48,13 @@ class PlayerListenerAdapterTest {
             .isInstanceOf(PlaybackError.UnsupportedFormat::class.java)
     }
 
+    /** Битый файл очередь пропускает так же, как чужой формат (G3). */
+    @Test
+    fun damaged_container_is_malformed() {
+        assertThat(errorFor(PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED))
+            .isInstanceOf(PlaybackError.Malformed::class.java)
+    }
+
     @Test
     fun unexplained_failure_is_unknown() {
         assertThat(errorFor(PlaybackException.ERROR_CODE_UNSPECIFIED))

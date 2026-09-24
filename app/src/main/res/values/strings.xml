@@ -13,6 +13,7 @@
     <string name="player_pause">Pause</string>
     <string name="player_error_unavailable">The file is unavailable: it was moved, deleted, or access was revoked.</string>
     <string name="player_error_format">This format is not supported.</string>
+    <string name="player_error_malformed">The file is damaged.</string>
     <string name="player_error_network">Network error. Check the connection and try again.</string>
     <string name="player_error_unknown">Playback failed.</string>
 
@@ -170,4 +171,19 @@
     <string name="track_add_to_queue">Add to queue</string>
     <string name="track_replace_queue">Replace queue</string>
     <string name="queue_added">Added to queue</string>
+    <string name="error_problem_unavailable">the file is unavailable</string>
+    <string name="error_problem_unplayable">the file is damaged or its format isn’t supported</string>
+    <string name="error_problem_network">network error</string>
+    <string name="error_problem_unknown">playback failed</string>
+    <string name="error_untitled">untitled track</string>
+    <string name="error_skipped_one">Skipped “%1$s”: %2$s</string>
+    <plurals name="error_skipped_many">
+        <item quantity="one">Skipped %d track that can’t be played</item>
+        <item quantity="other">Skipped %d tracks that can’t be played</item>
+    </plurals>
+    <string name="error_stopped_one">Can’t play “%1$s”: %2$s</string>
+    <plurals name="error_stopped_many">
+        <item quantity="one">Stopped: %d track in a row can’t be played</item>
+        <item quantity="other">Stopped: %d tracks in a row can’t be played</item>
+    </plurals>
 </resources>

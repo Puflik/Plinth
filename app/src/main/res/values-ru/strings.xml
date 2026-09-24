@@ -13,6 +13,7 @@
     <string name="player_pause">Пауза</string>
     <string name="player_error_unavailable">Файл недоступен: его переместили, удалили или отозвали доступ.</string>
     <string name="player_error_format">Этот формат не поддерживается.</string>
+    <string name="player_error_malformed">Файл повреждён.</string>
     <string name="player_error_network">Ошибка сети. Проверьте соединение и попробуйте снова.</string>
     <string name="player_error_unknown">Не удалось воспроизвести.</string>
 
@@ -183,4 +184,23 @@
     <string name="track_add_to_queue">Добавить в очередь</string>
     <string name="track_replace_queue">Заменить очередь</string>
     <string name="queue_added">Добавлено в очередь</string>
+    <string name="error_problem_unavailable">файл недоступен</string>
+    <string name="error_problem_unplayable">файл повреждён или его формат не поддерживается</string>
+    <string name="error_problem_network">ошибка сети</string>
+    <string name="error_problem_unknown">ошибка воспроизведения</string>
+    <string name="error_untitled">трек без названия</string>
+    <string name="error_skipped_one">Пропущен «%1$s»: %2$s</string>
+    <plurals name="error_skipped_many">
+        <item quantity="one">Пропущен %d трек, который не играет</item>
+        <item quantity="few">Пропущено %d трека, которые не играют</item>
+        <item quantity="many">Пропущено %d треков, которые не играют</item>
+        <item quantity="other">Пропущено %d трека, которые не играют</item>
+    </plurals>
+    <string name="error_stopped_one">Не удалось сыграть «%1$s»: %2$s</string>
+    <plurals name="error_stopped_many">
+        <item quantity="one">Остановлено: %d трек подряд не играет</item>
+        <item quantity="few">Остановлено: %d трека подряд не играют</item>
+        <item quantity="many">Остановлено: %d треков подряд не играют</item>
+        <item quantity="other">Остановлено: %d трека подряд не играют</item>
+    </plurals>
 </resources>

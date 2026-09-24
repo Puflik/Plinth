@@ -385,6 +385,7 @@ private val PlaybackError.messageRes: Int
         when (this) {
             is PlaybackError.SourceUnavailable -> R.string.player_error_unavailable
             is PlaybackError.UnsupportedFormat -> R.string.player_error_format
+            is PlaybackError.Malformed -> R.string.player_error_malformed
             is PlaybackError.Network -> R.string.player_error_network
             is PlaybackError.Unknown -> R.string.player_error_unknown
         }
