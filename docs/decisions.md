@@ -2218,3 +2218,69 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
   четыре секрета GitHub (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
   `KEY_PASSWORD`) и тег `v0.1.0`. По 15.2 плана — ревью волны в чистом
   контексте, когда автор решит.
+
+### После выпуска v0.1.0: параллельные задачи
+
+Автор 2026-09-24: тег `v0.1.0` отправлен, секреты подписи заведены (ключ —
+вне репозитория, у автора). Пока идут сборка релиза и проверка на телефоне,
+выбраны все четыре параллельные задачи: старые Android (образы API 26 и 30),
+B2.4 (семь форматов), промпт для ревью волны в чистом контексте (15.2
+плана), разбивка v0.2. Скачивание Command-line Tools (155 МБ) и образов
+`x86_64-26_r16` (981 МБ), `x86_64-30_r16` (1,44 ГБ) с dl.google.com и
+лицензия образов — с согласия автора.
+
+### B2.4: семь форматов
+
+- **`tools/make_format_fixtures.py`** — секунда тишины на формат из ffmpeg
+  (`anullsrc`, моно, `bitexact`, без метаданных): MP3 (libmp3lame), AAC и
+  ALAC в M4A, FLAC, Ogg Vorbis, Opus (48 кГц), WAV; 1–88 КБ, в
+  `androidTest/assets/formats`.
+- **`FormatSupportTest`** (параметризованный, `audio/media3`): файл → кэш →
+  `Media3Engine.prepare(autoPlay)` → ждём `TrackEnded` или `Failed` не дольше
+  10 с; итог — `TrackEnded`, длительность из файла — 1 с ± 100 мс.
+  Декодеры системные, поэтому тест ценнее всего на старых образах.
+- **API 36:** 7 из 7. Мутация «в файл пишутся первые 64 байта» роняет все 7.
+  Gapless между треками (B2.3, склеенная пара) по-прежнему не сделан:
+  плеер держит один трек, следующий готовит очередь.
+
+### v0.2 «Ядро и первый источник»: первый шаг — ответы автора
+
+Согласовано с автором 2026-09-24.
+
+- **UniFFI — макросы в Rust** (`#[uniffi::export]`), не файл `plinth.udl` из
+  декомпозиции: второго описания, которое расходится с кодом, нет; что видит
+  Kotlin — фиксирует ADR 0010 и сгенерированный код.
+- **ABI — все четыре** (arm64-v8a, armeabi-v7a, x86_64, x86), профиль
+  `opt-level = "z"` + LTO + `strip` сразу, размер APK — замер на первой сборке,
+  урезание по факту (A2.4).
+- **Загрузки разрешены:** Android NDK (версия по умолчанию AGP 9.4),
+  `cargo-ndk`, крейты uniffi и зависимости с crates.io, Rust — актуальный
+  stable через rustup, фиксируется в `core/rust-toolchain.toml`.
+- **Первый шаг (порядок работ 1–3 из `tasks-v0.2.md`):** A1 — workspace
+  `core/`, крейт `types` (минимум: `CoreError`), rustfmt/clippy; A2 — сборка
+  под Android (`gradle/rust.gradle.kts`, `.so` в `jniLibs`, CI: Rust, NDK,
+  `cargo test`, `clippy`), `docs/BUILD.md`, замер APK; A3-минимум — крейт
+  `ffi` (`cdylib`), функция-«привет», `panic.rs` (`catch_unwind` → ошибка в
+  Kotlin), `logging.rs` → `AppLog`. Kotlin-мост — пакет
+  `io.github.puflik.plinth.ffi` (пакет `core` занят `AppError` и
+  конфигурацией). DoD эпика A: вызов на устройстве, лог из Rust, panic —
+  исключение Kotlin.
+- **Состояние Rust на машине:** cargo 1.91.1, таргеты
+  `aarch64/armv7/i686/x86_64-linux-android` уже стоят; NDK и `cargo-ndk` нет.
+
+### Состояние на конец чата (2026-09-24)
+
+- **v0.1.0 выпущен:** GitHub Release «Plinth v0.1.0», pre-release,
+  `app-github-release.apk` (2,9 МБ) и `mapping-v0.1.0.txt.gz`; заметки —
+  раздел 0.1.0 из `CHANGELOG.md`. Проверка на телефоне по
+  `docs/testing/v0.1-checklist.md` — у автора.
+- **B2.4 сделан** (семь форматов на API 36), не закоммичен на момент записи.
+- **Старые Android:** в SDK поставлены Command-line Tools
+  (`cmdline-tools/latest`). `sdkmanager` в 2026 — обёртка над новым Android
+  CLI (`android.exe`); имена пакетов у него через «/»
+  (`system-images/android-26/google_apis/x86_64`), а `.bat`-файлы из Git Bash
+  режут аргументы по «;». Образы API 26 и 30 качались в конце чата; AVD
+  `Plinth_API_26` и `Plinth_API_30` — `avdmanager` из PowerShell, имя образа
+  в кавычках внутри аргумента.
+- **Дальше:** прогон на API 26/30; v0.2 шаг 1 (ответы выше); ревью волны в
+  чистом контексте (15.2 плана).
