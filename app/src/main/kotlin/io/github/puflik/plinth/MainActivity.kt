@@ -41,6 +41,7 @@ import io.github.puflik.plinth.ui.player.MiniPlayer
 import io.github.puflik.plinth.ui.player.MiniPlayerActions
 import io.github.puflik.plinth.ui.player.PlayerViewModel
 import io.github.puflik.plinth.ui.settings.CrashReportOffer
+import io.github.puflik.plinth.ui.settings.VendorGuidePrompt
 import io.github.puflik.plinth.ui.start.StartViewModel
 import io.github.puflik.plinth.ui.start.explanationText
 import io.github.puflik.plinth.ui.theme.PlinthTheme
@@ -127,6 +128,8 @@ private fun PlinthMain(
 
     // Прошлый запуск закончился сбоем — предложить сохранить отчёт (G1.3).
     CrashReportOffer(snackbar)
+    // Прошлую игру убила прошивка — один раз объяснить, что с этим делать (G2).
+    VendorGuidePrompt()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },

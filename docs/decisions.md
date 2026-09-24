@@ -1936,3 +1936,48 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
 - **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 381 JVM-тесту на
   flavor (+10), `assembleGithubDebug`, `assembleFdroidDebug`,
   `assembleGithubDebugAndroidTest`.
+
+### Шаг G2: производители, которые убивают фоновую игру
+
+- **Обнаружение (G2.1):** `KillWatch` ставит метку `filesDir/vendor/playing`,
+  когда звук пошёл, и снимает, когда остановился (только на переходах).
+  `ServiceKillDetector` при старте процесса: метка осталась — процесс умер
+  посреди игры; причина — `ApplicationExitInfo` (Android 11+), крупно в
+  `ExitReason`: остановил человек (`USER_REQUESTED`, `USER_STOPPED`), наш сбой
+  (`CRASH`, `CRASH_NATIVE`, `ANR`), обновление (`PACKAGE_UPDATED`,
+  `PERMISSION_CHANGE`) — не убийство; остальное (нехватка памяти, сигнал,
+  прочее) — убийство. На Android 8–10 причины нет: убийство, если нет отчёта
+  о нашем сбое. Решение — `KillVerdict`, чистая функция. Метка после проверки
+  снимается; проверка — через `dagger.Lazy` после установки логгера и до
+  `KillWatch.start()`, в лог — «process died while playing: exit=…, killed=…».
+- **Производитель (G2.2):** `Vendor.of(Build.MANUFACTURER)` — Xiaomi (Redmi,
+  POCO), Samsung, Huawei (Honor), OPPO (realme, OnePlus), прочие.
+- **Куда вести (G2.3):** `VendorIntents` — кандидаты экранов автозапуска и
+  батареи по dontkillmyapp.com (MIUI, Samsung Device Care, EMUI, ColorOS);
+  открывается первый, что запускается (`ActivityNotFoundException` и
+  `SecurityException` — к следующему), потом общий
+  `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`, потом страница приложения.
+  Ссылка — `dontkillmyapp.com/<производитель>`.
+- **Показ один раз (G2.4, решение автора):** диалог «Why music stops» в
+  `PlinthMain` — только если этот запуск обнаружил убийство и диалог ещё не
+  закрывали (`VendorPromptState`, `vendor_guide_shown` в DataStore). В
+  настройках — пункт «Why music stops in the background», открывает тот же
+  текст без «Android остановил…». Отдельного `VendorGuideScreen` нет — диалог.
+- **Тесты (JVM):** `VendorGuardTest` (5: группы производителей, экраны у
+  названных, ссылка, вердикт по причинам, метка по состоянию игры),
+  `VendorGuideViewModelTest` (2: после убийства — один раз; без убийства —
+  нет). RED — 6 падений из 7.
+- **Проверено на живом эмуляторе (API 36):** «Yesterday» играет → метка
+  `playing` → `kill -9` процесса → запуск → диалог «Why music stops» /
+  «Android stopped Plinth while music was playing.» и общий текст (эмулятор —
+  Google), в логе «W Vendor: process died while playing: exit=SYSTEM,
+  killed=true»; «Open settings» → системный экран батареи; «Close» → в
+  DataStore `vendor_guide_shown`. Убийство без игры — диалога нет.
+  **Не пройдено вживую:** повторное убийство посреди игры после «Close» — два
+  раза игра не началась из-за навигации в проверке; «один раз» держит
+  `VendorGuideViewModelTest`.
+- **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 388 JVM-тестов на
+  flavor (+7), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`.
+- **Состояние на конец чата (2026-09-24):** эпики A–F закрыты, G1a, G1b, G2
+  сделаны; остались G3 (ошибки), A3 (документация по факту), H (приёмка).

@@ -11,6 +11,8 @@ import io.github.puflik.plinth.diagnostics.CrashStore
 import io.github.puflik.plinth.diagnostics.log.AppLog
 import io.github.puflik.plinth.diagnostics.log.LogRedactor
 import io.github.puflik.plinth.diagnostics.log.Logger
+import io.github.puflik.plinth.diagnostics.vendor.KillReport
+import io.github.puflik.plinth.diagnostics.vendor.KillWatch
 import javax.inject.Inject
 import kotlin.time.Clock
 
@@ -46,6 +48,13 @@ class PlinthApplication :
     @Inject
     lateinit var clock: Clock
 
+    // Ленивый: проверка «убили ли прошлую игру» пишет в лог — только после установки логгера.
+    @Inject
+    lateinit var killReport: dagger.Lazy<KillReport>
+
+    @Inject
+    lateinit var killWatch: KillWatch
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -53,6 +62,9 @@ class PlinthApplication :
         AppLog.i(TAG, appInfo.line)
         // Сбой — отчётом на диск, дальше системе; при следующем запуске его предложат сохранить (G1.3).
         CrashHandler.install(crashes, LogRedactor(), clock, appInfo)
+        // Убили ли прошлую игру — до того, как метка начнёт следить за новой (G2).
+        killReport.get()
+        killWatch.start()
         // Очередь возвращается при старте процесса, а не экрана: её ждёт и служба воспроизведения.
         queueKeeper.start()
     }

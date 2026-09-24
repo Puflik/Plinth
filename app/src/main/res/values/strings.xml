@@ -100,6 +100,15 @@
     <string name="report_saved">Report saved</string>
     <string name="report_save_failed">Could not save the report.</string>
     <string name="report_on_github">Report on GitHub</string>
+    <string name="settings_vendor_guide">Why music stops in the background</string>
+    <string name="settings_vendor_guide_hint">Battery restrictions on this phone</string>
+    <string name="vendor_guide_title">Why music stops</string>
+    <string name="vendor_guide_killed">Android stopped Plinth while music was playing.</string>
+    <string name="vendor_guide_text_named">On %1$s phones the system closes background apps to save battery. Let Plinth run in the background: turn on autostart and lift battery restrictions for it.</string>
+    <string name="vendor_guide_text_other">Some phones close background apps to save battery. Turn off battery optimization for Plinth so the music keeps playing.</string>
+    <string name="vendor_guide_open_settings">Open settings</string>
+    <string name="vendor_guide_learn_more">More on dontkillmyapp.com</string>
+    <string name="vendor_guide_close">Close</string>
     <string name="start_explain_empty">Showing the library: it has no music yet.</string>
     <string name="start_explain_recent">Continuing where you left off: you listened %1$s ago.</string>
     <string name="start_explain_recent_now">Continuing where you left off: you were listening a moment ago.</string>

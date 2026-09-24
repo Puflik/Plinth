@@ -25,6 +25,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -33,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.diagnostics.vendor.Vendor
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
 
@@ -58,6 +62,14 @@ fun SettingsScreen(
     val context = LocalContext.current
     val saveLog = rememberLogSaver(diagnostics)
     val uriHandler = LocalUriHandler.current
+    var vendorGuide by remember { mutableStateOf(false) }
+    if (vendorGuide) {
+        VendorGuideDialog(
+            Vendor.of(Build.MANUFACTURER),
+            afterKill = false,
+            onClose = { vendorGuide = false },
+        )
+    }
     LazyColumn(modifier = modifier.fillMaxSize()) {
         startScreenChoice(startState, onChoose = start::onChoose)
         if (language != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -73,6 +85,7 @@ fun SettingsScreen(
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
         diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
+        vendorGuideItem(onOpen = { vendorGuide = true })
     }
 }
 
