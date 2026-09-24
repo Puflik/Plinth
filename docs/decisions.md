@@ -1636,3 +1636,57 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
   Hilt с `StartupModule`). После прогона приложение поставлено заново с
   выданными `READ_MEDIA_AUDIO` и `POST_NOTIFICATIONS`; мастер при первом
   запуске проскочит разрешение и откроется на папках.
+
+### Шаг 2 вертикали «онбординг и старт»: пустое состояние и возврат пропущенного
+
+- **Пустое состояние (12.5)** — `ui/library/EmptyLibrary`: где искали
+  («Plinth looked in Music, Download»; корень хранилища — «Whole storage»,
+  без папок — «No folders are scanned yet»), «Choose a folder» — системный
+  проводник (`OpenDocumentTree`, тот же `rememberFolderPicker`, что в
+  настройках) и блок «What’s next»: онлайн-поиск — в 0.2, ссылка «Releases on
+  GitHub» (`core/config/ProjectLinks.RELEASES`, общая для обоих flavor).
+  Вкладки и сортировка в пустом состоянии скрыты.
+- **Выбранная в пустом состоянии папка сканируется сразу** — в отличие от
+  экрана настроек, где правка ждёт «Rescan»: человек ждёт музыку, а не
+  повода нажать кнопку.
+- **«Пусто» — только когда это известно:** `LibraryUiState.isEmpty` —
+  разрешение выдано, списки прочитаны (`loaded`), треков нет и скан
+  закончен (`Done` или `Failed`). Пока скан `Idle` или `Running`, пустой
+  список — «Scanning your music…»; пока списки не прочитаны — ничего. Иначе
+  пустое состояние мелькало бы на каждом запуске до первой выдачи Room — и
+  правило F3 «пусто → пустое состояние» ошибалось бы.
+- **`startup/DeferredPrompts`** — таблица «пропущенный шаг → ситуация, где он
+  нужен» (`PromptTrigger`); в v0.1 одна строка: `FOLDERS` →
+  `EMPTY_LIBRARY`. Разрешение в таблицу не входит — без него библиотека
+  спрашивает сама. Остальные триггеры 12.4 придут со своими шагами.
+- **Как шаг возвращается:** пустое состояние говорит «You skipped choosing
+  folders» и даёт «Not now» — проводник тот же. Отдельной карточки поверх
+  пустого состояния нет: с двумя кнопками «выбрать папку» рядом было бы
+  непонятно, чем они отличаются.
+- **Шаг перестаёт быть пропущенным** (`OnboardingSettings.settle`): выбрали
+  папку в пустом состоянии, нажали «Not now» или поправили папки в
+  настройках (`FolderSettingsViewModel` — любая правка). В мастере правка
+  папок тоже зовёт `settle`, но «Skip» после неё всё равно пишет шаг
+  пропущенным — нажатая кнопка сильнее.
+- **Тесты (JVM):** `DeferredPromptsTest` (3), `DataStoreOnboardingSettingsTest`
+  +1 (`settle`), `LibraryViewModelTest` +5 (пустое состояние после скана со
+  списком папок; не пусто, пока списки не прочитаны или нет разрешения;
+  пропущенные папки возвращаются только в пустой библиотеке; выбранная папка
+  сканируется и снимает подсказку; «Not now» не возвращается),
+  `FolderSettingsViewModelTest` +1. RED — 9 падений из 41.
+- **Проверено на живом эмуляторе (API 36), после `pm clear`:** мастер →
+  разрешение → «Remove» у `Music/` и `Download/` → «Skip» → «You skipped
+  choosing folders» / «No folders are scanned yet» / «Choose a folder»,
+  «Not now», «What’s next»; «Choose a folder» → системный диалог →
+  `Music/PlinthManual` → «Use this folder» → «Allow» → сразу скан, 8 треков
+  без `Download`, в DataStore `onboarding_skipped` пуст. Второй прогон: «Not
+  now» → «No music found» без «Not now»; `force-stop` и запуск — подсказка
+  не вернулась. «Releases on GitHub» открывает браузер. Папка без музыки
+  (`Alarms`) → «Plinth looked in Alarms.». Ссылка «Releases» выровнена по
+  тексту (у `TextButton` снят боковой отступ).
+- **Зелёный критерий шага F2:** на JBR — `ktlintCheck`, `detekt`, по 323
+  JVM-теста на flavor (+10), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`; `connectedGithubDebugAndroidTest` — 95,
+  0 падений. После прогона приложение поставлено заново с выданными
+  `READ_MEDIA_AUDIO` и `POST_NOTIFICATIONS`: при первом запуске мастер
+  проскочит разрешение и откроется на папках.

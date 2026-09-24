@@ -28,7 +28,16 @@
         <item quantity="other">Found %d tracks</item>
     </plurals>
     <string name="library_scan_failed">Could not scan your music.</string>
-    <string name="library_empty">No music yet. Plinth looks in the Music and Download folders.</string>
+    <string name="library_empty_title">No music found</string>
+    <string name="library_empty_looked_in">Plinth looked in %1$s.</string>
+    <string name="library_empty_no_folders">No folders are scanned yet.</string>
+    <string name="library_empty_pick">Choose a folder</string>
+    <string name="library_prompt_folders_title">You skipped choosing folders</string>
+    <string name="library_prompt_folders_text">Plinth looked only in %1$s and found no music. Show it where your music is.</string>
+    <string name="library_prompt_not_now">Not now</string>
+    <string name="library_next_title">What’s next</string>
+    <string name="library_next_text">Online search arrives in version 0.2: music beyond this device, right in Plinth.</string>
+    <string name="library_next_releases">Releases on GitHub</string>
 
     <string name="action_back">Back</string>
     <string name="library_sort">Sort</string>

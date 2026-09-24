@@ -127,5 +127,7 @@ class OnboardingViewModelTest {
         override val record: Flow<OnboardingRecord> = MutableSharedFlow()
 
         override suspend fun finish(skipped: Set<OnboardingStep>) = Unit
+
+        override suspend fun settle(step: OnboardingStep) = Unit
     }
 }

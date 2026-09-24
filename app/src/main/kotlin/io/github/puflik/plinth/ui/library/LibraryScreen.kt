@@ -29,6 +29,7 @@ import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.PermissionState
+import io.github.puflik.plinth.startup.OnboardingStep
 import io.github.puflik.plinth.ui.common.PermissionRationaleScreen
 import io.github.puflik.plinth.ui.common.openAppSettings
 import io.github.puflik.plinth.ui.common.rememberMediaPermission
@@ -38,6 +39,7 @@ import io.github.puflik.plinth.ui.library.tabs.ArtistsTab
 import io.github.puflik.plinth.ui.library.tabs.FoldersTab
 import io.github.puflik.plinth.ui.library.tabs.TracksTab
 import io.github.puflik.plinth.ui.player.rememberAudioFilePicker
+import io.github.puflik.plinth.ui.settings.rememberFolderPicker
 
 /**
  * Библиотека — стартовый экран (C4.1): вкладки треков, альбомов,
@@ -65,6 +67,7 @@ fun LibraryScreen(
             viewModel.openFile(uri, name)
             onOpenPlayer()
         }
+    val pickFolder = rememberFolderPicker(viewModel::onFolderPicked)
     val feedback = rememberTrackActionFeedback(onOpenPlayer)
     val onTrack = { track: LibraryTrack, action: TrackAction ->
         viewModel.onTrack(track, action)
@@ -80,7 +83,7 @@ fun LibraryScreen(
         LibraryTopBar(
             tab = tab,
             state = state,
-            showSort = state.permission == PermissionState.Granted,
+            showSort = state.permission == PermissionState.Granted && !state.isEmpty,
             onTrackSort = viewModel::onTrackSort,
             onAlbumSort = viewModel::onAlbumSort,
             onOpenFile = openFile,
@@ -97,6 +100,8 @@ fun LibraryScreen(
                     onOpenArtist = onOpenArtist,
                     onOpenFolder = viewModel::openFolder,
                     onFolderUp = viewModel::folderUp,
+                    onPickFolder = pickFolder,
+                    onDismissPrompt = viewModel::onDismissPrompt,
                 )
             PermissionState.Denied, PermissionState.PermanentlyDenied ->
                 PermissionRationaleScreen(
@@ -109,7 +114,10 @@ fun LibraryScreen(
     }
 }
 
-/** Выданное разрешение: статус скана, вкладки и открытая вкладка. */
+/**
+ * Выданное разрешение: статус скана и вкладки. Пустая библиотека —
+ * проводник и «что дальше» (F2); пока скан идёт по пустой — «ищу музыку».
+ */
 @Composable
 private fun LibraryContent(
     state: LibraryUiState,
@@ -121,8 +129,19 @@ private fun LibraryContent(
     onOpenArtist: (String) -> Unit,
     onOpenFolder: (String) -> Unit,
     onFolderUp: () -> Unit,
+    onPickFolder: () -> Unit,
+    onDismissPrompt: (OnboardingStep) -> Unit,
 ) {
     ScanStatus(state.scan)
+    if (state.isEmpty) {
+        EmptyLibrary(state.scannedFolders, state.prompt, onPickFolder, onDismissPrompt)
+        return
+    }
+    if (state.tracks.isEmpty()) {
+        // Списки ещё не прочитаны — ничего; прочитаны, но скан не закончен — он и ищет.
+        if (state.loaded) Scanning()
+        return
+    }
     PrimaryTabRow(selectedTabIndex = tab.ordinal) {
         LibraryTab.entries.forEach { entry ->
             Tab(
@@ -131,10 +150,6 @@ private fun LibraryContent(
                 text = { Text(stringResource(entry.labelRes)) },
             )
         }
-    }
-    if (state.tracks.isEmpty()) {
-        EmptyLibrary(scanning = state.scan is ScanProgress.Running)
-        return
     }
     when (tab) {
         LibraryTab.TRACKS -> TracksTab(state.tracks, onAction = onTrack)
@@ -168,10 +183,10 @@ private fun ScanStatus(scan: ScanProgress) {
 }
 
 @Composable
-private fun EmptyLibrary(scanning: Boolean) {
+private fun Scanning() {
     Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Text(
-            text = stringResource(if (scanning) R.string.library_scanning else R.string.library_empty),
+            text = stringResource(R.string.library_scanning),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )

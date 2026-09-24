@@ -5,6 +5,9 @@ import io.github.puflik.plinth.library.FakeFolderSettings
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
+import io.github.puflik.plinth.startup.FakeOnboardingSettings
+import io.github.puflik.plinth.startup.OnboardingRecord
+import io.github.puflik.plinth.startup.OnboardingStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +25,9 @@ import org.junit.Test
 class FolderSettingsViewModelTest {
     private val settings = FakeFolderSettings()
     private val scan = FakeScan()
-    private val viewModel by lazy { FolderSettingsViewModel(settings, scan) }
+    private val onboarding =
+        FakeOnboardingSettings(OnboardingRecord(finished = true, skipped = setOf(OnboardingStep.FOLDERS)))
+    private val viewModel by lazy { FolderSettingsViewModel(settings, scan, onboarding) }
 
     @Before
     fun setUp() {
@@ -92,6 +97,14 @@ class FolderSettingsViewModelTest {
             viewModel.onRescan()
 
             assertThat(scan.starts).isEqualTo(1)
+        }
+
+    @Test
+    fun `changed folders settle the folders step skipped in the wizard`() =
+        runTest(UnconfinedTestDispatcher()) {
+            viewModel.onInclude("Podcasts/")
+
+            assertThat(onboarding.record.value.skipped).isEmpty()
         }
 
     private class FakeScan : LibraryScan {

@@ -7,6 +7,8 @@ import io.github.puflik.plinth.library.FolderSettings
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
+import io.github.puflik.plinth.startup.OnboardingSettings
+import io.github.puflik.plinth.startup.OnboardingStep
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -34,6 +36,7 @@ class FolderSettingsViewModel
     constructor(
         private val settings: FolderSettings,
         private val scan: LibraryScan,
+        private val onboarding: OnboardingSettings,
     ) : ViewModel() {
         val uiState: StateFlow<FolderSettingsUiState> =
             combine(settings.folders, scan.progress, ::FolderSettingsUiState)
@@ -53,8 +56,12 @@ class FolderSettingsViewModel
 
         fun onRescan() = scan.start()
 
+        /** Папки выбраны — пропущенный в мастере шаг папок больше не предлагается (F2). */
         private fun change(transform: (FolderConfig) -> FolderConfig) {
-            viewModelScope.launch { settings.update(transform) }
+            viewModelScope.launch {
+                settings.update(transform)
+                onboarding.settle(OnboardingStep.FOLDERS)
+            }
         }
 
         private companion object {

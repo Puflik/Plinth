@@ -40,6 +40,12 @@ class DataStoreOnboardingSettings
             }
         }
 
+        override suspend fun settle(step: OnboardingStep) {
+            store.edit { preferences ->
+                preferences[SKIPPED]?.let { preferences[SKIPPED] = it - step.name }
+            }
+        }
+
         private companion object {
             val FINISHED = booleanPreferencesKey("onboarding_finished")
             val SKIPPED = stringSetPreferencesKey("onboarding_skipped")

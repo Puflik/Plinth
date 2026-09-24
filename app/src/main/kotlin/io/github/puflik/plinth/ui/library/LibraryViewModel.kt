@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.library.FolderSettings
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.ScanProgress
@@ -18,6 +19,10 @@ import io.github.puflik.plinth.library.sort.TrackSort
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.settings.SortSettings
+import io.github.puflik.plinth.startup.DeferredPrompts
+import io.github.puflik.plinth.startup.OnboardingSettings
+import io.github.puflik.plinth.startup.OnboardingStep
+import io.github.puflik.plinth.startup.PromptTrigger
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +39,11 @@ import javax.inject.Inject
  *
  * @property folder открытая на вкладке «Папки» папка; треки в ней — в
  *   порядке [trackSort], как на вкладке «Треки».
+ * @property loaded списки уже прочитаны: пустые — значит, пусто, а не «ещё не
+ *   пришли».
+ * @property scannedFolders где ищется музыка — пустое состояние говорит, где искали.
+ * @property prompt пропущенный в мастере шаг, который сейчас стоит предложить
+ *   (F2, 12.4); бывает только в пустой библиотеке.
  */
 data class LibraryUiState(
     val permission: PermissionState,
@@ -44,7 +54,21 @@ data class LibraryUiState(
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val folder: LibraryFolder = LibraryFolder.tree(emptyList()),
-)
+    val loaded: Boolean = false,
+    val scannedFolders: List<String> = emptyList(),
+    val prompt: OnboardingStep? = null,
+) {
+    /**
+     * Пустое состояние (F2, 12.5): разрешение есть, скан закончен, а треков
+     * нет. Пока скан идёт или списки не прочитаны, пусто ещё не значит ничего.
+     */
+    val isEmpty: Boolean
+        get() =
+            permission == PermissionState.Granted &&
+                loaded &&
+                tracks.isEmpty() &&
+                (scan is ScanProgress.Done || scan == ScanProgress.Failed)
+}
 
 /**
  * Библиотека на экране (C4.1): разрешение, фоновый скан и списки фонотеки.
@@ -55,6 +79,9 @@ data class LibraryUiState(
  *
  * Списки приходят из [LibraryRepository] потоками и обновляются сами, когда
  * скан что-то записал. Касание трека открывает его в [PlaybackController].
+ *
+ * Пустая библиотека предлагает выбрать папку; если папки пропустили в
+ * мастере, об этом говорит возвращённый шаг ([DeferredPrompts]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -65,6 +92,8 @@ class LibraryViewModel
         repository: LibraryRepository,
         private val playback: PlaybackController,
         private val sorts: SortSettings,
+        private val folderSettings: FolderSettings,
+        private val onboarding: OnboardingSettings,
     ) : ViewModel() {
         private val permission = MutableStateFlow(PermissionState.NotRequested)
         private val trackSort = sorts.trackSort
@@ -81,18 +110,34 @@ class LibraryViewModel
                 folderPath,
             ) { tracks, albums, artists, path -> Lists(tracks, albums, artists, LibraryFolder.tree(tracks).open(path)) }
 
+        private val setup: Flow<Setup> =
+            combine(folderSettings.folders, onboarding.record) { folders, record ->
+                Setup(folders.included, record.skipped)
+            }
+
         val uiState: StateFlow<LibraryUiState> =
-            combine(permission, scan.progress, trackSort, albumSort, lists) { permission, scan, tracks, albums, lists ->
-                LibraryUiState(
-                    permission = permission,
-                    scan = scan,
-                    trackSort = tracks,
-                    albumSort = albums,
-                    tracks = lists.tracks,
-                    albums = lists.albums,
-                    artists = lists.artists,
-                    folder = lists.folder,
-                )
+            combine(permission, scan.progress, combine(trackSort, albumSort, ::Pair), lists, setup) {
+                permission,
+                scan,
+                (tracks, albums),
+                lists,
+                setup,
+                ->
+                val state =
+                    LibraryUiState(
+                        permission = permission,
+                        scan = scan,
+                        trackSort = tracks,
+                        albumSort = albums,
+                        tracks = lists.tracks,
+                        albums = lists.albums,
+                        artists = lists.artists,
+                        folder = lists.folder,
+                        loaded = true,
+                        scannedFolders = setup.folders,
+                    )
+                val trigger = PromptTrigger.EMPTY_LIBRARY.takeIf { state.isEmpty }
+                state.copy(prompt = trigger?.let { DeferredPrompts.due(setup.skipped, it) })
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), INITIAL)
 
         fun onPermission(state: PermissionState) {
@@ -131,6 +176,23 @@ class LibraryViewModel
             name: String?,
         ) = playback.play(QueueContext.File, listOf(QueueItem(AudioSource.LocalFile(uri), title = name)), start = 0)
 
+        /**
+         * Папка из пустого состояния: сканировать её, и сразу — человек ждёт
+         * музыку, а не повода нажать «Пересканировать». Шаг папок сделан.
+         */
+        fun onFolderPicked(folder: String) {
+            viewModelScope.launch {
+                folderSettings.update { it.include(folder) }
+                onboarding.settle(OnboardingStep.FOLDERS)
+                scan.start()
+            }
+        }
+
+        /** «Не сейчас»: возвращённый шаг больше не предлагается. */
+        fun onDismissPrompt(step: OnboardingStep) {
+            viewModelScope.launch { onboarding.settle(step) }
+        }
+
         fun openFolder(path: String) {
             folderPath.value = path
         }
@@ -140,6 +202,11 @@ class LibraryViewModel
             uiState.value.folder.parentPath
                 ?.let { folderPath.value = it }
         }
+
+        private data class Setup(
+            val folders: List<String>,
+            val skipped: Set<OnboardingStep>,
+        )
 
         private data class Lists(
             val tracks: List<LibraryTrack>,

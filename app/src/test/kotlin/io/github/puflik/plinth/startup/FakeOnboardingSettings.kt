@@ -11,4 +11,8 @@ class FakeOnboardingSettings(
     override suspend fun finish(skipped: Set<OnboardingStep>) {
         record.value = OnboardingRecord(finished = true, skipped = skipped)
     }
+
+    override suspend fun settle(step: OnboardingStep) {
+        record.value = record.value.copy(skipped = record.value.skipped - step)
+    }
 }

@@ -46,6 +46,18 @@ class DataStoreOnboardingSettingsTest {
                 .containsExactly(OnboardingStep.FOLDERS)
         }
 
+    @Test
+    fun `settled step is no longer skipped`() =
+        runTest {
+            val settings = DataStoreOnboardingSettings(storeIn(this))
+            settings.finish(setOf(OnboardingStep.PERMISSION, OnboardingStep.FOLDERS))
+
+            settings.settle(OnboardingStep.FOLDERS)
+
+            assertThat(settings.record.first())
+                .isEqualTo(OnboardingRecord(finished = true, skipped = setOf(OnboardingStep.PERMISSION)))
+        }
+
     private fun storeIn(scope: TestScope) =
         PreferenceDataStoreFactory.create(scope = scope.backgroundScope) {
             temp.root.resolve("onboarding.preferences_pb")

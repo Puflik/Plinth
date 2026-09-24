@@ -4,17 +4,22 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.library.FakeFolderSettings
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
+import io.github.puflik.plinth.library.model.FolderConfig
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.PermissionState
 import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.TrackSort
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.settings.FakeSortSettings
+import io.github.puflik.plinth.startup.FakeOnboardingSettings
+import io.github.puflik.plinth.startup.OnboardingRecord
+import io.github.puflik.plinth.startup.OnboardingStep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -37,7 +42,9 @@ class LibraryViewModelTest {
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val sorts = FakeSortSettings()
-    private val viewModel by lazy { LibraryViewModel(scan, repository, playback, sorts) }
+    private val folders = FakeFolderSettings()
+    private val onboarding = FakeOnboardingSettings(OnboardingRecord(finished = true))
+    private val viewModel by lazy { LibraryViewModel(scan, repository, playback, sorts, folders, onboarding) }
 
     private val bohemian = track(1, "Bohemian Rhapsody", "Queen", "A Night at the Opera", "Music/Queen/")
     private val yesterday = track(2, "Yesterday", "The Beatles", "Rubber Soul", "Music/Beatles/")
@@ -58,8 +65,8 @@ class LibraryViewModelTest {
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
 
-            val initial = LibraryUiState(PermissionState.NotRequested, ScanProgress.Idle)
-            assertThat(viewModel.uiState.value).isEqualTo(initial)
+            assertThat(viewModel.uiState.value.permission).isEqualTo(PermissionState.NotRequested)
+            assertThat(viewModel.uiState.value.scan).isEqualTo(ScanProgress.Idle)
             assertThat(scan.starts).isEqualTo(0)
         }
 
@@ -99,7 +106,13 @@ class LibraryViewModelTest {
 
             scan.progress.value = ScanProgress.Done(found = 42)
 
-            val done = LibraryUiState(PermissionState.Granted, ScanProgress.Done(found = 42))
+            val done =
+                LibraryUiState(
+                    PermissionState.Granted,
+                    ScanProgress.Done(found = 42),
+                    loaded = true,
+                    scannedFolders = FolderConfig.DEFAULT.included,
+                )
             assertThat(viewModel.uiState.value).isEqualTo(done)
         }
 
@@ -266,6 +279,78 @@ class LibraryViewModelTest {
 
             viewModel.folderUp()
             assertThat(viewModel.uiState.value.folder.path).isEmpty()
+        }
+
+    @Test
+    fun `finished scan without tracks is the empty library with the folders it looked in`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onPermission(PermissionState.Granted)
+
+            scan.progress.value = ScanProgress.Running(written = 0, total = 0)
+            assertThat(viewModel.uiState.value.isEmpty).isFalse()
+
+            scan.progress.value = ScanProgress.Done(found = 0)
+            assertThat(viewModel.uiState.value.isEmpty).isTrue()
+            assertThat(viewModel.uiState.value.scannedFolders).containsExactly("Music/", "Download/").inOrder()
+            assertThat(viewModel.uiState.value.prompt).isNull()
+
+            repository.upsert(listOf(anthem))
+            assertThat(viewModel.uiState.value.isEmpty).isFalse()
+        }
+
+    @Test
+    fun `library is not empty until its lists are read`() {
+        val unread = LibraryUiState(PermissionState.Granted, ScanProgress.Done(found = 0))
+
+        assertThat(unread.isEmpty).isFalse()
+        assertThat(unread.copy(loaded = true).isEmpty).isTrue()
+        assertThat(unread.copy(loaded = true, permission = PermissionState.Denied).isEmpty).isFalse()
+    }
+
+    @Test
+    fun `folders skipped in the wizard come back in the empty library only`() =
+        runTest(UnconfinedTestDispatcher()) {
+            onboarding.record.value = OnboardingRecord(finished = true, skipped = setOf(OnboardingStep.FOLDERS))
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onPermission(PermissionState.Granted)
+            scan.progress.value = ScanProgress.Done(found = 0)
+
+            assertThat(viewModel.uiState.value.prompt).isEqualTo(OnboardingStep.FOLDERS)
+
+            repository.upsert(listOf(anthem))
+            assertThat(viewModel.uiState.value.prompt).isNull()
+        }
+
+    @Test
+    fun `folder picked in the empty library is scanned and settles the prompt`() =
+        runTest(UnconfinedTestDispatcher()) {
+            onboarding.record.value = OnboardingRecord(finished = true, skipped = setOf(OnboardingStep.FOLDERS))
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onPermission(PermissionState.Granted)
+            scan.progress.value = ScanProgress.Done(found = 0)
+
+            viewModel.onFolderPicked("Podcasts/")
+
+            assertThat(folders.folders.value.included).containsExactly("Music/", "Download/", "Podcasts/")
+            assertThat(scan.starts).isEqualTo(2)
+            assertThat(onboarding.record.value.skipped).isEmpty()
+            assertThat(viewModel.uiState.value.prompt).isNull()
+        }
+
+    @Test
+    fun `dismissed prompt does not come back`() =
+        runTest(UnconfinedTestDispatcher()) {
+            onboarding.record.value = OnboardingRecord(finished = true, skipped = setOf(OnboardingStep.FOLDERS))
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onPermission(PermissionState.Granted)
+            scan.progress.value = ScanProgress.Done(found = 0)
+
+            viewModel.onDismissPrompt(OnboardingStep.FOLDERS)
+
+            assertThat(viewModel.uiState.value.prompt).isNull()
+            assertThat(onboarding.record.value.skipped).isEmpty()
+            assertThat(viewModel.uiState.value.isEmpty).isTrue()
         }
 
     private fun track(
