@@ -1,7 +1,9 @@
 package io.github.puflik.plinth.audio.media3
 
+import androidx.media3.common.MediaMetadata
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.audio.engine.TrackInfo
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -19,6 +21,25 @@ class MediaItemMapperTest {
         val source = AudioSource.LocalFile(SAF_URI)
 
         assertThat(MediaItemMapper.map(source).mediaId).isEqualTo(source.key)
+    }
+
+    /** Чего нет в подписях, система возьмёт из тегов файла — поэтому пустое остаётся пустым. */
+    @Test
+    fun track_info_becomes_media_metadata() {
+        val full = MediaItemMapper.map(AudioSource.LocalFile(SAF_URI), TrackInfo("Yesterday", "The Beatles", "Help!"))
+        val titleOnly = MediaItemMapper.map(AudioSource.LocalFile(SAF_URI), TrackInfo("track.flac"))
+
+        assertThat(full.mediaMetadata.title.toString()).isEqualTo("Yesterday")
+        assertThat(full.mediaMetadata.artist.toString()).isEqualTo("The Beatles")
+        assertThat(full.mediaMetadata.albumTitle.toString()).isEqualTo("Help!")
+        assertThat(titleOnly.mediaMetadata.title.toString()).isEqualTo("track.flac")
+        assertThat(titleOnly.mediaMetadata.artist).isNull()
+        assertThat(titleOnly.mediaMetadata.albumTitle).isNull()
+    }
+
+    @Test
+    fun without_info_metadata_is_left_to_the_file() {
+        assertThat(MediaItemMapper.map(AudioSource.LocalFile(SAF_URI)).mediaMetadata).isEqualTo(MediaMetadata.EMPTY)
     }
 
     @Test

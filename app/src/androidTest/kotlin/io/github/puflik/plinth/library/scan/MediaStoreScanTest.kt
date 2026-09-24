@@ -56,9 +56,13 @@ class MediaStoreScanTest {
 
             assertThat(first).isEqualTo(ScanResult(found = 4, updated = 4, missing = 0))
             assertThat(titles()).containsExactly("FLAC Silence", "M4A Silence", "plinth-untagged", "Тишина").inOrder()
+            // Обложка альбома — у первого трека по диску и номеру: FLAC стоит на диске 1 первым.
+            val uris = repository.tracks().first().associate { it.title to it.uri }
             assertThat(repository.albums().first())
-                .containsExactly(Album("Fixtures", "Plinth Various", 3), Album("PlinthTest", null, 1))
-                .inOrder()
+                .containsExactly(
+                    Album("Fixtures", "Plinth Various", 3, coverTrackUri = uris["FLAC Silence"]),
+                    Album("PlinthTest", null, 1, coverTrackUri = uris["plinth-untagged"]),
+                ).inOrder()
 
             fixtures.remove(TagFixtures.FLAC)
             fixtures.awaitScanned(source, expected = TagFixtures.ALL.size - 1)

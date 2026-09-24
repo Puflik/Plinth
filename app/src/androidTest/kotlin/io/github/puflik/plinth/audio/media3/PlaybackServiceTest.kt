@@ -102,6 +102,40 @@ class PlaybackServiceTest {
             }
         }
 
+    /** У WAV нет тегов: без подписей из очереди уведомление осталось бы пустым. */
+    @Test
+    fun external_controller_sees_titles_from_the_queue() =
+        runBlocking<Unit> {
+            val items =
+                (1..2).map { number ->
+                    val file = File(context.cacheDir, "titled-$number.wav").also { SilentWav.write(it, 3.seconds) }
+                    QueueItem(AudioSource.LocalFile(Uri.fromFile(file).toString()), "Titled $number", "Plinth")
+                }
+            val playback = onMain { EntryPointAccessors.fromApplication<AudioEntryPoint>(context).playbackController() }
+            val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+            val controller =
+                MediaController
+                    .Builder(context, token)
+                    .setApplicationLooper(Looper.getMainLooper())
+                    .buildAsync()
+                    .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            try {
+                withTimeout(TIMEOUT) {
+                    onMain { playback.play(QueueContext.Album("Titles", null), items, start = 0) }
+                    while (onMain { controller.mediaMetadata.title?.toString() } != "Titled 1") delay(POLL)
+                    assertThat(onMain { controller.mediaMetadata.artist?.toString() }).isEqualTo("Plinth")
+
+                    onMain { controller.seekToNext() }
+                    while (onMain { controller.mediaMetadata.title?.toString() } != "Titled 2") delay(POLL)
+                }
+            } finally {
+                onMain {
+                    controller.release()
+                    playback.togglePlayPause()
+                }
+            }
+        }
+
     private fun <T> onMain(block: () -> T): T {
         var result: Result<T>? = null
         instrumentation.runOnMainSync { result = runCatching(block) }

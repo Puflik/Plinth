@@ -5,6 +5,7 @@ import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackParams
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
+import io.github.puflik.plinth.audio.engine.TrackInfo
 import io.github.puflik.plinth.di.ApplicationScope
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueAction
@@ -82,7 +83,7 @@ class PlaybackController
         ) {
             if (queue.value != PlaybackQueue.EMPTY) return
             mutableQueue.value = saved
-            saved.current?.let { engine.prepare(it.source, PlaybackParams(startPosition = position, autoPlay = false)) }
+            saved.current?.let { prepare(it, PlaybackParams(startPosition = position, autoPlay = false)) }
         }
 
         /** Добавить трек в ручной блок; если ничего не играло — он и заиграет. */
@@ -144,8 +145,14 @@ class PlaybackController
 
         private fun start(queue: PlaybackQueue) {
             mutableQueue.value = queue
-            queue.current?.let { engine.prepare(it.source, PlaybackParams(autoPlay = true)) }
+            queue.current?.let { prepare(it, PlaybackParams(autoPlay = true)) }
         }
+
+        /** Подписи трека идут в движок: снаружи файл без тегов называется так же, как в приложении. */
+        private fun prepare(
+            item: QueueItem,
+            params: PlaybackParams,
+        ) = engine.prepare(item.source, params.copy(info = TrackInfo(item.title, item.artist, item.album)))
 
         private val PlaybackState.hasSource: Boolean
             get() = this != PlaybackState.Idle && this !is PlaybackState.Error

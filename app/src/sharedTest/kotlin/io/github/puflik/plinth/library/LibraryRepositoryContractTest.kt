@@ -242,8 +242,10 @@ abstract class LibraryRepositoryContractTest {
             )
 
             assertThat(repository.albums().first())
-                .containsExactly(Album("Greatest Hits", "The Kinks", 1), Album("Greatest Hits", "Queen", 2))
-                .inOrder()
+                .containsExactly(
+                    Album("Greatest Hits", "The Kinks", 1, coverTrackUri = uriOf(2)),
+                    Album("Greatest Hits", "Queen", 2, coverTrackUri = uriOf(1)),
+                ).inOrder()
         }
 
     @Test
@@ -257,7 +259,8 @@ abstract class LibraryRepositoryContractTest {
                 ),
             )
 
-            assertThat(repository.albums().first()).containsExactly(Album("Now 1", "Various Artists", trackCount = 3))
+            assertThat(repository.albums().first())
+                .containsExactly(Album("Now 1", "Various Artists", trackCount = 3, coverTrackUri = uriOf(1)))
         }
 
     @Test
@@ -316,9 +319,9 @@ abstract class LibraryRepositoryContractTest {
             )
             val exactOrder =
                 listOf(
-                    Album("Abbey Road", "Beatles", 1),
-                    Album("Abbey Road", "The Beatles", 1),
-                    Album("abbey road", "Beatles", 1),
+                    Album("Abbey Road", "Beatles", 1, coverTrackUri = uriOf(3)),
+                    Album("Abbey Road", "The Beatles", 1, coverTrackUri = uriOf(1)),
+                    Album("abbey road", "Beatles", 1, coverTrackUri = uriOf(2)),
                 )
 
             assertThat(repository.albums(AlbumSort.TITLE).first()).containsExactlyElementsIn(exactOrder).inOrder()
@@ -369,6 +372,28 @@ abstract class LibraryRepositoryContractTest {
             val tracks = repository.albumTracks(Album("Bootleg", null, 1)).first()
 
             assertThat(tracks).containsExactly(anonymous)
+        }
+
+    /**
+     * Обложка альбома — встроенная картинка его первого трека в порядке
+     * [LibraryRepository.albumTracks]; пропавший трек её не даёт.
+     */
+    @Test
+    fun album_cover_comes_from_its_first_track() =
+        contract { repository ->
+            repository.upsert(
+                listOf(
+                    track(id = 1, artist = "Queen", album = "Jazz", discNumber = 2, trackNumber = 1),
+                    track(id = 2, artist = "Queen", album = "Jazz", discNumber = 1, trackNumber = 1),
+                    track(id = 3, artist = "Queen", album = "Jazz", discNumber = 1, trackNumber = 2),
+                ),
+            )
+
+            assertThat(repository.onlyAlbumCover()).isEqualTo(uriOf(2))
+
+            repository.markMissing(listOf(2L))
+
+            assertThat(repository.onlyAlbumCover()).isEqualTo(uriOf(id = 3))
         }
 
     @Test
@@ -422,7 +447,7 @@ abstract class LibraryRepositoryContractTest {
             repository.markMissing(gone.map(LibraryTrack::id))
 
             assertThat(repository.tracks().first()).containsExactly(kept)
-            assertThat(repository.albums().first()).containsExactly(Album("Jazz", "Queen", 1))
+            assertThat(repository.albums().first()).containsExactly(Album("Jazz", "Queen", 1, coverTrackUri = uriOf(2)))
             assertThat(repository.artists().first()).containsExactly(Artist("Queen", albumCount = 1, trackCount = 1))
             assertThat(repository.albumTracks(Album("Arrival", "ABBA", 1)).first()).isEmpty()
         }
@@ -480,7 +505,7 @@ abstract class LibraryRepositoryContractTest {
         modifiedAt: Long = id,
     ) = LibraryTrack(
         id = id,
-        uri = "content://media/external/audio/media/$id",
+        uri = uriOf(id),
         title = title,
         artist = artist,
         album = album,
@@ -491,6 +516,11 @@ abstract class LibraryRepositoryContractTest {
         folder = "Music/",
         modifiedAt = modifiedAt,
     )
+
+    /** `content://` трека [id] — такой же, как у [track]. */
+    protected fun uriOf(id: Long): String = "content://media/external/audio/media/$id"
+
+    private suspend fun LibraryRepository.onlyAlbumCover(): String? = albums().first().single().coverTrackUri
 
     private suspend fun LibraryRepository.titles(sort: TrackSort): List<String> =
         tracks(sort).first().map(LibraryTrack::title)

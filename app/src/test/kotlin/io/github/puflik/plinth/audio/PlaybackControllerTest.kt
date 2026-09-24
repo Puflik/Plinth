@@ -4,6 +4,8 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackState
+import io.github.puflik.plinth.audio.engine.TrackInfo
+import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueAction
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
@@ -34,6 +36,28 @@ class PlaybackControllerTest {
             assertThat(engine.lastParams?.autoPlay).isTrue()
             assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
             assertThat(controller.queue.value.current).isEqualTo(tracks[1])
+        }
+
+    /** Файл без тегов снаружи показывается так же, как в приложении. */
+    @Test
+    fun `track titles go to the engine for the system to show`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            val song = item("race").copy(title = "Bicycle Race", artist = "Queen", album = "Jazz")
+
+            controller.play(album, listOf(song), start = 0)
+
+            assertThat(engine.lastParams?.info).isEqualTo(TrackInfo("Bicycle Race", "Queen", "Jazz"))
+        }
+
+    @Test
+    fun `restored track carries its titles too`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+
+            controller.restore(PlaybackQueue.EMPTY.play(album, tracks, start = 1), position = 30.seconds)
+
+            assertThat(engine.lastParams?.info).isEqualTo(TrackInfo("track-1"))
         }
 
     @Test

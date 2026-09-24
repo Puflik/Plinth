@@ -2,6 +2,7 @@ package io.github.puflik.plinth.ui.library.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -14,9 +15,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.artwork.ArtworkSize
 import io.github.puflik.plinth.library.model.Album
+import io.github.puflik.plinth.ui.common.ArtworkImage
 
-/** Карточка альбома (C4.2) — пока без обложки: обложкам нужен загрузчик картинок. */
+/** Карточка альбома (C4.2): обложка первого трека (E2), название, исполнитель, число треков. */
 @Composable
 fun AlbumCard(
     album: Album,
@@ -24,6 +27,12 @@ fun AlbumCard(
     modifier: Modifier = Modifier,
 ) {
     Card(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+        ArtworkImage(
+            uri = album.coverTrackUri,
+            size = ArtworkSize.THUMBNAIL,
+            placeholder = R.drawable.ic_album,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        )
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = album.title,

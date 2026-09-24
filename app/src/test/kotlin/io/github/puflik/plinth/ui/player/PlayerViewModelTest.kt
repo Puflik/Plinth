@@ -97,6 +97,19 @@ class PlayerViewModelTest {
         }
 
     @Test
+    fun `artwork comes from the current file and a stream has none`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            playback.play(album, listOf(song), start = 0)
+            assertThat(viewModel.uiState.value.artworkUri).isEqualTo("content://plinth.test/song.flac")
+
+            val stream = QueueItem(AudioSource.Remote("https://radio.example/live"), title = "Live")
+            playback.play(QueueContext.File, listOf(stream), start = 0)
+            assertThat(viewModel.uiState.value.artworkUri).isNull()
+        }
+
+    @Test
     fun `unavailable file is reported and controls go off`() =
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }

@@ -139,9 +139,9 @@ class LibraryViewModelTest {
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
             repository.upsert(listOf(yesterday, bohemian, anthem))
-            val opera = Album("A Night at the Opera", "Queen", 1)
-            val soul = Album("Rubber Soul", "The Beatles", 1)
-            val innuendo = Album("Innuendo", "Queen", 1)
+            val opera = Album("A Night at the Opera", "Queen", 1, coverTrackUri = bohemian.uri)
+            val soul = Album("Rubber Soul", "The Beatles", 1, coverTrackUri = yesterday.uri)
+            val innuendo = Album("Innuendo", "Queen", 1, coverTrackUri = anthem.uri)
 
             assertThat(viewModel.uiState.value.albums).containsExactly(innuendo, opera, soul).inOrder()
 

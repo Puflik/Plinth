@@ -15,11 +15,13 @@ import kotlin.time.Duration
  * @property gaplessNext следующий трек очереди. Движок вправе подготовить его
  *   заранее, чтобы переход прошёл без паузы. Предыдущий сосед не нужен:
  *   воспроизведение идёт вперёд, а переход назад всегда начинается заново.
+ * @property info подписи трека для системы; `null` — всё из тегов файла.
  */
 data class PlaybackParams(
     val startPosition: Duration = Duration.ZERO,
     val autoPlay: Boolean = false,
     val gaplessNext: AudioSource? = null,
+    val info: TrackInfo? = null,
 ) {
     init {
         require(!startPosition.isNegative()) { "стартовая позиция не может быть отрицательной: $startPosition" }

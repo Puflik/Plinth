@@ -20,6 +20,17 @@ import kotlinx.coroutines.flow.Flow
 private const val IN_ALBUM_ORDER = "disc_number, track_number IS NULL, track_number, title_key, media_store_id"
 
 /**
+ * Обложка альбома — у его первого трека (E2): подзапрос по тем же названию и
+ * владельцу, что у группы, в порядке [IN_ALBUM_ORDER]. Колонки порядка без
+ * таблицы относятся к ближайшей — к `cover`; индекс `(album, album_owner)`
+ * сводит подзапрос к нескольким строкам.
+ */
+private const val COVER_TRACK_URI =
+    "(SELECT cover.uri FROM tracks AS cover " +
+        "WHERE cover.missing = 0 AND cover.album = tracks.album AND cover.album_owner IS tracks.album_owner " +
+        "ORDER BY " + IN_ALBUM_ORDER + " LIMIT 1) AS coverTrackUri"
+
+/**
  * Запросы к трекам (C3.1, C3.2). Альбомы и исполнители — тоже здесь:
  * своих таблиц у них нет, их собирает `GROUP BY` по трекам.
  *
@@ -53,7 +64,7 @@ abstract class TrackDao {
      * групп — они функция названия, — но избавляют сортировку от голых колонок.
      */
     @Query(
-        "SELECT album AS title, album_owner AS artist, COUNT(*) AS trackCount FROM tracks " +
+        "SELECT album AS title, album_owner AS artist, COUNT(*) AS trackCount, " + COVER_TRACK_URI + " FROM tracks " +
             "WHERE missing = 0 AND album IS NOT NULL " +
             "GROUP BY album_key, album_owner_key, album, album_owner " +
             "ORDER BY album_key, album_owner_key IS NULL, album_owner_key, album, album_owner",
@@ -61,7 +72,7 @@ abstract class TrackDao {
     abstract fun albumsByTitle(): Flow<List<Album>>
 
     @Query(
-        "SELECT album AS title, album_owner AS artist, COUNT(*) AS trackCount FROM tracks " +
+        "SELECT album AS title, album_owner AS artist, COUNT(*) AS trackCount, " + COVER_TRACK_URI + " FROM tracks " +
             "WHERE missing = 0 AND album IS NOT NULL " +
             "GROUP BY album_key, album_owner_key, album, album_owner " +
             "ORDER BY album_owner_key IS NULL, album_owner_key, album_key, album, album_owner",

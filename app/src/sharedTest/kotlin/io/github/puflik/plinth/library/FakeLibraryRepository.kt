@@ -42,8 +42,10 @@ class FakeLibraryRepository(
             tracks
                 .filter { it.album != null }
                 .groupBy { checkNotNull(it.album) to it.albumOwner }
-                .map { (album, tracksOfAlbum) -> Album(album.first, album.second, tracksOfAlbum.size) }
-                .sortedWith(albumOrder(sort))
+                .map { (album, tracksOfAlbum) ->
+                    val cover = tracksOfAlbum.minWith(inAlbumOrder()).uri
+                    Album(album.first, album.second, tracksOfAlbum.size, coverTrackUri = cover)
+                }.sortedWith(albumOrder(sort))
         }
 
     override fun artists(): Flow<List<Artist>> =
@@ -68,7 +70,7 @@ class FakeLibraryRepository(
         present.map { tracks ->
             tracks
                 .filter { it.album == album.title && it.albumOwner == album.artist }
-                .sortedWith(discOrder().thenByKey(LibraryTrack::title).thenBy(LibraryTrack::id))
+                .sortedWith(inAlbumOrder())
         }
 
     override suspend fun knownVersions(): Map<Long, Long> =
@@ -100,6 +102,10 @@ class FakeLibraryRepository(
             AlbumSort.TITLE -> keyOrder(Album::title).thenByKey(Album::artist)
             AlbumSort.ARTIST -> keyOrder(Album::artist).thenByKey(Album::title)
         }.thenBy(CodePointOrder, Album::title).thenBy(nullsLast(CodePointOrder), Album::artist)
+
+    /** Порядок треков альбома: по диску и номеру, равные — по названию и `id`. */
+    private fun inAlbumOrder(): Comparator<LibraryTrack> =
+        discOrder().thenByKey(LibraryTrack::title).thenBy(LibraryTrack::id)
 
     /** Диск без номера — первым, трек без номера — последним на своём диске. */
     private fun discOrder(): Comparator<LibraryTrack> =

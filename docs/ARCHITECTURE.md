@@ -29,6 +29,7 @@
 | `audio` | `PlaybackController` — фасад для UI и хозяин очереди; `QueueKeeper` — её сохранение | — |
 | `library` | Локальная фонотека: разрешения, сканер, база, сортировка | Знать об экранах |
 | `queue` | Очередь воспроизведения, порядок, повтор, её файл | **Любой импорт Android**; знать об экранах и библиотеке |
+| `artwork` | Обложки: кэш в памяти и загрузчик; `artwork/embedded` — встроенная картинка файла средствами Android | Ядру (всё, кроме `embedded`) — **любой импорт Android**; знать об экранах |
 | `diagnostics` | Логи, обход вендорских ограничений, отчёты об ошибках | — |
 | `settings`, `startup` | Настройки и первый запуск; пока — `SortSettings`, порядок списков библиотеки в DataStore | — |
 | `di` | Проводка графа Hilt | Содержать логику |
@@ -66,7 +67,8 @@
 |---|---|
 | `AudioEngine` | Команды: `prepare` · `play` · `pause` · `seekTo` · `setVolume` · `release` |
 | `AudioSource` | Откуда брать звук: локальный файл (`content://`, `file://`) или поток с заголовками |
-| `PlaybackParams` | Стартовая позиция, автостарт, следующий трек для gapless |
+| `PlaybackParams` | Стартовая позиция, автостарт, следующий трек для gapless, подписи трека для системы |
+| `TrackInfo` | Название, исполнитель, альбом — что показать в уведомлении и на экране блокировки; пустое система берёт из тегов файла |
 | `PlaybackState` | Что происходит сейчас: `Idle` · `Buffering` · `Playing` · `Paused` · `Ended` · `Error` |
 | `PlaybackEvent` | Что случилось: позиция, буферизация, конец трека, ошибка |
 | `PlaybackError` | Типизированная причина: нет источника, формат, сеть, неизвестно |
@@ -95,7 +97,7 @@ ExoPlayer разрешает обращаться к себе только из 
 | Файл `audio/media3` | Что делает |
 |---|---|
 | `ExoPlayerFactory` | Создаёт плеер на заданном `Looper`: атрибуты «музыка», аудиофокус, пауза при выдернутых наушниках |
-| `MediaItemMapper` | `AudioSource` → `MediaItem`; заголовки потока пока отвергает |
+| `MediaItemMapper` | `AudioSource` → `MediaItem`, `TrackInfo` → его `mediaMetadata`; заголовки потока пока отвергает |
 | `PlayerListenerAdapter` | Обратные вызовы ExoPlayer → состояние, события, типизированные ошибки; позиция раз в 500 мс, пока звук идёт |
 | `Media3Engine` | Реализация `AudioEngine`: проверки, публикация; создаётся в потоке плеера |
 | `PlaybackService` | `MediaSessionService`: сессия на том же плеере, уведомление и foreground — силами Media3 |
@@ -232,8 +234,8 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 ```
 
 Плеер и альбом открываются поверх вкладок, нижняя навигация на них скрыта.
-Строка трека одна на все списки (`components/TrackRow`), карточка альбома —
-пока без обложки (`components/AlbumCard`). Название играющего хранит
+Строка трека одна на все списки (`components/TrackRow`), карточка альбома
+(`components/AlbumCard`) — с обложкой первого трека (`Album.coverTrackUri`). Название играющего хранит
 `PlaybackController.title`: его видят и библиотека, и плеер.
 
 ## Очередь
@@ -267,6 +269,27 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 | `audio/media3/QueueCommandsPlayer` | Плеер сессии: next/prev — в очередь, слушатели видят эти команды |
 | `ui/library/TrackAction` | Действие над треком списка и перевод `LibraryTrack` в `QueueItem` |
 
+## Обложки
+
+```
+ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<ImageBitmap>
+   плеер: FULL, карточки: THUMBNAIL              │ ArtworkCache: LRU по байтам, помнит и «нет обложки»
+                                                 │ не больше трёх файлов сразу
+                                                 ▼
+                              ArtworkSource ◄── EmbeddedArtworkSource (artwork/embedded)
+                                                 ≤ 512 px: миниатюра системы, потом теги
+                                                 > 512 px: теги (MediaMetadataRetriever), потом система
+```
+
+Своими силами, без библиотек картинок. Ключ — `content://` файла и размер:
+у трека это его источник, у альбома — первый трек по диску и номеру
+(`Album.coverTrackUri`, считает хранилище). Миниатюра системы (Android 10+)
+быстрая и находит `cover.jpg` рядом с файлом, но не больше половины экрана —
+поэтому плееру картинка читается из тегов. Ядро (`Artwork`, `ArtworkCache`,
+`ArtworkLoader`) — чистый Kotlin, его сторожит `ArtworkBoundaryTest`.
+Загрузчик — синглтон (`di/ArtworkModule`), экранам его отдаёт `MainActivity`
+через `LocalArtworkLoader`; кэшу — восьмая часть памяти процесса.
+
 ## Поток данных первой вертикали
 
 ```
@@ -296,6 +319,7 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 | `src/test` | JVM-тесты |
 | `src/androidTest` | Тесты на эмуляторе: всё, что требует настоящего Media3 или SQLite |
 | `src/androidTest/assets/tags` | Секунда тишины с тегами на формат (MP3, FLAC, M4A, без тегов) для сканера; рецепт — `tools/make_tag_fixtures.py` |
+| `src/androidTest/assets/artwork` | MP3 со встроенной обложкой 1400×1400; рецепт — `tools/make_artwork_fixtures.py` |
 | `src/sharedTest` | Общее для двух предыдущих: контрактные тесты, `FakeAudioEngine`, `FakeLibraryRepository` |
 
 `sharedTest` подключён к обоим наборам в `app/build.gradle.kts`. Иначе
@@ -326,4 +350,6 @@ WorkManager, экран библиотеки со списками треков,
 папок, экран альбома и сортировка, поиск и выбор папок для сканирования. Файл
 мимо библиотеки открывается через SAF из меню. Вертикаль «очередь» (эпик D)
 тоже пройдена: контексты с ручным блоком, shuffle и повтор, next/prev из
-уведомления и гарнитуры, очередь переживает перезапуск.
+уведомления и гарнитуры, очередь переживает перезапуск. Идёт вертикаль «плеер»
+(эпик E): раскладка D1, обложки в плеере и карточках альбомов, подписи трека
+из очереди в уведомлении.

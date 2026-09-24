@@ -2,10 +2,8 @@ package io.github.puflik.plinth.ui.player
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -41,9 +39,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.artwork.ArtworkSize
 import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
+import io.github.puflik.plinth.ui.common.ArtworkImage
 import io.github.puflik.plinth.ui.common.formatRemaining
 import io.github.puflik.plinth.ui.common.formatTime
 import kotlin.time.Duration
@@ -107,14 +107,15 @@ private fun PlayerCore(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Место под обложку (E2) — пока плашка.
-        Box(
+        ArtworkImage(
+            uri = state.artworkUri,
+            size = ArtworkSize.FULL,
+            placeholder = R.drawable.ic_music_note,
             modifier =
                 Modifier
                     .fillMaxWidth(ARTWORK_WIDTH)
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .clip(RoundedCornerShape(12.dp)),
         )
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(

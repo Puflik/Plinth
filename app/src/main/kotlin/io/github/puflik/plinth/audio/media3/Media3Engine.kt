@@ -86,7 +86,7 @@ class Media3Engine(
     ): Unit =
         synchronized(lock) {
             checkAlive()
-            val item = MediaItemMapper.map(source)
+            val item = MediaItemMapper.map(source, params.info)
             val generation = ++requested
             hasSource = true
             mutableState.value = PlaybackState.Buffering

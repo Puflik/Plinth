@@ -1274,6 +1274,8 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
   метаданные сессии берутся из тегов файла (см. шаг 3).
 
 
+## 2026-09-24
+
 ### Вертикали «плеер» (эпик E) и «онбординг и старт» (эпик F): разбивка
 
 Согласовано с автором 2026-09-24. Порядок — E, затем F.
@@ -1336,3 +1338,58 @@ Read this first for prior context. Claude appends here per the CLAUDE.md
   времени — «-0:07»; скриншот совпадает со схемой 12.13.
 - **Зелёный критерий:** на JBR — `ktlintCheck`, `detekt`, по 243 JVM-теста на
   flavor, сборки обоих flavor и тестового APK. Инструментальные не менялись.
+
+### Шаг 2 вертикали «плеер»: обложки и подписи в уведомлении
+
+- **Обложки — своими силами** (решение автора): пакет `artwork`. Ядро —
+  чистый Kotlin, страж `ArtworkBoundaryTest`: `Artwork` (найдена / точно нет),
+  `ArtworkSize` (`THUMBNAIL` 512 px — карточки и мини-плеер, `FULL` 1024 px —
+  плеер), `ArtworkCache` (LRU по байтам; помнит и «обложки нет», такая запись
+  места не занимает; картинка больше бюджета не хранится), `ArtworkLoader`
+  (файл разбирается один раз; не больше трёх сразу; запрос, отменённый в
+  очереди, файл не читает; ошибка чтения не запоминается). Кэшу — восьмая
+  часть памяти процесса.
+- **`artwork/embedded/EmbeddedArtworkSource`** — два пути: миниатюра системы
+  (`loadThumbnail`, Android 10+) и картинка из тегов (`MediaMetadataRetriever`,
+  уменьшение степенью двойки при декодировании, не ниже запроса). Замер на
+  эмуляторе: миниатюра системы — не больше половины экрана (обложка 1400 px
+  приходит как 700 px и на запрос 512, и на 1024). Поэтому до 512 px первой
+  идёт система, дальше — теги; второй путь запасной: теги находят обложку
+  документа SAF (у него миниатюры нет), система — `cover.jpg` рядом с файлом
+  без картинки в тегах.
+- **Обложка альбома — у первого трека по диску и номеру**: `Album.coverTrackUri`
+  в контракте `LibraryRepository`, Room считает её подзапросом по индексу
+  `(album, album_owner)`, без новой колонки и миграции. Пропавший трек обложку
+  не даёт.
+- **Экраны:** `ui/common/ArtworkImage` — картинка с обрезкой по рамке, пока
+  грузится и без обложки — значок (`ic_music_note` в плеере, `ic_album` в
+  карточке); декоративная, TalkBack её не читает. Загрузчик — синглтон
+  (`di/ArtworkModule`), экранам его отдаёт `MainActivity` как
+  `LocalArtworkLoader`. `PlayerUiState.artworkUri` — файл текущего трека,
+  у потока — `null`.
+- **Подписи в уведомлении** (хвост шага 3 «очереди»): `TrackInfo` (название,
+  исполнитель, альбом) в `PlaybackParams`; `PlaybackController` кладёт туда
+  подписи `QueueItem`, `MediaItemMapper` — в `mediaMetadata`. ExoPlayer ставит
+  их выше тегов файла, пустые поля добирает из тегов (и обложку тоже).
+- **Тесты:** JVM — `ArtworkCacheTest` (4), `ArtworkLoaderTest` (7),
+  `ArtworkBoundaryTest` (1), контракт +1 (обложка у первого трека, в том числе
+  после пропажи), `PlayerViewModelTest` +1, `PlaybackControllerTest` +2.
+  Эмулятор — `EmbeddedArtworkSourceTest` (6: миниатюра из `MediaStore`, файл
+  без обложки, большой запрос читается из тегов, уменьшение не ниже запроса,
+  маленькая картинка не растягивается, путь тегов без обложки),
+  `MediaItemMapperTest` +2, `PlaybackServiceTest` +1 (внешний `MediaController`
+  видит названия WAV без тегов из очереди), `MediaStoreScanTest` сверяет
+  обложки альбомов. RED — перед каждой реализацией: 19 падений на JVM у
+  обложек, 2 + 2 у подписей.
+- **Фикстура:** `tools/make_artwork_fixtures.py` →
+  `androidTest/assets/artwork/plinth-cover.mp3` (секунда тишины, APIC — красный
+  JPEG 1400×1400).
+- **Проверено на живом эмуляторе (API 36):** вкладка альбомов — у «Test
+  Pattern» встроенная обложка, у «Folder Art» (без картинки в тегах) —
+  `cover.jpg` папки, у остальных значок; плеер — обложка из тегов, `cover.jpg`
+  для «Folder Tone», значок для «Long Tone»; файл через SAF — обложка из тегов.
+  Сессия для «plinth-untagged» — `plinth-untagged, PlinthManual` (раньше
+  `null`), дальше «Yesterday, The Beatles, Help!».
+- **Зелёный критерий шага 2:** на JBR — `ktlintCheck`, `detekt`, по 259
+  JVM-тестов на flavor (+16), сборки обоих flavor и тестового APK;
+  `connectedGithubDebugAndroidTest` — 92, 0 падений (+10).
