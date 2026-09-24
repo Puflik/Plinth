@@ -53,6 +53,10 @@ class RoomLibraryRepository(
     override fun albumTracks(album: Album): Flow<List<LibraryTrack>> =
         dao.albumTracks(album.title, album.artist).toLibraryTracks()
 
+    override fun artistTracks(artist: String): Flow<List<LibraryTrack>> = dao.artistTracks(artist).toLibraryTracks()
+
+    override fun artistAlbums(artist: String): Flow<List<Album>> = dao.artistAlbums(artist)
+
     override suspend fun knownVersions(): Map<Long, Long> =
         dao.knownVersions().associate { it.mediaStoreId to it.modifiedAt }
 

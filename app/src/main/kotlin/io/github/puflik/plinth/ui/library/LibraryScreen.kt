@@ -61,6 +61,7 @@ import io.github.puflik.plinth.ui.player.rememberAudioFilePicker
 fun LibraryScreen(
     onOpenPlayer: () -> Unit,
     onOpenAlbum: (Album) -> Unit,
+    onOpenArtist: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
@@ -102,6 +103,7 @@ fun LibraryScreen(
                     onTrack = onTrack,
                     onFolderTrack = onFolderTrack,
                     onOpenAlbum = onOpenAlbum,
+                    onOpenArtist = onOpenArtist,
                     onOpenFolder = viewModel::openFolder,
                     onFolderUp = viewModel::folderUp,
                 )
@@ -125,6 +127,7 @@ private fun LibraryContent(
     onTrack: (LibraryTrack, TrackAction) -> Unit,
     onFolderTrack: (LibraryTrack, TrackAction) -> Unit,
     onOpenAlbum: (Album) -> Unit,
+    onOpenArtist: (String) -> Unit,
     onOpenFolder: (String) -> Unit,
     onFolderUp: () -> Unit,
 ) {
@@ -145,7 +148,7 @@ private fun LibraryContent(
     when (tab) {
         LibraryTab.TRACKS -> TracksTab(state.tracks, onAction = onTrack)
         LibraryTab.ALBUMS -> AlbumsTab(state.albums, onOpen = onOpenAlbum)
-        LibraryTab.ARTISTS -> ArtistsTab(state.artists)
+        LibraryTab.ARTISTS -> ArtistsTab(state.artists, onOpen = onOpenArtist)
         LibraryTab.FOLDERS -> FoldersTab(state.folder, onOpenFolder, onUp = onFolderUp, onAction = onFolderTrack)
     }
 }

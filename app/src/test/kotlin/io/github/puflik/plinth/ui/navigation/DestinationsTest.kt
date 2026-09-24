@@ -39,8 +39,8 @@ class DestinationsTest {
     }
 
     @Test
-    fun `player and album open over the tabs`() {
-        assertThat(Destination.tabs).containsNoneOf(Destination.Player, Destination.Album)
+    fun `player, album and artist open over the tabs`() {
+        assertThat(Destination.tabs).containsNoneOf(Destination.Player, Destination.Album, Destination.Artist)
     }
 
     @Test

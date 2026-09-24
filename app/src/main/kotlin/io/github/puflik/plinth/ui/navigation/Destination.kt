@@ -6,12 +6,13 @@ import io.github.puflik.plinth.R
 import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_ARTIST
 import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TITLE
 import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TRACK_COUNT
+import io.github.puflik.plinth.ui.library.artist.ArtistViewModel.Companion.ARG_NAME
 
 /**
  * Перечень экранов приложения (A2.1).
  *
  * Вкладки нижней навигации — подмножество [tabs]; у них есть подпись и
- * значок. Экраны без вкладки (плеер, альбом) открываются поверх вкладок, их
+ * значок. Экраны без вкладки (плеер, альбом, исполнитель) открываются поверх вкладок, их
  * [labelRes] и [iconRes] — `0`.
  */
 enum class Destination(
@@ -38,6 +39,9 @@ enum class Destination(
 
     /** Шаблон маршрута; сам маршрут собирает навигация из аргументов альбома. */
     Album(route = "album?$ARG_TITLE={$ARG_TITLE}&$ARG_ARTIST={$ARG_ARTIST}&$ARG_TRACK_COUNT={$ARG_TRACK_COUNT}"),
+
+    /** Шаблон маршрута экрана исполнителя (E5); имя кодирует навигация. */
+    Artist(route = "artist?$ARG_NAME={$ARG_NAME}"),
     ;
 
     companion object {

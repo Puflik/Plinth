@@ -37,16 +37,19 @@ class FakeLibraryRepository(
     override fun tracks(sort: TrackSort): Flow<List<LibraryTrack>> =
         present.map { tracks -> tracks.sortedWith(trackOrder(sort)) }
 
-    override fun albums(sort: AlbumSort): Flow<List<Album>> =
-        present.map { tracks ->
-            tracks
-                .filter { it.album != null }
-                .groupBy { checkNotNull(it.album) to it.albumOwner }
-                .map { (album, tracksOfAlbum) ->
-                    val cover = tracksOfAlbum.minWith(inAlbumOrder()).uri
-                    Album(album.first, album.second, tracksOfAlbum.size, coverTrackUri = cover)
-                }.sortedWith(albumOrder(sort))
-        }
+    override fun albums(sort: AlbumSort): Flow<List<Album>> = present.map { albumsOf(it, sort) }
+
+    private fun albumsOf(
+        tracks: List<LibraryTrack>,
+        sort: AlbumSort,
+    ): List<Album> =
+        tracks
+            .filter { it.album != null }
+            .groupBy { checkNotNull(it.album) to it.albumOwner }
+            .map { (album, tracksOfAlbum) ->
+                val cover = tracksOfAlbum.minWith(inAlbumOrder()).uri
+                Album(album.first, album.second, tracksOfAlbum.size, coverTrackUri = cover)
+            }.sortedWith(albumOrder(sort))
 
     override fun artists(): Flow<List<Artist>> =
         present.map { tracks ->
@@ -71,6 +74,15 @@ class FakeLibraryRepository(
             tracks
                 .filter { it.album == album.title && it.albumOwner == album.artist }
                 .sortedWith(inAlbumOrder())
+        }
+
+    override fun artistTracks(artist: String): Flow<List<LibraryTrack>> =
+        present.map { tracks -> tracks.filter { it.artist == artist }.sortedWith(trackOrder(TrackSort.ARTIST)) }
+
+    override fun artistAlbums(artist: String): Flow<List<Album>> =
+        present.map { tracks ->
+            val his = tracks.filter { it.artist == artist }.map { it.album to it.albumOwner }.toSet()
+            albumsOf(tracks, AlbumSort.TITLE).filter { (it.title to it.artist) in his }
         }
 
     override suspend fun knownVersions(): Map<Long, Long> =

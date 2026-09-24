@@ -36,6 +36,19 @@ interface LibraryRepository {
     /** Треки альбома по диску, затем по номеру; треки без номера — в конце диска. */
     fun albumTracks(album: Album): Flow<List<LibraryTrack>>
 
+    /**
+     * Треки исполнителя [artist] (тег трека, точное имя, как в [artists]) —
+     * в порядке [tracks] по исполнителю: альбомы по названию, внутри — по
+     * диску и номеру, треки без альбома — в конце.
+     */
+    fun artistTracks(artist: String): Flow<List<LibraryTrack>>
+
+    /**
+     * Альбомы, где есть треки [artist], в порядке [albums] по названию. Число
+     * треков и обложка — всего альбома: сборник с одной его песней — целый сборник.
+     */
+    fun artistAlbums(artist: String): Flow<List<Album>>
+
     /** `id` → `modifiedAt` всех видимых треков: по ним сканер решает, что перечитать. */
     suspend fun knownVersions(): Map<Long, Long>
 

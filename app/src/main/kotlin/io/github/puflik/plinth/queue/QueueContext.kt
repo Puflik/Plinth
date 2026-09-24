@@ -22,6 +22,11 @@ sealed interface QueueContext {
         val query: String,
     ) : QueueContext
 
+    /** Треки исполнителя (E5): имя — тег трека, как в списке исполнителей. */
+    data class Artist(
+        val name: String,
+    ) : QueueContext
+
     /** Один файл, открытый мимо библиотеки через SAF. */
     data object File : QueueContext
 }

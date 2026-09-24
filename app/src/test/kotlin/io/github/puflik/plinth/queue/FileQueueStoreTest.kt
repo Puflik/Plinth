@@ -55,6 +55,7 @@ class FileQueueStoreTest {
                     QueueContext.Album("Demos", null),
                     QueueContext.Folder("Music/Queen/"),
                     QueueContext.Search("queen opera"),
+                    QueueContext.Artist("Queen"),
                     QueueContext.File,
                 )
             for (context in contexts) {
@@ -140,6 +141,7 @@ class FileQueueStoreTest {
         title = name,
         artist = artist,
         album = "A Night at the Opera",
+        albumOwner = "Queen",
         duration = duration,
     )
 

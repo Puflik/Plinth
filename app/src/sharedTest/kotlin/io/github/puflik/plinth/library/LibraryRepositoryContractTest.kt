@@ -396,6 +396,54 @@ abstract class LibraryRepositoryContractTest {
             assertThat(repository.onlyAlbumCover()).isEqualTo(uriOf(id = 3))
         }
 
+    /**
+     * Треки исполнителя (E5) — его треки в порядке вкладки «по исполнителю»:
+     * альбомы по названию без артикля, внутри — по диску и номеру, без
+     * альбома — в конце. Сборники тоже: исполнитель — тег трека.
+     */
+    @Test
+    fun artist_tracks_follow_artist_order() =
+        contract { repository ->
+            repository.upsert(artistLibrary())
+
+            val tracks = repository.artistTracks("Queen").first()
+
+            assertThat(tracks.map(LibraryTrack::title))
+                .containsExactly("Track 3", "Track 1", "Track 2", "Track 6", "Track 4")
+                .inOrder()
+            assertThat(tracks)
+                .containsExactlyElementsIn(repository.tracks(TrackSort.ARTIST).first().filter { it.artist == "Queen" })
+                .inOrder()
+        }
+
+    /** Альбомы исполнителя — где есть его треки; число треков и обложка — всего альбома. */
+    @Test
+    fun artist_albums_are_albums_with_his_tracks() =
+        contract { repository ->
+            repository.upsert(artistLibrary())
+
+            val albums = repository.artistAlbums("Queen").first()
+
+            assertThat(albums.map { it.title to it.artist })
+                .containsExactly("Jazz" to "Queen", "A Night at the Opera" to "Queen", "Now 1" to "Various Artists")
+                .inOrder()
+            assertThat(albums.last()).isEqualTo(Album("Now 1", "Various Artists", trackCount = 2, uriOf(id = 6)))
+        }
+
+    @Test
+    fun missing_tracks_leave_the_artist() =
+        contract { repository ->
+            repository.upsert(artistLibrary())
+
+            val gone = artistLibrary().filter { it.album == "A Night at the Opera" || it.album == "Now 1" }
+            repository.markMissing(gone.map(LibraryTrack::id))
+
+            assertThat(repository.artistTracks("Queen").first().map(LibraryTrack::title))
+                .containsExactly("Track 3", "Track 1", "Track 4")
+            assertThat(repository.artistAlbums("Queen").first().map(Album::title)).containsExactly("Jazz")
+            assertThat(repository.artistTracks("Nobody").first()).isEmpty()
+        }
+
     @Test
     fun artists_list_each_track_artist_once() =
         contract { repository ->
@@ -516,6 +564,18 @@ abstract class LibraryRepositoryContractTest {
         folder = "Music/",
         modifiedAt = modifiedAt,
     )
+
+    /** Queen на трёх альбомах (один — сборник) и без альбома; ABBA рядом. */
+    private fun artistLibrary() =
+        listOf(
+            track(id = 1, artist = "Queen", album = "Jazz", trackNumber = 2),
+            track(id = 2, artist = "Queen", album = "A Night at the Opera", trackNumber = 1),
+            track(id = 3, artist = "Queen", album = "Jazz", trackNumber = 1),
+            track(id = 4, artist = "Queen"),
+            track(id = 5, artist = "ABBA", album = "Arrival"),
+            track(id = 6, artist = "Queen", album = "Now 1", albumArtist = "Various Artists"),
+            track(id = 7, artist = "ABBA", album = "Now 1", albumArtist = "Various Artists"),
+        )
 
     /** `content://` трека [id] — такой же, как у [track]. */
     protected fun uriOf(id: Long): String = "content://media/external/audio/media/$id"

@@ -128,6 +128,10 @@ class FileQueueStore(
                 writeUTF("search")
                 writeUTF(context.query)
             }
+            is QueueContext.Artist -> {
+                writeUTF("artist")
+                writeUTF(context.name)
+            }
         }
     }
 
@@ -139,6 +143,7 @@ class FileQueueStore(
             "album" -> QueueContext.Album(readUTF(), readNullable())
             "folder" -> QueueContext.Folder(readUTF())
             "search" -> QueueContext.Search(readUTF())
+            "artist" -> QueueContext.Artist(readUTF())
             else -> throw IOException("неизвестный контекст $kind")
         }
 
@@ -164,6 +169,7 @@ class FileQueueStore(
         writeNullable(item.artist)
         writeNullable(item.album)
         writeLong(item.duration?.inWholeMilliseconds ?: NO_DURATION)
+        writeNullable(item.albumOwner)
     }
 
     private fun DataInputStream.readItem(): QueueItem {
@@ -179,6 +185,7 @@ class FileQueueStore(
             artist = readNullable(),
             album = readNullable(),
             duration = readLong().takeIf { it != NO_DURATION }?.milliseconds,
+            albumOwner = readNullable(),
         )
     }
 
@@ -190,7 +197,8 @@ class FileQueueStore(
     private fun DataInputStream.readNullable(): String? = if (readBoolean()) readUTF() else null
 
     private companion object {
-        const val VERSION = 1
+        /** 2 — владелец альбома у элемента и контекст «исполнитель» (E5); файл версии 1 не читается. */
+        const val VERSION = 2
         const val NO_CONTEXT = "none"
         const val NO_DURATION = -1L
     }

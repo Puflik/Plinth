@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +42,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.artwork.ArtworkSize
 import io.github.puflik.plinth.audio.engine.PlaybackError
+import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.RepeatMode
 import io.github.puflik.plinth.ui.common.ArtworkImage
 import io.github.puflik.plinth.ui.common.formatRemaining
@@ -53,16 +57,21 @@ import kotlin.time.Duration
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
+    onOpenAlbum: (Album) -> Unit,
+    onOpenArtist: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
-            Icon(
-                painterResource(R.drawable.ic_collapse),
-                contentDescription = stringResource(R.string.player_collapse),
-            )
+        Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    painterResource(R.drawable.ic_collapse),
+                    contentDescription = stringResource(R.string.player_collapse),
+                )
+            }
+            PlayerMenu(state, onOpenAlbum, onOpenArtist)
         }
         PlayerCore(
             state = state,
@@ -76,7 +85,43 @@ fun PlayerScreen(
                     onRepeat = viewModel::onRepeat,
                 ),
             edits = QueueEdits(onRemove = viewModel::onRemoveUpcoming, onMove = viewModel::onMoveUpcoming),
+            onOpenArtist = onOpenArtist,
         )
+    }
+}
+
+/** Меню ⋮, слой D3 (E5): к альбому и к исполнителю — то, что известно о треке. */
+@Composable
+private fun PlayerMenu(
+    state: PlayerUiState,
+    onOpenAlbum: (Album) -> Unit,
+    onOpenArtist: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }, enabled = state.album != null || state.artist != null) {
+            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.library_more))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            state.album?.let { album ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.player_go_album)) },
+                    onClick = {
+                        expanded = false
+                        onOpenAlbum(album)
+                    },
+                )
+            }
+            state.artist?.let { artist ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.player_go_artist)) },
+                    onClick = {
+                        expanded = false
+                        onOpenArtist(artist)
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -118,6 +163,7 @@ private fun PlayerCore(
     state: PlayerUiState,
     controls: PlayerControls,
     edits: QueueEdits,
+    onOpenArtist: (String) -> Unit,
 ) {
     var panel by rememberSaveable { mutableStateOf(PlayerPanel.COVER) }
     Column(
@@ -145,7 +191,17 @@ private fun PlayerCore(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            state.artist?.let { Text(text = it, style = MaterialTheme.typography.bodyLarge, maxLines = 1) }
+            state.artist?.let { artist ->
+                Text(
+                    text = artist,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    modifier =
+                        Modifier.clickable(onClickLabel = stringResource(R.string.player_go_artist)) {
+                            onOpenArtist(artist)
+                        },
+                )
+            }
         }
         state.error?.let {
             Text(

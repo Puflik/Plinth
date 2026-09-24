@@ -12,6 +12,8 @@ import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.ui.library.LibraryScreen
 import io.github.puflik.plinth.ui.library.album.AlbumScreen
 import io.github.puflik.plinth.ui.library.album.AlbumViewModel
+import io.github.puflik.plinth.ui.library.artist.ArtistScreen
+import io.github.puflik.plinth.ui.library.artist.ArtistViewModel
 import io.github.puflik.plinth.ui.player.PlayerScreen
 import io.github.puflik.plinth.ui.search.SearchScreen
 import io.github.puflik.plinth.ui.settings.FolderSettingsScreen
@@ -19,7 +21,9 @@ import io.github.puflik.plinth.ui.settings.FolderSettingsScreen
 /**
  * Граф навигации (A2.1).
  *
- * Библиотека — стартовый экран; плеер и альбом открываются поверх вкладок.
+ * Библиотека — стартовый экран; плеер, альбом и исполнитель открываются
+ * поверх вкладок. Из плеера к альбому и исполнителю — вместо плеера: он
+ * сворачивается в мини-плеер, «назад» ведёт туда, откуда плеер открыли.
  * Из настроек пока есть только папки фонотеки (C2.5), остальное придёт с F.
  */
 @Composable
@@ -34,14 +38,29 @@ fun PlinthNavHost(
     ) {
         val openPlayer = { navController.navigate(Destination.Player.route) { launchSingleTop = true } }
         val back: () -> Unit = { navController.popBackStack() }
+        val openAlbum = { album: Album -> navController.navigate(albumRoute(album)) }
+        val openArtist = { artist: String -> navController.navigate(artistRoute(artist)) }
         composable(Destination.Library.route) {
-            LibraryScreen(onOpenPlayer = openPlayer, onOpenAlbum = { navController.navigate(albumRoute(it)) })
+            LibraryScreen(onOpenPlayer = openPlayer, onOpenAlbum = openAlbum, onOpenArtist = openArtist)
         }
         composable(Destination.Player.route) {
-            PlayerScreen(onBack = back)
+            PlayerScreen(
+                onBack = back,
+                onOpenAlbum = { album ->
+                    navController.popBackStack()
+                    openAlbum(album)
+                },
+                onOpenArtist = { artist ->
+                    navController.popBackStack()
+                    openArtist(artist)
+                },
+            )
         }
         composable(Destination.Album.route, arguments = ALBUM_ARGUMENTS) {
             AlbumScreen(onBack = back, onOpenPlayer = openPlayer)
+        }
+        composable(Destination.Artist.route, arguments = ARTIST_ARGUMENTS) {
+            ArtistScreen(onBack = back, onOpenPlayer = openPlayer, onOpenAlbum = openAlbum)
         }
         composable(Destination.Search.route) {
             SearchScreen(onOpenPlayer = openPlayer)
@@ -65,6 +84,11 @@ private val ALBUM_ARGUMENTS =
             defaultValue = 0
         },
     )
+
+private val ARTIST_ARGUMENTS = listOf(navArgument(ArtistViewModel.ARG_NAME) { type = NavType.StringType })
+
+/** Маршрут экрана исполнителя: имя — любая строка, поэтому кодируется. */
+private fun artistRoute(artist: String): String = "artist?${ArtistViewModel.ARG_NAME}=${Uri.encode(artist)}"
 
 /**
  * Маршрут экрана альбома. Название и исполнитель — любые строки, с `&`, `?`

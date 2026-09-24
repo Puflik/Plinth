@@ -5,6 +5,7 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackError
+import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
@@ -109,6 +110,21 @@ class PlayerViewModelTest {
 
             viewModel.onRemoveUpcoming(index = 0, item = third)
             assertThat(viewModel.uiState.value.upcoming).containsExactly(second)
+        }
+
+    /** Меню ⋮ и касание по исполнителю ведут туда, откуда трек (E5). */
+    @Test
+    fun `current track leads to its album and artist`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            val compiled = song.copy(album = "Now 1", albumOwner = "Various Artists")
+
+            playback.play(album, listOf(compiled, second), start = 0)
+            assertThat(viewModel.uiState.value.album).isEqualTo(Album("Now 1", "Various Artists", trackCount = 0))
+            assertThat(viewModel.uiState.value.artist).isEqualTo("Queen")
+
+            viewModel.onNext()
+            assertThat(viewModel.uiState.value.album).isNull()
         }
 
     /** Мини-плеер виден, когда есть что показать, — и после восстановления на паузе тоже. */

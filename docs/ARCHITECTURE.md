@@ -227,8 +227,10 @@ LibraryScreen (стартовый) ── вкладки: TracksTab · AlbumsTab
      │  LibraryViewModel: LibraryRepository (списки, порядок) + LibraryScan + PlaybackController
      ├── касание трека ──► PlaybackController.open(source, title) ──► PlayerScreen
      ├── касание альбома ──► AlbumScreen (Album — аргументами навигации) ──► PlayerScreen
+     ├── касание исполнителя ──► ArtistScreen (имя — аргументом): его альбомы и треки
      └── меню: «Open file» (SAF) ──► PlayerScreen
 
+PlayerScreen ── меню ⋮, касание по исполнителю ──► AlbumScreen / ArtistScreen (вместо плеера)
 MiniPlayer (над нижней навигацией, на всех экранах, кроме плеера) ── касание, свайп вверх ──► PlayerScreen
      PlayerViewModel на уровне Activity; свайп вбок — next/previous, play/pause
 
@@ -273,7 +275,7 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 |---|---|
 | `queue/PlaybackQueue` | Контекст, порядок обхода, позиция, ручной блок; `play`, `replace`, `perform`, `next`, `previous`, shuffle, repeat; `remove` и `move` того, что сыграет дальше |
 | `queue/QueueItem`, `QueueContext`, `QueueAction`, `ShuffleOrder` | Элемент (источник и подписи), откуда контекст, действия долгого нажатия и повтор, порядок обхода |
-| `queue/QueueStore`, `FileQueueStore` | Сохранённая очередь и позиция; свой двоичный формат с версией; файлы трогает одна операция за раз |
+| `queue/QueueStore`, `FileQueueStore` | Сохранённая очередь и позиция; свой двоичный формат с версией (сейчас 2); файлы трогает одна операция за раз |
 | `audio/QueueKeeper` | Восстановление при старте и сохранение по ходу |
 | `audio/media3/QueueCommandsPlayer` | Плеер сессии: next/prev — в очередь, слушатели видят эти команды |
 | `ui/library/TrackAction` | Действие над треком списка и перевод `LibraryTrack` в `QueueItem` |
@@ -361,4 +363,5 @@ WorkManager, экран библиотеки со списками треков,
 тоже пройдена: контексты с ручным блоком, shuffle и повтор, next/prev из
 уведомления и гарнитуры, очередь переживает перезапуск. Идёт вертикаль «плеер»
 (эпик E): раскладка D1, обложки в плеере и карточках альбомов, подписи трека
-из очереди в уведомлении, мини-плеер, панели с правкой очереди.
+из очереди в уведомлении, мини-плеер, панели с правкой очереди, меню ⋮ и
+экран исполнителя.

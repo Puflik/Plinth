@@ -4,6 +4,7 @@ import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
+import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
@@ -16,6 +17,8 @@ import kotlin.time.Duration
  * @property upcoming что сыграет дальше без повтора.
  * @property artworkUri файл, чья встроенная обложка показывается; `null` —
  *   показывать нечего (ничего не играет или играет поток).
+ * @property album альбом текущего трека — для «к альбому»; число треков
+ *   экран альбома считает сам, здесь оно `0`.
  * @property hasTrack в очереди есть текущий трек — играет он или стоит на
  *   паузе; по нему показывается мини-плеер.
  */
@@ -32,6 +35,7 @@ data class PlayerUiState(
     val repeat: RepeatMode,
     val artworkUri: String?,
     val hasTrack: Boolean,
+    val album: Album?,
 ) {
     /** Какая доля трека сыграна, `0..1`; без длительности — `0`. */
     val progressFraction: Float
@@ -57,6 +61,7 @@ data class PlayerUiState(
             repeat = queue.repeat,
             artworkUri = (queue.current?.source as? AudioSource.LocalFile)?.uri,
             hasTrack = queue.current != null,
+            album = queue.current?.let { item -> item.album?.let { Album(it, item.albumOwner, trackCount = 0) } },
         )
     }
 }

@@ -24,7 +24,14 @@ enum class TrackAction {
 
 /** Трек библиотеки как элемент очереди: очередь библиотеку не знает. */
 fun LibraryTrack.toQueueItem() =
-    QueueItem(source = AudioSource.LocalFile(uri), title = title, artist = artist, album = album, duration = duration)
+    QueueItem(
+        source = AudioSource.LocalFile(uri),
+        title = title,
+        artist = artist,
+        album = album,
+        duration = duration,
+        albumOwner = albumOwner,
+    )
 
 /**
  * [action] над [track] из списка [tracks], который играет контекстом

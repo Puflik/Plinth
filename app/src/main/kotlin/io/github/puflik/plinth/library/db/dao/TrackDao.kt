@@ -79,6 +79,27 @@ abstract class TrackDao {
     )
     abstract fun albumsByArtist(): Flow<List<Album>>
 
+    /** Треки исполнителя — как [tracksByArtist], только его: одно имя, порядок тот же. */
+    @Query(
+        "SELECT * FROM tracks WHERE missing = 0 AND artist = :artist " +
+            "ORDER BY album_key IS NULL, album_key, " + IN_ALBUM_ORDER,
+    )
+    abstract fun artistTracks(artist: String): Flow<List<TrackEntity>>
+
+    /**
+     * Альбомы, где есть треки исполнителя, — как [albumsByTitle], но группы без
+     * его треков отсекает `HAVING`: сравнение даёт 1, 0 или `NULL`, а `SUM`
+     * пропускает `NULL`. Число треков и обложка — всей группы.
+     */
+    @Query(
+        "SELECT album AS title, album_owner AS artist, COUNT(*) AS trackCount, " + COVER_TRACK_URI + " FROM tracks " +
+            "WHERE missing = 0 AND album IS NOT NULL " +
+            "GROUP BY album_key, album_owner_key, album, album_owner " +
+            "HAVING SUM(artist = :artist) > 0 " +
+            "ORDER BY album_key, album_owner_key IS NULL, album_owner_key, album, album_owner",
+    )
+    abstract fun artistAlbums(artist: String): Flow<List<Album>>
+
     /** Исполнитель — тег `artist` трека; альбомы считаются по названию, сборники тоже. */
     @Query(
         "SELECT artist AS name, COUNT(DISTINCT album) AS albumCount, COUNT(*) AS trackCount FROM tracks " +

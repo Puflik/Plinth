@@ -9,6 +9,10 @@ import kotlin.time.Duration
  * Библиотеку очередь не знает — трек из неё и файл из SAF становятся
  * одинаковыми элементами. Ручное это добавление или трек контекста, решает
  * место в [PlaybackQueue], а не сам элемент.
+ *
+ * @property albumOwner чей альбом (исполнитель альбома, иначе трека): вместе
+ *   с [album] он узнаёт альбом, к которому ведёт плеер (E5). У сборника
+ *   исполнитель трека и владелец альбома — разные люди.
  */
 data class QueueItem(
     val source: AudioSource,
@@ -16,4 +20,5 @@ data class QueueItem(
     val artist: String? = null,
     val album: String? = null,
     val duration: Duration? = null,
+    val albumOwner: String? = null,
 )

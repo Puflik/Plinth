@@ -1,5 +1,6 @@
 package io.github.puflik.plinth.ui.library.tabs
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ListItem
@@ -11,10 +12,11 @@ import androidx.compose.ui.res.stringResource
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.model.Artist
 
-/** Исполнители по имени (C4.1). Экрана исполнителя в v0.1 ещё нет — строки не нажимаются. */
+/** Исполнители по имени (C4.1); касание открывает экран исполнителя (E5). */
 @Composable
 fun ArtistsTab(
     artists: List<Artist>,
+    onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
@@ -24,6 +26,7 @@ fun ArtistsTab(
             ListItem(
                 headlineContent = { Text(artist.name) },
                 supportingContent = { Text(stringResource(R.string.library_artist_summary, albums, tracks)) },
+                modifier = Modifier.clickable { onOpen(artist.name) },
             )
         }
     }
