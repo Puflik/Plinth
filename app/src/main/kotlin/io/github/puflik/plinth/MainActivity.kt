@@ -25,6 +25,9 @@ import io.github.puflik.plinth.ui.common.LocalArtworkLoader
 import io.github.puflik.plinth.ui.navigation.BottomNavigationBar
 import io.github.puflik.plinth.ui.navigation.Destination
 import io.github.puflik.plinth.ui.navigation.PlinthNavHost
+import io.github.puflik.plinth.ui.onboarding.OnboardingScreen
+import io.github.puflik.plinth.ui.onboarding.OnboardingUiState
+import io.github.puflik.plinth.ui.onboarding.OnboardingViewModel
 import io.github.puflik.plinth.ui.player.MiniPlayer
 import io.github.puflik.plinth.ui.player.MiniPlayerActions
 import io.github.puflik.plinth.ui.player.PlayerViewModel
@@ -54,8 +57,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Мастер первого запуска стоит перед приложением, пока его не пройдут или не пропустят (F1). */
 @Composable
 private fun PlinthApp() {
+    val onboarding: OnboardingViewModel = hiltViewModel()
+    when (val state = onboarding.uiState.collectAsState().value) {
+        // Первый ли это запуск, ещё не прочитано — доли секунды виден фон темы.
+        OnboardingUiState.Loading -> Unit
+        is OnboardingUiState.Step -> OnboardingScreen(step = state.step, viewModel = onboarding)
+        OnboardingUiState.Finished -> PlinthMain()
+    }
+}
+
+/** Приложение: вкладки, экраны поверх них и мини-плеер. */
+@Composable
+private fun PlinthMain() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route

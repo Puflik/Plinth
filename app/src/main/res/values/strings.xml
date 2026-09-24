@@ -68,6 +68,15 @@
     <string name="folders_reset">Reset to Music and Download</string>
     <string name="folders_not_local">Pick a folder on this device.</string>
 
+    <string name="onboarding_welcome">Welcome to Plinth</string>
+    <string name="onboarding_step">Step %1$d of %2$d</string>
+    <string name="onboarding_folders_title">Where is your music?</string>
+    <string name="onboarding_folders_text">Plinth looks for music in these folders. Add others or skip the ones you don’t need — you can change this later in Settings.</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_skip_all">Skip all</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_done">Done</string>
+
     <string name="player_collapse">Collapse</string>
     <string name="player_time_toggle">Switch between elapsed and remaining time</string>
     <string name="player_previous">Previous</string>

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.ScanProgress
+import io.github.puflik.plinth.library.model.FolderConfig
 
 /**
  * Экран папок (C2.5): что сканировать и что пропускать; папки выбираются
@@ -47,17 +48,7 @@ fun FolderSettingsScreen(
     val include = rememberFolderPicker(viewModel::onInclude)
     val exclude = rememberFolderPicker(viewModel::onExclude)
     LazyColumn(modifier = modifier.fillMaxSize()) {
-        folderSection(R.string.folders_included, state.folders.included, viewModel::onRemove)
-        folderSection(R.string.folders_excluded, state.folders.excluded, viewModel::onRemove)
-        item(key = "actions") {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = include) { Text(stringResource(R.string.folders_add)) }
-                OutlinedButton(onClick = exclude) { Text(stringResource(R.string.folders_exclude)) }
-            }
-        }
+        folderChoice(state.folders, onRemove = viewModel::onRemove, onInclude = include, onExclude = exclude)
         item(key = "reset") {
             TextButton(
                 onClick = viewModel::onReset,
@@ -66,6 +57,30 @@ fun FolderSettingsScreen(
             ) { Text(stringResource(R.string.folders_reset)) }
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
+    }
+}
+
+/**
+ * Списки «сканируются» и «пропускаются» с кнопками выбора — общие для
+ * настроек и мастера первого запуска (F1). [onInclude] и [onExclude]
+ * открывают системный диалог — см. [rememberFolderPicker].
+ */
+internal fun LazyListScope.folderChoice(
+    folders: FolderConfig,
+    onRemove: (String) -> Unit,
+    onInclude: () -> Unit,
+    onExclude: () -> Unit,
+) {
+    folderSection(R.string.folders_included, folders.included, onRemove)
+    folderSection(R.string.folders_excluded, folders.excluded, onRemove)
+    item(key = "actions") {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = onInclude) { Text(stringResource(R.string.folders_add)) }
+            OutlinedButton(onClick = onExclude) { Text(stringResource(R.string.folders_exclude)) }
+        }
     }
 }
 
@@ -122,7 +137,7 @@ private fun Rescan(
 
 /** Системный выбор папки; папку не из хранилища устройства не берём и говорим об этом. */
 @Composable
-private fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
+internal fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
     val context = LocalContext.current
     val picker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
