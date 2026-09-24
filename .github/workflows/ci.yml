@@ -11,6 +11,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Rust-ядро (A2.3): быстрее Android-сборки и падает раньше неё.
+  core:
+    name: Rust core — format, clippy, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Версия, компоненты и таргеты — из core/rust-toolchain.toml.
+      - name: Install Rust
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      # unwrap/expect/panic! в коде ядра — ошибка (core/Cargo.toml, [workspace.lints]).
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --locked
+
   check:
     name: Style, tests, both flavors
     runs-on: ubuntu-latest
@@ -23,6 +52,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # Сборка APK зовёт cargo (плагин plinth.rust): .so под четыре ABI и
+      # Kotlin-биндинги. Нужны Rust, NDK и cargo-ndk — docs/BUILD.md.
+      - name: Install Rust
+        working-directory: core
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Install NDK
+        # Версия — ndk из gradle/libs.versions.toml.
+        run: |
+          ndk=$(awk -F'"' '/^ndk = /{print $2}' gradle/libs.versions.toml)
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" > /dev/null
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

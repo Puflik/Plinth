@@ -13,6 +13,7 @@ import io.github.puflik.plinth.diagnostics.log.LogRedactor
 import io.github.puflik.plinth.diagnostics.log.Logger
 import io.github.puflik.plinth.diagnostics.vendor.KillReport
 import io.github.puflik.plinth.diagnostics.vendor.KillWatch
+import io.github.puflik.plinth.ffi.CoreInitializer
 import io.github.puflik.plinth.library.UnavailableRescan
 import javax.inject.Inject
 import kotlin.time.Clock
@@ -59,6 +60,9 @@ class PlinthApplication :
     @Inject
     lateinit var unavailableRescan: UnavailableRescan
 
+    @Inject
+    lateinit var coreInitializer: CoreInitializer
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -73,6 +77,8 @@ class PlinthApplication :
         unavailableRescan.start()
         // Очередь возвращается при старте процесса, а не экрана: её ждёт и служба воспроизведения.
         queueKeeper.start()
+        // Rust-ядро — в фоне, после логгера: его первая запись идёт в тот же лог (A3).
+        coreInitializer.start()
     }
 
     override val workManagerConfiguration: Configuration

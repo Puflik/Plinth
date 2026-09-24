@@ -1,0 +1,10 @@
+# Генерация Kotlin-биндингов (A3.2). Код ложится в app/build/generated и в
+# репозиторий не попадает; руками его не правят и за пределами пакета
+# io.github.puflik.plinth.ffi не импортируют (FfiBoundaryTest).
+[bindings.kotlin]
+package_name = "io.github.puflik.plinth.ffi.generated"
+cdylib_name = "plinth_ffi"
+# SystemCleaner — только с API 34, а minSdk у Plinth 26.
+android_cleaner = false
+# Записи (CoreLogRecord и будущие) в Kotlin — data class с val, а не var.
+generate_immutable_records = true

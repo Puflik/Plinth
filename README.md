@@ -50,6 +50,8 @@ Requirements:
 - **Android SDK.** Put its path into `local.properties` as `sdk.dir=...`
   (Android Studio writes this file for you). Missing platforms are downloaded
   by the build.
+- **Rust, Android NDK and cargo-ndk** (since v0.2): the build compiles the Rust
+  core in `core/` for four ABIs. Versions and setup — [docs/BUILD.md](docs/BUILD.md).
 
 Two product flavors are built from the same source:
 

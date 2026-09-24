@@ -1,0 +1,22 @@
+# Граница ядра с Kotlin (A3.1). Единственный крейт, который знает об FFI:
+# остальные крейты ядра пишутся так, будто Kotlin не существует
+# (docs/adr/0010-ffi-boundary.md).
+[package]
+name = "plinth-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+# libplinth_ffi.so — её грузит сгенерированный Kotlin-код через JNA.
+name = "plinth_ffi"
+crate-type = ["cdylib"]
+
+[dependencies]
+plinth-types.workspace = true
+uniffi.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

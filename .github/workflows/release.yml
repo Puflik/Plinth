@@ -27,6 +27,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Rust-ядро: .so под четыре ABI собирает Gradle через cargo-ndk (docs/BUILD.md).
+      - name: Install Rust
+        working-directory: core
+        run: rustup toolchain install
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Install NDK
+        run: |
+          ndk=$(awk -F'"' '/^ndk = /{print $2}' gradle/libs.versions.toml)
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" > /dev/null
+
       - name: Make the wrapper executable
         # core.filemode=false на Windows: бит запуска в коммит не попадает.
         run: chmod +x gradlew

@@ -1,0 +1,42 @@
+# Rust-ядро Plinth (A1.1). Крейты:
+#   types           — общие типы и ошибки, не зависит ни от одного крейта ядра
+#   ffi             — граница с Kotlin (UniFFI), единственный cdylib
+#   uniffi-bindgen  — генератор Kotlin-биндингов, запускается на машине сборки
+# Как собрать — docs/BUILD.md, что пересекает границу — docs/adr/0010-ffi-boundary.md.
+
+[workspace]
+resolver = "3"
+members = ["types", "ffi", "uniffi-bindgen"]
+
+[workspace.package]
+# Версия ядра идёт вместе с версией приложения, в котором ядро появилось.
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[workspace.dependencies]
+plinth-types = { path = "types" }
+uniffi = "0.32.2"
+log = "0.4.34"
+thiserror = "2.0.21"
+
+# Ни одна функция, видимая из Kotlin, не паникует (A3.3): unwrap, expect и
+# panic! в коде ядра — ошибка CI (`clippy -D warnings`). В тестах можно —
+# см. clippy.toml.
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+
+# A2.4: размер APK. Четыре ABI × библиотека — самый быстрый способ выйти из
+# бюджета 30 МБ, поэтому профиль ужат сразу.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+# Не "abort": он выключает catch_unwind, и panic в ядре снова роняет процесс
+# (docs/adr/0010-ffi-boundary.md). Значение по умолчанию, записано явно —
+# чтобы его не «оптимизировали».
+panic = "unwind"

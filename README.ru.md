@@ -50,6 +50,8 @@
   собирает на Temurin 21. На JDK 8 Gradle не запустится.
 - **Android SDK.** Путь к нему — в `local.properties`, строка `sdk.dir=...`
   (Android Studio пишет этот файл сама). Недостающие платформы сборка скачает.
+- **Rust, Android NDK и cargo-ndk** (с v0.2): сборка компилирует Rust-ядро из
+  `core/` под четыре ABI. Версии и установка — [docs/BUILD.md](docs/BUILD.md).
 
 Из одних исходников собираются два flavor:
 

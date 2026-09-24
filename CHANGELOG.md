@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Rust core groundwork: the app now ships a native library built from `core/`
+  for four ABIs and starts it in the background at launch. No user-visible
+  features depend on it yet; its log lines go to the app log, and a crash
+  inside the core reaches the app as an error instead of closing it.
+
 ## [0.1.0] - 2026-09-24
 
 The first wave, "Sound": a player for the music files on your phone. This is

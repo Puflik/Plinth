@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.room)
+    // A2.2: Rust-ядро — .so в jniLibs и Kotlin-биндинги в generated (build-logic).
+    id("plinth.rust")
 }
 
 // Подпись релиза (используется в H5). Ключ приходит либо из
@@ -28,6 +30,8 @@ fun signingSecret(
 android {
     namespace = "io.github.puflik.plinth"
     compileSdk = 37
+    // A2.2: NDK для Rust-ядра — им собирает cargo-ndk (плагин plinth.rust).
+    ndkVersion = libs.versions.ndk.get()
 
     defaultConfig {
         applicationId = "io.github.puflik.plinth"
@@ -35,6 +39,13 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+
+        // A2.4: четыре ABI — под них собирается Rust-ядро (плагин plinth.rust
+        // берёт список отсюда). Фильтр отсекает и лишнее из зависимостей: JNA
+        // несёт ещё armeabi и mips, под которые ядра нет.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Приёмочные замеры (H) идут минуты — только по запросу: `-Pacceptance`.
@@ -147,6 +158,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.jna) { artifact { type = "aar" } }
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.hilt.work)

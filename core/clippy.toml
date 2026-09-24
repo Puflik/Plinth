@@ -1,0 +1,6 @@
+# Настройки clippy (A1.3). Сами правила — в [workspace.lints] корневого
+# Cargo.toml: там запрещены unwrap, expect и panic! в коде ядра. Тестам они
+# разрешены — упавший тест и есть паника.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

@@ -2300,3 +2300,73 @@ B2.4 (семь форматов), промпт для ревью волны в �
   `ANDROID_SERIAL`, не мешают чату v0.2). Там же — проверка на старых
   Android: проверять надо v0.1, не незаконченный v0.2. Тег `v0.1.1` — с этой
   ветки, потом слияние ветки в `main`.
+
+### v0.2, шаг 1: пустое сквозное соединение (A1, A2, A3-минимум)
+
+Сделано 2026-09-24, не закоммичено.
+
+- **A1 — `core/`:** workspace (edition 2024, resolver 3), Rust 1.98.1 в
+  `rust-toolchain.toml` с четырьмя Android-таргетами, `rustfmt.toml`
+  (ширина 120, `use_small_heuristics = "Max"`), `clippy.toml`. Clippy
+  запрещает `unwrap`/`expect`/`panic!` в коде ядра, тестам можно. Профиль
+  `release`: `opt-level="z"`, LTO, `codegen-units=1`, `strip`, `panic` явно
+  `"unwind"`. Крейт `plinth-types`: `CoreError` — Storage / Network / Parse /
+  Unavailable / Internal с текстом. Версия ядра — 0.2.0.
+- **A3-минимум — крейт `plinth-ffi`** (`cdylib`, UniFFI 0.32.2 на макросах):
+  `start(logger, level)`, `hello(name)`, `panic_for_test(message)`. Каждая
+  возвращает `Result<_, CoreError>` через `panic::guard`. `CoreError` для
+  Kotlin — `#[uniffi::remote(Error)]` + `flat_error`, в Kotlin
+  `CoreException.<Вид>(«internal: panicked at ffi\src\lib.rs:…: текст»)`.
+  Хук паники под `guard` только запоминает место, пишет в лог уже `guard`:
+  логгер — код Kotlin, паника внутри хука — `abort`. Мутация «хук пишет сам»
+  роняет тестовый процесс с `panicked while processing panic` — тест
+  `broken_logger_does_not_abort_the_process` это ловит. `logging.rs`: крейт
+  `log` → `CoreLogger`, уровень отсекается в Rust, повторный `start` меняет
+  логгер. `init` переименован в `start`: в Kotlin `init` читается плохо.
+- **A2 — сборка:** вместо `gradle/rust.gradle.kts` — included build
+  `build-logic` с плагином `plinth.rust`. Скрипт через `apply(from=…)` не
+  видит классов AGP из `plugins {}` корня, и сборка не компилируется.
+  Задачи `cargoNdkBuild` (`cargo ndk`, ABI из `ndk.abiFilters`, `--platform`
+  = minSdk) и `uniffiKotlin`. Биндинги генерируются из библиотеки **под
+  машину сборки** (`plinth_ffi.dll`/`.so`/`.dylib`), поэтому Kotlin и
+  JVM-тестам нужен Rust, но не NDK; в репозиторий они не попадают. Подключены
+  через Variant API (`addGeneratedSourceDirectory`). `abiFilters` — четыре
+  ABI: JNA 5.19.1 несёт ещё armeabi/mips/mips64. NDK 28.2.13676358 — версия
+  по умолчанию AGP 9.4.1 (из `common-32.4.1.jar`), в каталоге версий
+  `ndk`. `libjnidispatch.so` из JNA выровнены под 16 КБ.
+- **Kotlin, пакет `ffi`:** `PlinthCore` — фасад, ленивый `start`, повтор
+  после неудачи. `CoreLogBridge` — `CoreLogger` → `AppLog` с модулем Rust
+  вместо тега, `TRACE` → `DEBUG`. `CoreInitializer` запускает ядро в фоне из
+  `PlinthApplication` после логгера; неудача — `AppLog.e`, не падение: от
+  ядра пока ничего не зависит. `Logger.minLevel` стал публичным — это фильтр
+  для ядра. DI — `CoreModule`, `CoreEntryPoint`. Правила R8 для JNA и
+  `ffi.generated`.
+- **CI:** задача `core` (fmt, clippy `-D warnings`, `cargo test`, всё с
+  `--locked`); в `check` и `release.yml` — Rust из `rust-toolchain.toml`,
+  `cargo-ndk` 4.1.2, NDK из каталога версий. Локально не запускался — только
+  проверка YAML.
+- **Документы:** `docs/BUILD.md`, ADR 0010 (+ индекс ADR), `ARCHITECTURE.md`
+  (раздел «Rust-ядро и граница FFI», пакет `ffi`), READMEs, CONTRIBUTING,
+  CHANGELOG.
+- **Проверено:** `cargo test` 14/14, clippy и fmt чистые; JVM-тесты 412 + 412
+  (было 406: `CoreLogBridgeTest` 4, `FfiBoundaryTest` 2); ktlint и detekt.
+- **NDK:** `android`-CLI держал блокировку SDK установкой образов API 26/30
+  из прошлого чата. Та не зависла, а докачалась в 21:29, файл «0 байт» был
+  ложным признаком. После неё NDK поставлен `sdkmanager "ndk/28.2.13676358"`.
+  Код выхода 9 — уже после распаковки, NDK цел.
+- **На устройстве (API 36, `ANDROID_SERIAL=emulator-5554`; рядом работал
+  `Plinth_API_26` сессии hotfix):** `.so` под четыре ABI собираются за
+  минуту. Инструментальный прогон — 108/108: 97 прежних, 7 форматов и 4
+  `PlinthCoreTest` (строка с кириллицей туда-обратно, паника →
+  `CoreException.Internal`, ядро живо после паники, строка паники в
+  `files/logs/plinth.log`). Обычный запуск пишет в лог
+  `I plinth_ffi: Plinth core 0.2.0 ready` через 1,3 с после строки `App`.
+- **Релиз с R8:** 4,93 МБ против 2,9 МБ у v0.1.0 (+2,0 МБ: 1,36 МБ ядро,
+  0,52 МБ JNA — несжатые). Сжатие `.so` дало бы −1 МБ, не нужно при бюджете
+  30 МБ. R8 оставил имена JNA и `ffi.generated`. Сборка с временным
+  `isDebuggable` (откачено), подписанная отладочным ключом, стартует ядро: в
+  логе та же строка «ready». 64-битные `.so` выровнены под 16 КБ, 32-битные —
+  под 4 КБ (требование только для 64-битных).
+- **Остаётся:** CI на GitHub — после push; устройства arm64/armv7 — телефон
+  автора; `CoreErrorMapper` (`CoreException` → `AppError`) — вместе с
+  первым настоящим API ядра.

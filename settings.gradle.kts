@@ -1,4 +1,6 @@
 pluginManagement {
+    // Логика сборки: Rust-ядро (A2.2).
+    includeBuild("build-logic")
     repositories {
         google()
         mavenCentral()

@@ -20,6 +20,24 @@
 потребитель кода (десктоп в v0.2+); дробить его раньше — платить за сборку без
 выгоды. Границы слоёв держатся пакетами и тестами-стражами, а не модулями.
 
+Рядом с Gradle — Rust-ядро: workspace `core/` (с v0.2). Его собирает сам
+Gradle — плагин `plinth.rust` из `build-logic/`. Сборка — в
+[docs/BUILD.md](BUILD.md).
+
+## Rust-ядро и граница FFI
+
+| Крейт | Ответственность | Что ему запрещено |
+|---|---|---|
+| `core/types` (`plinth-types`) | Общие типы; `CoreError` — ошибка ядра по категориям | Зависеть от других крейтов ядра; знать об FFI |
+| `core/ffi` (`plinth-ffi`) | Граница с Kotlin на UniFFI: экспорт, `panic::guard`, логи Rust → `CoreLogger` | Паниковать наружу: каждая функция возвращает `Result<_, CoreError>` |
+| `core/uniffi-bindgen` | Генератор Kotlin-биндингов, работает при сборке | Попадать в APK |
+
+Kotlin видит ядро только через пакет `ffi`: `PlinthCore` — фасад,
+`CoreLogBridge` — приём логов, `CoreInitializer` — запуск в фоне при старте.
+Сгенерированный код (`ffi.generated`) и JNA за пределами `ffi` не
+импортируются (`FfiBoundaryTest`). Что пересекает границу и почему —
+[ADR 0010](adr/0010-ffi-boundary.md).
+
 ## Пакеты
 
 Корень — `io.github.puflik.plinth`.
@@ -36,6 +54,7 @@
 | `settings`, `startup` | Настройки и первый запуск: `SortSettings` — порядок списков библиотеки, `StartScreen` — стартовый экран; `startup` — мастер (`OnboardingWizard`), возврат пропущенного (`DeferredPrompts`), правила старта (`StartRules`, `DecisionExplanation`); настройки — в DataStore | — |
 | `di` | Проводка графа Hilt | Содержать логику |
 | `ui` | Compose: тема, навигация, экраны | Обращаться к движку иначе как через `PlaybackController`, к библиотеке — иначе как через `LibraryRepository`, `LibraryScan` и `FolderSettings` |
+| `ffi` | Мост к Rust-ядру: фасад `PlinthCore`, приём логов, запуск; сгенерированные биндинги — в `ffi.generated` | Отдавать наружу типы `ffi.generated` и JNA |
 | `core` | Мелочь, общая для всех: конфигурация, ошибки приложения (`AppError`) и решение, показывать ли их (`ErrorPresenter`) | Зависеть от `ui` |
 | `flavor` | То, чем различаются сборки `github` и `fdroid` | Лежать в `main` |
 
@@ -404,8 +423,11 @@ ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<Image
   Схема выгружается в `app/schemas/` (плагин `androidx.room`). Настройки —
   **DataStore** (Preferences), очередь — свой файл в `filesDir/queue`.
 - **Фон — WorkManager** для скана библиотеки (`ScanWorker` строит Hilt).
+- **Rust-ядро — UniFFI** (Kotlin-биндинги генерируются при сборке) поверх
+  **JNA**; логи — крейт `log` ([ADR 0010](adr/0010-ffi-boundary.md)).
 - **Тесты** — JUnit 4, Truth, `kotlinx-coroutines-test`, `work-testing`.
-- **Версии** — только в `gradle/libs.versions.toml`.
+- **Версии** — только в `gradle/libs.versions.toml`; у Rust — в
+  `core/Cargo.toml` и `core/rust-toolchain.toml`.
 
 ## Что уже есть
 
@@ -433,3 +455,8 @@ WorkManager, экран библиотеки со списками треков,
 данных, отчёт о сбое с предложением сохранить его, объяснение, когда
 прошивка убила фоновую игру, и обработка ошибок воспроизведения — пропуск
 трека, который не играет, с коротким сообщением.
+
+v0.2 «Ядро и первый источник», шаг 1: пустое сквозное соединение Kotlin →
+Rust. Есть workspace `core/`, сборка `.so` под четыре ABI из Gradle, крейт
+`ffi` с перехватом паник и логами в `AppLog`. Приложение поднимает ядро при
+старте; ни одна функция v0.1 от него пока не зависит.

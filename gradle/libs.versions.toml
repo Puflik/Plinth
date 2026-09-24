@@ -8,9 +8,12 @@
 # Плагин org.jetbrains.kotlin.android не применяется: с AGP 9.0 поддержка
 # Kotlin встроена в сам AGP и отдельный плагин запрещён.
 #   agp    ↔ gradle     — AGP 9.x требует Gradle 9.x (см. gradle-wrapper.properties)
+#   ndk    ↔ agp        — NDK по умолчанию для AGP 9.4 (A2.2); ей же собирается Rust-ядро
+#   jna    ↔ uniffi     — JNA, на которой работают биндинги uniffi из core/Cargo.toml
 
 [versions]
 agp = "9.4.1"
+ndk = "28.2.13676358"
 kotlin = "2.3.21"
 ksp = "2.3.12"
 hilt = "2.60.1"
@@ -28,6 +31,7 @@ coroutines = "1.11.0"
 junit = "4.13.2"
 androidxTestRunner = "1.7.0"
 truth = "1.4.5"
+jna = "5.19.1"
 detekt = "2.0.0-alpha.6"
 ktlint = "14.2.0"
 
@@ -68,9 +72,15 @@ androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", vers
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
+# Рантайм Kotlin-биндингов ядра (A3). В APK идёт как aar — с libjnidispatch.so под все ABI.
+jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+
+# API плагина Android для build-logic (convention-плагин plinth.rust).
+android-gradle-api = { group = "com.android.tools.build", name = "gradle-api", version.ref = "agp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

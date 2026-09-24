@@ -1,0 +1,18 @@
+# Генератор Kotlin-биндингов (A3.2). Работает на машине сборки, в APK не
+# попадает: читает метаданные UniFFI из собранной libplinth_ffi.so.
+[package]
+name = "uniffi-bindgen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/main.rs"
+
+[dependencies]
+uniffi = { workspace = true, features = ["cli"] }
+
+[lints]
+workspace = true

@@ -13,3 +13,13 @@
 -keepclassmembernames interface androidx.media3.common.Player$Listener {
     <methods>;
 }
+
+# Rust-ядро (A3): биндинги UniFFI работают через JNA — рефлексией. JNA
+# находит поля структур и методы колбэков по именам, а нативные методы
+# библиотеки — по именам символов в libplinth_ffi.so. Переименование любого
+# из них ломает ядро в релизе, хотя отладочная сборка работает.
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keep class io.github.puflik.plinth.ffi.generated.** { *; }
+# JNA ссылается на AWT, которого на Android нет, — эти ветки не исполняются.
+-dontwarn java.awt.**

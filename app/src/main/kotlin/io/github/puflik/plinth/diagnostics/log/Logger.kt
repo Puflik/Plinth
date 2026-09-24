@@ -11,7 +11,8 @@ class Logger(
     private val sinks: List<LogSink>,
     private val redactor: LogRedactor,
     private val clock: Clock,
-    private val minLevel: LogLevel,
+    /** Порог записи; им же фильтрует свои записи Rust-ядро (A3.4). */
+    val minLevel: LogLevel,
 ) {
     fun log(
         level: LogLevel,

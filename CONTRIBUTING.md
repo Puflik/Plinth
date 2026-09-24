@@ -31,6 +31,8 @@ ships on GitHub Releases and F-Droid, never on Google Play.
 - **Android SDK**, path in `local.properties` as `sdk.dir=...` (Android Studio
   writes it). The build downloads missing platforms itself. Android Studio must
   support AGP 9.
+- **Rust, Android NDK and cargo-ndk** for the Rust core in `core/` — versions
+  and setup in [docs/BUILD.md](docs/BUILD.md).
 
 ```bash
 ./gradlew assembleGithubDebug
@@ -50,11 +52,19 @@ Run what CI runs:
 ./gradlew assembleGithubDebug assembleFdroidDebug assembleGithubDebugAndroidTest
 ```
 
+and, if you touched `core/`, in `core/`:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
 `./gradlew ktlintFormat` fixes formatting in place; the ktlint report is in
 `app/build/reports/ktlint`.
 
-If you touched `audio/media3`, `library/db` or `library/scan`, also run the
-instrumented tests on an emulator (the reference is API 36):
+If you touched `audio/media3`, `library/db`, `library/scan`, `ffi` or `core/`,
+also run the instrumented tests on an emulator (the reference is API 36):
 
 ```bash
 ./gradlew connectedGithubDebugAndroidTest

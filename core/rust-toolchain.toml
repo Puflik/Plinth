@@ -1,0 +1,12 @@
+# Версия Rust фиксируется (A1.1): одна и та же у всех, в CI и в релизе.
+# rustup ставит её сам при первом вызове cargo в core/.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = [
+  "aarch64-linux-android",
+  "armv7-linux-androideabi",
+  "i686-linux-android",
+  "x86_64-linux-android",
+]

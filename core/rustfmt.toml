@@ -1,0 +1,9 @@
+# Форматирование Rust (A1.3): только стабильные настройки — `cargo fmt` на
+# stable без nightly. Ширина строки та же, что у Kotlin в .editorconfig.
+edition = "2024"
+max_width = 120
+# Короткие литералы и вызовы остаются в одну строку, пока влезают в ширину.
+use_small_heuristics = "Max"
+newline_style = "Unix"
+use_field_init_shorthand = true
+use_try_shorthand = true
