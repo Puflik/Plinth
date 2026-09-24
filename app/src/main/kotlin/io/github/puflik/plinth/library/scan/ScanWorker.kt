@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import io.github.puflik.plinth.diagnostics.log.AppLog
 import io.github.puflik.plinth.library.FolderSettings
 import kotlinx.coroutines.flow.first
 
@@ -32,13 +33,16 @@ class ScanWorker
                     scanner.scan(settings.folders.first()) { written, total ->
                         setProgress(workDataOf(KEY_WRITTEN to written, KEY_TOTAL to total))
                     }
+                AppLog.i(TAG, "done: ${result.found} tracks")
                 Result.success(workDataOf(KEY_FOUND to result.found))
             } catch (expected: SecurityException) {
                 // Разрешение отозвали посреди скана: повторять бессмысленно до новой выдачи.
+                AppLog.w(TAG, "permission revoked mid-scan", expected)
                 Result.failure()
             }
 
         companion object {
+            private const val TAG = "Scan"
             const val KEY_WRITTEN = "written"
             const val KEY_TOTAL = "total"
             const val KEY_FOUND = "found"

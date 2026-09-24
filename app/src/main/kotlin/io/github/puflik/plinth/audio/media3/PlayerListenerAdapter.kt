@@ -8,6 +8,7 @@ import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
+import io.github.puflik.plinth.diagnostics.log.AppLog
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -91,6 +92,8 @@ internal class PlayerListenerAdapter(
     }
 
     override fun onPlayerError(error: PlaybackException) {
+        // Адрес источника в тексте ошибки вырежет LogRedactor.
+        AppLog.w("Media3", "Playback error ${error.errorCodeName}", error)
         onEvent(PlaybackEvent.Failed(error.toPlaybackError()))
     }
 

@@ -7,6 +7,7 @@ import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.audio.PlaybackController
+import io.github.puflik.plinth.diagnostics.log.AppLog
 import javax.inject.Inject
 
 /**
@@ -43,13 +44,19 @@ class PlaybackService : MediaSessionService() {
         // Соседние треки знает очередь приложения, а не ExoPlayer с его единственным треком.
         val sessionPlayer = QueueCommandsPlayer(player, onNext = playback::next, onPrevious = playback::previous)
         session = MediaSession.Builder(this, sessionPlayer).build()
+        AppLog.i(TAG, "created")
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
+        AppLog.i(TAG, "destroyed")
         session?.release()
         session = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val TAG = "PlaybackService"
     }
 }
