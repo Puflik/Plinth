@@ -23,4 +23,14 @@ class TimeFormatTest {
     fun `fractions of a second are dropped`() {
         assertThat(formatTime(59_999.milliseconds)).isEqualTo("0:59")
     }
+
+    @Test
+    fun `remaining time counts down with a minus`() {
+        assertThat(formatRemaining(1.minutes + 5.seconds, 4.minutes + 18.seconds)).isEqualTo("-3:13")
+    }
+
+    @Test
+    fun `remaining time never goes below zero`() {
+        assertThat(formatRemaining(5.minutes, 4.minutes)).isEqualTo("-0:00")
+    }
 }

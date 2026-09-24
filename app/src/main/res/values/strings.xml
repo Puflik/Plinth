@@ -69,6 +69,8 @@
     <string name="folders_reset">Reset to Music and Download</string>
     <string name="folders_not_local">Pick a folder on this device.</string>
 
+    <string name="player_collapse">Collapse</string>
+    <string name="player_time_toggle">Switch between elapsed and remaining time</string>
     <string name="player_previous">Previous</string>
     <string name="player_next">Next</string>
     <string name="player_shuffle_on">Shuffle: on</string>
