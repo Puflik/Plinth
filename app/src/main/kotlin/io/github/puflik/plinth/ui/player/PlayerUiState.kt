@@ -16,6 +16,8 @@ import kotlin.time.Duration
  * @property upcoming что сыграет дальше без повтора.
  * @property artworkUri файл, чья встроенная обложка показывается; `null` —
  *   показывать нечего (ничего не играет или играет поток).
+ * @property hasTrack в очереди есть текущий трек — играет он или стоит на
+ *   паузе; по нему показывается мини-плеер.
  */
 data class PlayerUiState(
     val title: String?,
@@ -29,7 +31,12 @@ data class PlayerUiState(
     val shuffle: Boolean,
     val repeat: RepeatMode,
     val artworkUri: String?,
+    val hasTrack: Boolean,
 ) {
+    /** Какая доля трека сыграна, `0..1`; без длительности — `0`. */
+    val progressFraction: Float
+        get() = duration?.takeIf { it.isPositive() }?.let { (position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+
     companion object {
         val EMPTY = from(PlaybackState.Idle, PlaybackProgress.NONE, PlaybackQueue.EMPTY)
 
@@ -49,6 +56,7 @@ data class PlayerUiState(
             shuffle = queue.shuffle,
             repeat = queue.repeat,
             artworkUri = (queue.current?.source as? AudioSource.LocalFile)?.uri,
+            hasTrack = queue.current != null,
         )
     }
 }

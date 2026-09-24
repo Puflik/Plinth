@@ -227,13 +227,19 @@ LibraryScreen (стартовый) ── вкладки: TracksTab · AlbumsTab
      │  LibraryViewModel: LibraryRepository (списки, порядок) + LibraryScan + PlaybackController
      ├── касание трека ──► PlaybackController.open(source, title) ──► PlayerScreen
      ├── касание альбома ──► AlbumScreen (Album — аргументами навигации) ──► PlayerScreen
-     └── меню: «Now playing» ──► PlayerScreen · «Open file» (SAF) ──► PlayerScreen
+     └── меню: «Open file» (SAF) ──► PlayerScreen
+
+MiniPlayer (над нижней навигацией, на всех экранах, кроме плеера) ── касание, свайп вверх ──► PlayerScreen
+     PlayerViewModel на уровне Activity; свайп вбок — next/previous, play/pause
 
 SearchScreen (вкладка) ── SearchViewModel: запрос с задержкой 300 мс → LibraryRepository.search
 FolderSettingsScreen (вкладка «Настройки») ── FolderSettings + LibraryScan: папки, «Rescan»
 ```
 
 Плеер и альбом открываются поверх вкладок, нижняя навигация на них скрыта.
+Мини-плеер (`ui/player/MiniPlayer`, слой D0) виден, пока в очереди есть
+текущий трек, — и после восстановления на паузе; без нижней навигации он сам
+отступает от системной панели.
 Строка трека одна на все списки (`components/TrackRow`), карточка альбома
 (`components/AlbumCard`) — с обложкой первого трека (`Album.coverTrackUri`). Название играющего хранит
 `PlaybackController.title`: его видят и библиотека, и плеер.
@@ -264,7 +270,7 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 |---|---|
 | `queue/PlaybackQueue` | Контекст, порядок обхода, позиция, ручной блок; `play`, `replace`, `perform`, `next`, `previous`, shuffle, repeat |
 | `queue/QueueItem`, `QueueContext`, `QueueAction`, `ShuffleOrder` | Элемент (источник и подписи), откуда контекст, действия долгого нажатия и повтор, порядок обхода |
-| `queue/QueueStore`, `FileQueueStore` | Сохранённая очередь и позиция; свой двоичный формат с версией |
+| `queue/QueueStore`, `FileQueueStore` | Сохранённая очередь и позиция; свой двоичный формат с версией; файлы трогает одна операция за раз |
 | `audio/QueueKeeper` | Восстановление при старте и сохранение по ходу |
 | `audio/media3/QueueCommandsPlayer` | Плеер сессии: next/prev — в очередь, слушатели видят эти команды |
 | `ui/library/TrackAction` | Действие над треком списка и перевод `LibraryTrack` в `QueueItem` |
@@ -352,4 +358,4 @@ WorkManager, экран библиотеки со списками треков,
 тоже пройдена: контексты с ручным блоком, shuffle и повтор, next/prev из
 уведомления и гарнитуры, очередь переживает перезапуск. Идёт вертикаль «плеер»
 (эпик E): раскладка D1, обложки в плеере и карточках альбомов, подписи трека
-из очереди в уведомлении.
+из очереди в уведомлении, мини-плеер.

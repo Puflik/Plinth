@@ -3,6 +3,9 @@ package io.github.puflik.plinth.queue
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -94,6 +97,27 @@ class FileQueueStoreTest {
             ).isFalse()
         }
 
+    /**
+     * `QueueKeeper` пишет очередь и позицию из двух корутин, и на пуле IO они
+     * идут одновременно. Быстрая смена треков (свайпы по мини-плееру) роняла
+     * процесс: обе записи шли через один временный файл позиции.
+     */
+    @Test
+    fun `queue and position saved at the same time do not collide`() =
+        runBlocking {
+            val parallel = FileQueueStore(temp.root.resolve("parallel"), Dispatchers.IO)
+            val queue = PlaybackQueue.EMPTY.play(QueueContext.Tracks, album, start = 0)
+
+            coroutineScope {
+                repeat(RACES) { race ->
+                    launch(Dispatchers.IO) { parallel.saveQueue(queue) }
+                    launch(Dispatchers.IO) { parallel.savePosition(race.seconds) }
+                }
+            }
+
+            assertThat(parallel.load()?.queue).isEqualTo(queue)
+        }
+
     @Test
     fun `damaged or foreign file reads as nothing`() =
         runTest {
@@ -118,4 +142,9 @@ class FileQueueStoreTest {
         album = "A Night at the Opera",
         duration = duration,
     )
+
+    private companion object {
+        /** Сколько пар одновременных записей: гонка на пуле IO ловится с первых десятков. */
+        const val RACES = 200
+    }
 }

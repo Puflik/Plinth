@@ -4,13 +4,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
@@ -20,6 +25,9 @@ import io.github.puflik.plinth.ui.common.LocalArtworkLoader
 import io.github.puflik.plinth.ui.navigation.BottomNavigationBar
 import io.github.puflik.plinth.ui.navigation.Destination
 import io.github.puflik.plinth.ui.navigation.PlinthNavHost
+import io.github.puflik.plinth.ui.player.MiniPlayer
+import io.github.puflik.plinth.ui.player.MiniPlayerActions
+import io.github.puflik.plinth.ui.player.PlayerViewModel
 import io.github.puflik.plinth.ui.theme.PlinthTheme
 import javax.inject.Inject
 
@@ -54,16 +62,36 @@ private fun PlinthApp() {
 
     // Плеер и альбом открываются поверх вкладок — без нижней навигации.
     val onTab = currentRoute == null || Destination.tabs.any { it.route == currentRoute }
+    // Мини-плеер — на всех экранах, кроме самого плеера, когда есть что играть.
+    val player: PlayerViewModel = hiltViewModel()
+    val playerState by player.uiState.collectAsState()
+    val showMiniPlayer = playerState.hasTrack && currentRoute != Destination.Player.route
 
     Scaffold(
         bottomBar = {
-            if (onTab) {
-                BottomNavigationBar(
-                    currentRoute = currentRoute,
-                    onDestinationSelected = { destination ->
-                        navController.navigateToTab(destination)
-                    },
-                )
+            Column {
+                if (showMiniPlayer) {
+                    MiniPlayer(
+                        state = playerState,
+                        actions =
+                            MiniPlayerActions(
+                                onPlayPause = player::onPlayPause,
+                                onNext = player::onNext,
+                                onPrevious = player::onPrevious,
+                                onExpand = navController::openPlayer,
+                            ),
+                        // Без нижней навигации отступ от системной панели — его забота.
+                        modifier = if (onTab) Modifier else Modifier.navigationBarsPadding(),
+                    )
+                }
+                if (onTab) {
+                    BottomNavigationBar(
+                        currentRoute = currentRoute,
+                        onDestinationSelected = { destination ->
+                            navController.navigateToTab(destination)
+                        },
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -74,11 +102,16 @@ private fun PlinthApp() {
     }
 }
 
+/** Плеер поверх текущего экрана; уже открытый второй раз не открывается. */
+private fun NavHostController.openPlayer() {
+    navigate(Destination.Player.route) { launchSingleTop = true }
+}
+
 /**
  * Переход по вкладке: одна запись в стеке на вкладку, состояние вкладки
  * сохраняется при возврате.
  */
-private fun androidx.navigation.NavHostController.navigateToTab(destination: Destination) {
+private fun NavHostController.navigateToTab(destination: Destination) {
     navigate(destination.route) {
         popUpTo(graph.startDestinationId) { saveState = true }
         launchSingleTop = true

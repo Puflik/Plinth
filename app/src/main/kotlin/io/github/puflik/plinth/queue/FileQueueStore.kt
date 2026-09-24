@@ -2,6 +2,8 @@ package io.github.puflik.plinth.queue
 
 import io.github.puflik.plinth.audio.engine.AudioSource
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -19,6 +21,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * Запись — во временный файл и переименование: убитый посреди записи процесс
  * не оставит половину очереди. Заголовки потоков на диск не пишутся — в них
  * бывают ключи доступа.
+ *
+ * Файлы трогает одна операция за раз ([lock]): очередь и позицию пишут две
+ * корутины, и на пуле IO они сталкивались на временном файле позиции.
  */
 class FileQueueStore(
     private val directory: File,
@@ -26,9 +31,10 @@ class FileQueueStore(
 ) : QueueStore {
     private val queueFile = File(directory, "queue.bin")
     private val positionFile = File(directory, "position.bin")
+    private val lock = Mutex()
 
     override suspend fun load(): SavedQueue? =
-        withContext(io) {
+        exclusive {
             try {
                 val queue = DataInputStream(queueFile.inputStream().buffered()).use(::readQueue)
                 val position =
@@ -51,15 +57,17 @@ class FileQueueStore(
         }
 
     override suspend fun saveQueue(queue: PlaybackQueue) =
-        withContext(io) {
+        exclusive {
             write(queueFile) { writeQueue(queue) }
             write(positionFile) { writeLong(0) }
         }
 
     override suspend fun savePosition(position: Duration) =
-        withContext(io) {
+        exclusive {
             write(positionFile) { writeLong(position.inWholeMilliseconds) }
         }
+
+    private suspend fun <T> exclusive(block: () -> T): T = lock.withLock { withContext(io) { block() } }
 
     private fun write(
         file: File,

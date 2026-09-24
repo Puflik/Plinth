@@ -33,7 +33,6 @@
     <string name="action_back">Back</string>
     <string name="library_sort">Sort</string>
     <string name="library_more">More options</string>
-    <string name="library_now_playing">Now playing</string>
     <string name="library_tab_tracks">Tracks</string>
     <string name="library_tab_albums">Albums</string>
     <string name="library_tab_artists">Artists</string>
@@ -79,6 +78,7 @@
     <string name="player_repeat_all">Repeat: all</string>
     <string name="player_repeat_one">Repeat: one</string>
     <string name="player_up_next">Up next</string>
+    <string name="player_expand">Open player</string>
     <string name="track_play_next">Play next</string>
     <string name="track_add_to_queue">Add to queue</string>
     <string name="track_replace_queue">Replace queue</string>

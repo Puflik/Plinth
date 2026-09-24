@@ -5,6 +5,7 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackError
+import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
@@ -94,6 +95,19 @@ class PlayerViewModelTest {
             viewModel.onRepeat()
             assertThat(viewModel.uiState.value.shuffle).isTrue()
             assertThat(viewModel.uiState.value.repeat).isEqualTo(RepeatMode.ALL)
+        }
+
+    /** Мини-плеер виден, когда есть что показать, — и после восстановления на паузе тоже. */
+    @Test
+    fun `there is a track once the queue has one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            assertThat(viewModel.uiState.value.hasTrack).isFalse()
+
+            playback.restore(PlaybackQueue.EMPTY.play(album, listOf(song), start = 0), position = 30.seconds)
+
+            assertThat(viewModel.uiState.value.hasTrack).isTrue()
+            assertThat(viewModel.uiState.value.isPlaying).isFalse()
         }
 
     @Test

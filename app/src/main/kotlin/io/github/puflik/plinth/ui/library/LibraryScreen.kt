@@ -92,7 +92,6 @@ fun LibraryScreen(
             onTrackSort = viewModel::onTrackSort,
             onAlbumSort = viewModel::onAlbumSort,
             onOpenFile = openFile,
-            onNowPlaying = onOpenPlayer,
         )
         when (state.permission) {
             PermissionState.Granted ->

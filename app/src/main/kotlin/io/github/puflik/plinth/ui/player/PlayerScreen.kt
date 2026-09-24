@@ -150,7 +150,7 @@ private fun SeekBar(
     val duration = state.duration?.takeIf { it.isPositive() }
     var dragged by remember { mutableStateOf<Float?>(null) }
     var remaining by rememberSaveable { mutableStateOf(false) }
-    val fraction = dragged ?: duration?.let { (state.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val fraction = dragged ?: state.progressFraction
     val shown = duration?.times(fraction.toDouble()) ?: state.position
     Column(modifier = Modifier.fillMaxWidth()) {
         Slider(

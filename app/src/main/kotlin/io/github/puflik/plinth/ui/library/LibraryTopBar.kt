@@ -25,7 +25,7 @@ import io.github.puflik.plinth.library.sort.TrackSort
 
 /**
  * Верхняя строка библиотеки: меню сортировки открытой вкладки (C4.3) и
- * прочее — открыть файл через SAF, вернуться к плееру.
+ * прочее — открыть файл через SAF. К плееру ведёт мини-плеер (E3).
  *
  * @param showSort списки видны: без разрешения сортировать нечего.
  */
@@ -38,7 +38,6 @@ fun LibraryTopBar(
     onTrackSort: (TrackSort) -> Unit,
     onAlbumSort: (AlbumSort) -> Unit,
     onOpenFile: () -> Unit,
-    onNowPlaying: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     TopAppBar(
@@ -51,7 +50,7 @@ fun LibraryTopBar(
                     LibraryTab.ARTISTS -> Unit
                 }
             }
-            MoreMenu(onOpenFile, onNowPlaying)
+            MoreMenu(onOpenFile)
         },
         // Отступ от строки состояния уже дал Scaffold активности.
         windowInsets = WindowInsets(0),
@@ -86,20 +85,13 @@ private fun <T> SortMenu(
 }
 
 @Composable
-private fun MoreMenu(
-    onOpenFile: () -> Unit,
-    onNowPlaying: () -> Unit,
-) {
+private fun MoreMenu(onOpenFile: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
             Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.library_more))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            MenuItem(R.string.library_now_playing) {
-                expanded = false
-                onNowPlaying()
-            }
             MenuItem(R.string.player_open_file) {
                 expanded = false
                 onOpenFile()
