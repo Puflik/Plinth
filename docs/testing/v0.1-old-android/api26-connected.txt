@@ -1,0 +1,25 @@
+# connectedGithubDebugAndroidTest, Plinth_API_26 (Android 8.0), ветка hotfix/0.1.1 (v0.1.0 + acc4aab)
+tests="93" failures="0" errors="0" skipped="0"
+## классы
+audio.media3.ExoPlayerFactoryTest tests=2 failures=0
+audio.media3.FormatSupportTest tests=7 failures=0
+audio.media3.Media3EngineContractTest tests=23 failures=0
+audio.media3.MediaItemMapperTest tests=6 failures=0
+audio.media3.PlaybackServiceTest tests=3 failures=0
+audio.media3.PlayerListenerAdapterTest tests=9 failures=0
+audio.media3.QueueCommandsPlayerTest tests=4 failures=0
+library.LibraryGraphTest tests=1 failures=0
+library.RoomLibraryRepositoryContractTest tests=34 failures=0
+library.scan.ScanWorkerTest tests=4 failures=0
+## не запускались на API 26 (@SdkSuppress(minSdkVersion = Q)): MediaStoreSourceTest, MediaStoreScanTest, LibraryScanWorkTest, EmbeddedArtworkSourceTest; ScanPerformanceTest (-Pacceptance)
+## FormatSupportTest: строк AudioTrack/AudioFlinger в logcat теста (0 — звук не выводился)
+silence-aac.m4a: 3
+silence-alac.m4a: 0
+silence.flac: 0
+silence.mp3: 4
+silence.ogg: 4
+silence.opus: 3
+silence.wav: 3
+## пример для MP3:
+09-24 16:36:16.323  5027  5063 D AudioTrack: Client defaulted notificationFrames to 7350 for frameCount 22050
+09-24 16:36:17.174  5027  5063 D AudioTrack: stop() called with 44975 frames delivered

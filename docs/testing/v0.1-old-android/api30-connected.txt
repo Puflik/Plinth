@@ -1,0 +1,36 @@
+# connectedGithubDebugAndroidTest, Plinth_API_30 (Android 11), ветка hotfix/0.1.1
+tests="104" failures="0" errors="0" skipped="0"
+artwork.embedded.EmbeddedArtworkSourceTest tests=6 failures=0
+audio.media3.ExoPlayerFactoryTest tests=2 failures=0
+audio.media3.FormatSupportTest tests=7 failures=0
+audio.media3.Media3EngineContractTest tests=23 failures=0
+audio.media3.MediaItemMapperTest tests=6 failures=0
+audio.media3.PlaybackServiceTest tests=3 failures=0
+audio.media3.PlayerListenerAdapterTest tests=9 failures=0
+audio.media3.QueueCommandsPlayerTest tests=4 failures=0
+library.LibraryGraphTest tests=1 failures=0
+library.RoomLibraryRepositoryContractTest tests=34 failures=0
+library.scan.LibraryScanWorkTest tests=1 failures=0
+library.scan.MediaStoreScanTest tests=1 failures=0
+library.scan.MediaStoreSourceTest tests=3 failures=0
+library.scan.ScanWorkerTest tests=4 failures=0
+## FormatSupportTest: строк AudioTrack/AudioFlinger в logcat теста (0 — звук не выводился)
+silence-aac.m4a: 4
+silence-alac.m4a: 0
+silence.flac: 4
+silence.mp3: 4
+silence.ogg: 3
+silence.opus: 4
+silence.wav: 4
+## аудиодекодеры образа (/apex/com.android.media.swcodec/etc/media_codecs.xml)
+MediaCodec name="c2.android.mp3.decoder" type="audio/mpeg"
+MediaCodec name="c2.android.amrnb.decoder" type="audio/3gpp"
+MediaCodec name="c2.android.amrwb.decoder" type="audio/amr-wb"
+MediaCodec name="c2.android.aac.decoder" type="audio/mp4a-latm"
+MediaCodec name="c2.android.g711.alaw.decoder" type="audio/g711-alaw"
+MediaCodec name="c2.android.g711.mlaw.decoder" type="audio/g711-mlaw"
+MediaCodec name="c2.android.vorbis.decoder" type="audio/vorbis"
+MediaCodec name="c2.android.opus.decoder" type="audio/opus"
+MediaCodec name="c2.android.raw.decoder" type="audio/raw"
+MediaCodec name="c2.android.flac.decoder" type="audio/flac"
+MediaCodec name="c2.android.gsm.decoder" type="audio/gsm"

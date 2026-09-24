@@ -2284,3 +2284,108 @@ B2.4 (семь форматов), промпт для ревью волны в �
   в кавычках внутри аргумента.
 - **Дальше:** прогон на API 26/30; v0.2 шаг 1 (ответы выше); ревью волны в
   чистом контексте (15.2 плана).
+
+## 2026-09-25
+
+### v0.1 на Android 8 и 11: прогон на эмуляторах
+
+Ветка `hotfix/0.1.1` — тег `v0.1.0` плюс `acc4aab` (`FormatSupportTest`),
+копия `C:\claude\Plinth-review`. Эмуляторы `Plinth_API_26` (Android 8.0) и
+`Plinth_API_30` (Android 11), образы google_apis x86_64, без окна и звука:
+`AudioTrack` при `-no-audio` создаётся как обычно, поэтому «со звуком» ниже —
+это `state:started` у игрока приложения в `dumpsys audio`. Отладочная сборка.
+Музыка — пять файлов из ffmpeg в `Music/PlinthOld/`: два MP3 и FLAC одного
+альбома (кириллица, `album_artist`, номера), MP3 с обложкой в `Covers/`, MP3
+без тегов. Улики — `docs/testing/v0.1-old-android/`, имена файлов ниже.
+Ничего не чинилось.
+
+| Версия | Прошло | Сломано (подробно и как воспроизвести — Н1–Н8 ниже) |
+|---|---|---|
+| **8.0 (API 26)** | `connectedGithubDebugAndroidTest` 93/93 (без четырёх классов `MediaStore`, см. ниже); мастер: `READ_EXTERNAL_STORAGE`, отказ → повторный запрос с «Don't ask again» → разрешено; скан 5/5 — `album_artist` есть, папки из `DATA` (Music → PlinthOld → Covers), кириллица, альбом без тега = имя папки; обложки через `MediaMetadataRetriever` — сетка альбомов, плеер, уведомление; MP3 со звуком; уведомление MediaStyle ⏮ ⏸ ⏭ с обложкой; `force-stop` → тот же трек, 17,9 → 18,0 с, пауза; фон 3 мин в Doze — PASS (разбор `dumpsys` поправлен вне репозитория, Н8); звонок: сброс и разговор — пауза и возврат; настройки без пункта «Язык» (так задумано до 13) | Н1 FLAC без звука; Н2 ALAC без звука; Н3 тест форматов зелёный без звука; Н4 выбор папки прячет накопитель; Н5 ложное «Why music stops» после `force-stop`; Н6 медиакнопка молчит после закрытия службы; Н8 `background_check.py` — ложный FAIL |
+| **11 (API 30)** | 104/104 (с тестами `MediaStore`); мастер: отказ → повтор → разрешено; скан 5/5 (`RELATIVE_PATH`), папки, альбомы; FLAC (`c2.android.flac.decoder`) и MP3 со звуком; уведомление — медиаплеер в быстрых настройках с обложкой и ⏮ ⏸ ⏭; `force-stop` → 11,1 → 12,0 с, пауза, без диалога (`exit-info`: USER REQUESTED); фон 3 мин в Doze — PASS как есть; звонок: сброс и разговор — пауза и возврат | Н2 ALAC без звука; Н3 тест форматов; Н5 ложное «Why music stops» после перезагрузки; Н6 медиакнопка молчит после закрытия службы; Н7 «Назад» в диалоге разрешения = «только настройки» |
+
+- **Н1. FLAC на Android 8.0 играет без звука — критерий 1 плана («играет
+  FLAC и MP3») там не выполнен.** В образе API 26 нет декодера FLAC в
+  `MediaCodec` (только кодировщик), программного декодера у нас нет (из Media3
+  подключены только `exoplayer` и `session`). ExoPlayer не выбирает
+  аудиодорожку и идёт по своим часам: сессия `PLAYING`, время в плеере и
+  уведомлении бежит, трек доигрывает и переключается — ни звука, ни ошибки.
+  Воспроизвести: API 26, FLAC в `Music/`, включить →
+  `adb shell dumpsys audio | grep u/pid:<uid>` пусто; у MP3 той же очереди —
+  `type:android.media.AudioTrack … state:started`. Улики:
+  `api26-flac-silent.txt` (две выборки через 3 с: позиция 21,0 → 24,0 с,
+  игроков нет; список декодеров образа), `api26-13-flac-playing.png`. На
+  Android 11 FLAC со звуком. Android 8.1–10 не проверены — образов нет.
+- **Н2. ALAC без звука на 8.0 и на 11.** Декодера ALAC нет ни в одном из двух
+  образов; в logcat `FormatSupportTest[silence-alac.m4a]` ни одной строки
+  `AudioTrack`/`AudioFlinger` (у остальных форматов — 3–4). В приложении ALAC
+  не включали; механизм тот же, что в Н1. Улики: `api26-connected.txt`,
+  `api30-connected.txt`. С какого Android ALAC звучит, не выяснено — эмулятор
+  API 36 занят чатом v0.2.
+- **Н3. `FormatSupportTest` зелёный, когда звука нет.** Тест ждёт `TrackEnded`
+  и сверяет длительность, а её отдаёт контейнер, не декодер: без декодера
+  плеер доигрывает трек молча. API 26 — 7/7 при молчащих FLAC и ALAC, API 30 —
+  7/7 при молчащем ALAC. Тесту не хватает проверки, что аудиодорожка выбрана и
+  звук выводится.
+- **Н4. Выбор папки на Android 8 прячет накопитель.** «Add folder» (мастер и
+  настройки, `OpenDocumentTree`) открывает системный выбор на «Recent — No
+  items», в корнях только «Recent» и «Downloads»; накопитель появляется лишь
+  после «⋮ → Show internal storage». Без этого знания папку не добавить
+  (`Music/` и `Download/` по умолчанию при этом работают). После включения
+  выбор работает: корень → «Whole storage», `Music/PlinthOld` →
+  «Music/PlinthOld/». Улики: `api26-06-roots.png`, `api26-07-menu.png`.
+- **Н5. Ревью №9 подтверждено — ложный диалог «Why music stops».** Android
+  8.0: `adb shell am force-stop` посреди игры (то же, что «Остановить» в
+  настройках) → при запуске «Android stopped Plinth while music was playing»
+  с советом отключить оптимизацию батареи (`api26-15-restored.png`). Android
+  11: `force-stop` распознан честно (USER REQUESTED, диалога нет), но после
+  **перезагрузки** посреди игры `exit-info` пуст → `UNKNOWN` → в журнале
+  `process died while playing: exit=UNKNOWN, killed=true` и тот же диалог
+  (`api30-reboot.txt`, `api30-08-after-reboot.png`).
+- **Н6. Ревью №12 подтверждено — медиакнопка не возобновляет игру после
+  закрытия службы.** Android 8.0: пауза → «Назад» → служба на переднем плане
+  10 мин (на ~606 с foreground снят), на ~666 с система её останавливает,
+  сессия исчезает; `KEYCODE_MEDIA_PLAY` → ни сессии, ни звука, `Last
+  MediaButtonReceiver: null` (`api26-service_lifetime.txt`). Через 4 мин паузы
+  кнопка ещё работает (`api26-headset_after_service.txt`). Android 11 — те же
+  сроки: foreground снят на ~606 с, служба остановлена на ~666 с, после неё
+  `KEYCODE_MEDIA_PLAY` — тишина (`api30-service_lifetime.txt`). Пока
+  приложение открыто, кнопка будит и только что восстановленную сессию.
+- **Н7. Ревью №18 подтверждено (Android 11).** Закрыть первый же системный
+  диалог разрешения жестом «Назад» → мастер пишет «Access to music is turned
+  off. Turn it on in the app settings…» и даёт только «Open settings». Флага
+  `USER_FIXED` у разрешения нет; после перезапуска «Allow access» снова
+  показывает системный диалог. Улики: `api30-02-after-back.png`,
+  `api30-03-dialog-again.png`.
+- **Н8. `tools/background_check.py` на Android 8.0 — ложный FAIL.** Строка
+  игрока в `dumpsys audio` там — `ID:311 -- type:android.media.AudioTrack --
+  u/pid:10079/5903 -- state:started`, без префикса
+  `AudioPlaybackConfiguration`, который ищет `audio_started` → «нет AudioTrack
+  в состоянии started» на первой же проверке (`api26-background_check.txt`).
+  Та же очередь со скриптом, чей разбор понимает оба формата (обёртка вне
+  репозитория), — PASS 3 мин в Doze, `AudioTrack` пересоздаётся на каждом
+  треке (`api26-background_check_patched.txt`). На 11 — PASS как есть.
+- **Пункты ревью «не проверено на 8–12»:** `album_artist` на API 26 есть —
+  `getColumnIndexOrThrow` не падает, скан проходит; папка из `DATA` на 8 —
+  верная; обложки на 8 через `MediaMetadataRetriever` есть (сетка, плеер,
+  уведомление 300×300); MediaStyle на 8 и 11 — в порядке
+  (`api26-12-shade.png`, `api26-14-shade-cover.png`, `api30-06-shade.png`).
+  Звонок на 8 и 11 — в порядке: здесь, в отличие от API 36, `gsm call` доходит
+  до телефонии (`mCallState` 1 → 2 → 0; `api26-call.txt`, `api30-call.txt`).
+  Звонок и наушники на **Android 12** не проверены — образа 12 нет.
+- **Автотесты не покрывают путь 8–9:** `MediaStoreSourceTest`,
+  `MediaStoreScanTest`, `LibraryScanWorkTest`, `EmbeddedArtworkSourceTest`
+  помечены `@SdkSuppress(minSdkVersion = Q)` (фикстуры пишут
+  `RELATIVE_PATH`/`IS_PENDING`) и на API 26 не запускаются; папки из `DATA` и
+  обложки без миниатюр системы проверены только руками (выше).
+- **Не проверено вовсе:** Android 8.1, 9, 10, 12 (образов нет); выдёргивание
+  наушников (`AUDIO_BECOMING_NOISY` — защищённая рассылка, из adb —
+  SecurityException, проводной гарнитуры у эмулятора нет); экран блокировки;
+  Bluetooth и кнопки гарнитуры; батарея; ALAC в самом приложении; выбор папки
+  на 11 (касания в DocumentsUI на эмуляторе без окна не доходили).
+- **Для следующих прогонов:** на Android 11 `adb push` +
+  `MEDIA_SCANNER_SCAN_FILE` файлы не разбирает (строки есть, `is_music=NULL` —
+  приложение их не видит); помогает
+  `adb shell content call --uri content://media --method scan_volume --arg external_primary`.
+  На 8.0 рассылка работает. С `MSYS_NO_PATHCONV=1` локальные пути для
+  `adb.exe` — в виде `C:/…`. Пакет отладки — `io.github.puflik.plinth.debug`.

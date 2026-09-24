@@ -1,0 +1,9 @@
+# API 30 (Android 11), uid 10169: FLAC и MP3 в приложении
+## Old FLAC
+state=3 pos=2646
+metadata: size=6, description=Old FLAC, Старый Артист, Old Album
+  AudioPlaybackConfiguration piid:295 type:android.media.AudioTrack u/pid:10169/7086 state:started attr:AudioAttributes: usage=USAGE_MEDIA c
+## Old MP3 1
+state=3 pos=2788
+metadata: size=6, description=Old MP3 1, Старый Артист, Old Album
+  AudioPlaybackConfiguration piid:303 type:android.media.AudioTrack u/pid:10169/7086 state:started attr:AudioAttributes: usage=USAGE_MEDIA c

@@ -1,0 +1,30 @@
+# API 30: игра (касание трека) → KEYCODE_MEDIA_PAUSE → «Назад» ×2 (активити закрыта) → ждём до 16 мин → KEYCODE_MEDIA_PLAY
+перед паузой: служба есть, foreground; сессия state=3 pos=20912
+0 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+31 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+61 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+91 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+122 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+152 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+182 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+212 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+243 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+273 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+303 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+334 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+364 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+394 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+424 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+455 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+485 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+515 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+545 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+576 с: служба есть, foreground; сессия state=2 pos=21179; pid 3308
+606 с: служба есть, не foreground; сессия state=2 pos=21179; pid 3308
+636 с: служба есть, не foreground; сессия state=2 pos=21179; pid 3308
+666 с: служба нет; сессия ; pid 3308
+после MEDIA_PLAY: служба нет; сессия ; started-игроков uid 10169: 0; pid 3308
+## dumpsys media_session (шапка):
+  Last MediaButtonReceiver: null
+  Media button session is null
+  Sessions Stack - have 0 sessions:

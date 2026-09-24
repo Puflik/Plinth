@@ -1,0 +1,24 @@
+# API 26 (Android 8.0), io.github.puflik.plinth.debug uid 10079, трек Old FLAC (Music/PlinthOld/old-flac-3.flac)
+Thu Sep 24 21:45:36 RTZ 2026
+## dumpsys media_session (фрагмент)
+      state=PlaybackState {state=3, position=21039, buffered position=90000, speed=1.0, updated=671288, actions=7340027, custom actions=[], active item id=0, error=null}
+      metadata:size=5, description=Old FLAC, Старый Артист, Old Album
+## dumpsys audio: игроки uid 10079
+(нет ни одного)
+## dumpsys media_session (фрагмент)
+      state=PlaybackState {state=3, position=24045, buffered position=90000, speed=1.0, updated=674291, actions=7340027, custom actions=[], active item id=0, error=null}
+      metadata:size=5, description=Old FLAC, Старый Артист, Old Album
+## dumpsys audio: игроки uid 10079
+(нет ни одного)
+## аудиодекодеры образа (/vendor/etc/media_codecs_google_audio.xml)
+MediaCodec name="OMX.google.mp3.decoder" type="audio/mpeg"
+MediaCodec name="OMX.google.amrnb.decoder" type="audio/3gpp"
+MediaCodec name="OMX.google.amrwb.decoder" type="audio/amr-wb"
+MediaCodec name="OMX.google.aac.decoder" type="audio/mp4a-latm"
+MediaCodec name="OMX.google.g711.alaw.decoder" type="audio/g711-alaw"
+MediaCodec name="OMX.google.g711.mlaw.decoder" type="audio/g711-mlaw"
+MediaCodec name="OMX.google.vorbis.decoder" type="audio/vorbis"
+MediaCodec name="OMX.google.opus.decoder" type="audio/opus"
+MediaCodec name="OMX.google.raw.decoder" type="audio/raw"
+## то же для MP3 (Old MP3 1) за минуту до этого:
+ID:271 -- type:android.media.AudioTrack -- u/pid:10079/5903 -- state:started

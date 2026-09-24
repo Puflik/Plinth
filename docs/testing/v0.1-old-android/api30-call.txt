@@ -1,0 +1,9 @@
+# API 30: звонок (adb emu gsm)
+до: state=3 pos=15653
+входящий: mCallState=1 state=2 pos=16536
+сбросили: mCallState=0 state=3 pos=19559
++3 с: state=3 pos=22148
+входящий 2: mCallState=1 state=2 pos=23582
+разговор 6 с: mCallState=2 state=2 pos=23582
+положили: mCallState=0 state=3 pos=24245
++3 с: state=3 pos=26172
