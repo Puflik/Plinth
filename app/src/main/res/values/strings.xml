@@ -178,6 +178,7 @@
     <string name="error_problem_network">network error</string>
     <string name="error_problem_unknown">playback failed</string>
     <string name="error_untitled">untitled track</string>
+    <string name="error_core_failed">Something went wrong</string>
     <string name="error_skipped_one">Skipped “%1$s”: %2$s</string>
     <plurals name="error_skipped_many">
         <item quantity="one">Skipped %d track that can’t be played</item>

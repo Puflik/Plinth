@@ -568,6 +568,8 @@ name = "plinth-ffi"
 version = "0.2.0"
 dependencies = [
  "log",
+ "plinth-library",
+ "plinth-sync",
  "plinth-types",
  "uniffi",
 ]

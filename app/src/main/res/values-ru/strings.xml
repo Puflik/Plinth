@@ -191,6 +191,7 @@
     <string name="error_problem_network">ошибка сети</string>
     <string name="error_problem_unknown">ошибка воспроизведения</string>
     <string name="error_untitled">трек без названия</string>
+    <string name="error_core_failed">Что-то пошло не так</string>
     <string name="error_skipped_one">Пропущен «%1$s»: %2$s</string>
     <plurals name="error_skipped_many">
         <item quantity="one">Пропущен %d трек, который не играет</item>

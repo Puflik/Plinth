@@ -20,6 +20,7 @@ publish = false
 [workspace.dependencies]
 plinth-types = { path = "types" }
 plinth-library = { path = "library" }
+plinth-sync = { path = "sync" }
 uniffi = "0.32.2"
 log = "0.4.34"
 thiserror = "2.0.21"

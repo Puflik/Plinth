@@ -14,6 +14,10 @@ import javax.inject.Singleton
  * - Остановка — всегда: звук кончился, выбирать дальше человеку.
  * - При возврате сохранённой очереди — ничего: звука никто не ждал, а
  *   остановку и так покажет экран плеера.
+ * - Отказ ядра — паника или сломанное хранилище — один раз за запуск:
+ *   «что-то пошло не так» и предложение сохранить лог. Сеть, мусор
+ *   провайдера и пропавший трек объясняют сами экраны (баннер «офлайн»,
+ *   серый трек) — строка внизу для них лишняя.
  *
  * Помнит, о каких файлах сказано, поэтому один на процесс.
  */
@@ -22,6 +26,7 @@ class ErrorPresenter
     @Inject
     constructor() {
         private val told = mutableSetOf<String>()
+        private var toldCoreFailed = false
 
         /** Что сказать о [error]; `null` — ничего, только лог. */
         fun present(error: AppError): ErrorNotice? =
@@ -29,6 +34,19 @@ class ErrorPresenter
                 is AppError.TracksSkipped -> if (error.whileRestoring) null else skipped(error.tracks)
                 is AppError.PlaybackStopped ->
                     if (error.whileRestoring) null else ErrorNotice.Stopped(error.track, error.skipped.size + 1)
+                is AppError.CoreFailed -> coreFailed(error.problem)
+            }
+
+        private fun coreFailed(problem: CoreProblem): ErrorNotice? =
+            when (problem) {
+                CoreProblem.INTERNAL, CoreProblem.STORAGE ->
+                    if (toldCoreFailed) {
+                        null
+                    } else {
+                        toldCoreFailed = true
+                        ErrorNotice.CoreFailed
+                    }
+                CoreProblem.NETWORK, CoreProblem.PARSE, CoreProblem.UNAVAILABLE -> null
             }
 
         private fun skipped(tracks: List<FailedTrack>): ErrorNotice? {
@@ -50,4 +68,7 @@ sealed interface ErrorNotice {
         val track: FailedTrack,
         val count: Int,
     ) : ErrorNotice
+
+    /** Ядро не справилось: «что-то пошло не так» и предложение сохранить лог. */
+    data object CoreFailed : ErrorNotice
 }

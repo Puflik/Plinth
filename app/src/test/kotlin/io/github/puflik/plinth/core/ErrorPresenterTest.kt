@@ -49,4 +49,29 @@ class ErrorPresenterTest {
     fun `a stop while restoring is left to the player screen`() {
         assertThat(presenter.present(AppError.PlaybackStopped(gone, whileRestoring = true))).isNull()
     }
+
+    /** План 17.6: паника и сломанное хранилище — «что-то пошло не так» и сохранить лог. Один раз за запуск. */
+    @Test
+    fun `a core failure is told once per launch`() {
+        assertThat(presenter.present(AppError.CoreFailed(CoreProblem.INTERNAL))).isEqualTo(ErrorNotice.CoreFailed)
+
+        assertThat(presenter.present(AppError.CoreFailed(CoreProblem.INTERNAL))).isNull()
+        assertThat(presenter.present(AppError.CoreFailed(CoreProblem.STORAGE))).isNull()
+    }
+
+    @Test
+    fun `a broken storage is told like a panic`() {
+        assertThat(presenter.present(AppError.CoreFailed(CoreProblem.STORAGE))).isEqualTo(ErrorNotice.CoreFailed)
+    }
+
+    /**
+     * Сеть — баннер «офлайн», мусор провайдера — ничего, пропавший трек — серый
+     * на экране (план 17.6): строка внизу тут не нужна.
+     */
+    @Test
+    fun `core problems the screens explain themselves are quiet`() {
+        for (problem in listOf(CoreProblem.NETWORK, CoreProblem.PARSE, CoreProblem.UNAVAILABLE)) {
+            assertThat(presenter.present(AppError.CoreFailed(problem))).isNull()
+        }
+    }
 }

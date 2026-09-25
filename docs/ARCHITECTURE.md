@@ -31,11 +31,16 @@ Gradle — плагин `plinth.rust` из `build-logic/`. Сборка — в
 | `core/types` (`plinth-types`) | Словарь ядра: `CoreError`, идентификаторы (UUIDv7), `Timestamp`, лестница качества, доступность, `Position` (дробный индекс) | Зависеть от других крейтов ядра; знать об FFI |
 | `core/library` (`plinth-library`) | Модель библиотеки (`Track` → `Version` → `Source`, артисты, альбомы, плейлисты, прослушивания, склейки) и хранилище на SQLite: миграции только вперёд с копией перед каждой ([ADR 0011](adr/0011-migration-strategy.md)), репозитории, выборки для экранов, проверка целостности | Знать об FFI и Kotlin; ссылаться из проекции журнала на каталог внешними ключами |
 | `core/sync` (`plinth-sync`) | Журнал пользовательских данных на `yrs` — источник правды для лайков, оценок, плейлистов, истории, склеек, подписок, чёрного списка и синхронизируемых настроек ([ADR 0007](adr/0007-journal-as-source-of-truth.md)): операции, файлы снимка и хвоста, проекция в таблицы базы — по операции и пересборкой | Писать пользовательское в базу мимо журнала; класть в журнал привязанное к устройству (пути, токены, кэш) |
-| `core/ffi` (`plinth-ffi`) | Граница с Kotlin на UniFFI: экспорт, `panic::guard`, логи Rust → `CoreLogger` | Паниковать наружу: каждая функция возвращает `Result<_, CoreError>` |
+| `core/ffi` (`plinth-ffi`) | Граница с Kotlin на UniFFI: объект `Core` (база, журнал, замок и идентификатор установки в каталоге данных), API по темам — `api/library_api.rs`, `api/journal_api.rs`, `panic::guard`, логи Rust → `CoreLogger` | Паниковать наружу: каждая функция возвращает `Result<_, CoreError>` |
 | `core/uniffi-bindgen` | Генератор Kotlin-биндингов, работает при сборке | Попадать в APK |
 
-Kotlin видит ядро только через пакет `ffi`: `PlinthCore` — фасад,
-`CoreLogBridge` — приём логов, `CoreInitializer` — запуск в фоне при старте.
+Kotlin видит ядро только через пакет `ffi`:
+- `PlinthCore` — фасад с темами `library` (`CoreLibrary`) и `journal`
+  (`CoreJournal`), типы приложения — `CoreModels.kt`;
+- `CoreFailure` и `CoreErrors` — отказы ядра, дальше их разбирает
+  `ErrorPresenter`;
+- `CoreLogBridge` — приём логов;
+- `CoreInitializer` — открытие ядра в `files/core` в фоне при старте.
 Сгенерированный код (`ffi.generated`) и JNA за пределами `ffi` не
 импортируются (`FfiBoundaryTest`). Что пересекает границу и почему —
 [ADR 0010](adr/0010-ffi-boundary.md).

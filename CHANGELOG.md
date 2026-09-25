@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for four ABIs and starts it in the background at launch. No user-visible
   features depend on it yet; its log lines go to the app log, and a crash
   inside the core reaches the app as an error instead of closing it.
+- The core keeps its own database and a journal of likes, ratings, playlists
+  and listening history in the app's private storage. The journal is the
+  source of truth: a deleted or damaged database is rebuilt from it at
+  launch. Screens do not use the core yet.
 
 ## [0.1.1] - 2026-09-25
 

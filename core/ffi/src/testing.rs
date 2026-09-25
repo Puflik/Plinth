@@ -1,7 +1,10 @@
 //! Общее для тестов крейта: логгер Rust и хук паники — на весь процесс,
 //! а тесты идут в параллельных потоках. Кто их трогает, держит [`serial`].
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use plinth_types::DeviceId;
 
 use crate::logging::{CoreLogLevel, CoreLogRecord, CoreLogger};
 
@@ -32,5 +35,24 @@ impl Capture {
 impl CoreLogger for Capture {
     fn log(&self, record: CoreLogRecord) {
         self.records.lock().unwrap().push(record);
+    }
+}
+
+/// Пустой каталог данных ядра; стирается в `Drop`.
+pub(crate) struct Scratch(pub(crate) PathBuf);
+
+impl Scratch {
+    pub(crate) fn new() -> Self {
+        Self(std::env::temp_dir().join(format!("plinth-core-{}", DeviceId::new())))
+    }
+
+    pub(crate) fn path(&self) -> String {
+        self.0.to_string_lossy().into_owned()
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
