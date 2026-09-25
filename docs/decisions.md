@@ -2516,12 +2516,28 @@ Android (раздел выше; Н5 = №9, Н6 = №12, Н7 = №18). Рабо�
   `Media button session` — сессия Plinth, `Last MediaButtonReceiver` — наш
   `startForegroundService`. До исправления в этой точке — тишина и
   `Last MediaButtonReceiver: null` (раздел о старых Android выше).
-- **Не проверено в этом чате:** 0.1.1 на `Plinth_API_26` — FLAC в приложении
-  (ждём строку «не удалось воспроизвести» и пропуск вместо тишины), выбор
-  папки сразу с накопителем, `background_check.py` без обёртки; снимок плеера
-  в альбомной ориентации на эмуляторе (раскладку стережёт `PlayerFrameTest`);
-  случай «процесс мёртв, служба мертва → медиакнопка» (`onPlaybackResumption`
-  собран, но вживую вызывался только путь с живым процессом).
+- **0.1.1 на `Plinth_API_26` (Android 8.0), после выпуска тега:**
+  `connectedGithubDebugAndroidTest` — 101, 0 падений; `FormatSupportTest` 7/7,
+  FLAC и ALAC — по ветке «нет декодера» (в logcat `no decoder for
+  [audio/flac]`, `[audio/alac]`, ни одной строки `AudioTrack`). В приложении
+  FLAC — строка «Skipped “Old FLAC”: the file is damaged or its format isn’t
+  supported», очередь ушла на следующий MP3 и играет
+  (`api26-0.1.1-flac-skipped.png`). Выбор папки после сброса данных
+  DocumentsUI — накопитель в списке корней сразу, без «⋮»; открывается выбор
+  по-прежнему на «Recent» (`api26-0.1.1-folder-roots.png`; открыть сразу в
+  памяти телефона мог бы `EXTRA_INITIAL_URI` — не делали). `python
+  tools/background_check.py --minutes 3` без обёртки — PASS в Doze. Плеер в
+  альбомной ориентации: обложка слева во всю высоту, название, перемотка и
+  пять кнопок справа (`api26-0.1.1-landscape.png`).
+- **Ловушка прогона:** первый `connectedGithubDebugAndroidTest` на API 26
+  упал на установке APK (`INSTALL_FAILED_ALREADY_EXISTS`), тестов не было, а
+  Gradle написал `BUILD SUCCESSFUL`. Итог прогона — только по XML в
+  `build/outputs/androidTest-results`, не по строке BUILD.
+- **Не проверено:** «процесс мёртв, служба мертва → медиакнопка»
+  (`onPlaybackResumption` собран, вживую шёл только путь с живым процессом).
+- **Выпуск:** тег `v0.1.1` (`595d48d`) отправлен автором 2026-09-25;
+  GitHub Release «Plinth v0.1.1» — pre-release, `app-github-release.apk`
+  (2,9 МБ) и `mapping-v0.1.1.txt.gz`, заметки — раздел [0.1.1].
 - **Слияние в `main`:** конфликт ожидаем в конце `docs/decisions.md` — там
   у `main` свои разделы v0.2; оставить оба блока. Ветка принесла в хотфикс и
   разделы о v0.2 из `acc4aab` (cherry-pick теста форматов) — в `main` они и
