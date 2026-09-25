@@ -11,9 +11,6 @@ import androidx.work.workDataOf
 import com.google.common.truth.Truth.assertThat
 import com.google.common.util.concurrent.Futures
 import io.github.puflik.plinth.library.FakeFolderSettings
-import io.github.puflik.plinth.library.FakeLibraryRepository
-import io.github.puflik.plinth.library.model.LibraryTrack
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
@@ -24,7 +21,7 @@ import org.junit.Test
  */
 class ScanWorkerTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
-    private val repository = FakeLibraryRepository()
+    private val store = FakeScanStore()
     private val folders = FakeFolderSettings()
     private val published = mutableListOf<Data>()
 
@@ -36,7 +33,7 @@ class ScanWorkerTest {
             val result = worker.doWork()
 
             assertThat(result).isEqualTo(ListenableWorker.Result.success(workDataOf(ScanWorker.KEY_FOUND to 1)))
-            assertThat(repository.tracks().first().map(LibraryTrack::id)).containsExactly(1L)
+            assertThat(store.present().map(ScannedTrack::id)).containsExactly(1L)
         }
 
     @Test
@@ -58,7 +55,7 @@ class ScanWorkerTest {
 
             worker.doWork()
 
-            assertThat(repository.tracks().first().map(LibraryTrack::id)).containsExactly(1L)
+            assertThat(store.present().map(ScannedTrack::id)).containsExactly(1L)
         }
 
     @Test
@@ -77,7 +74,7 @@ class ScanWorkerTest {
                         appContext: Context,
                         workerClassName: String,
                         workerParameters: WorkerParameters,
-                    ) = ScanWorker(appContext, workerParameters, LibraryScanner(source, repository), folders)
+                    ) = ScanWorker(appContext, workerParameters, LibraryScanner(source, store), folders)
                 },
             ).setProgressUpdater { _, _, data ->
                 published += data

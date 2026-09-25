@@ -3413,3 +3413,111 @@ TECNO CAMON 30 (`CL6`), Android 16 (API 36), HiOS 16.3, ABI **`arm64-v8a`**
 - **D3c** — как в разбивке: `ScanWorker` через `core.scan`, тома из
   `StorageManager`, удаление Room, сканера `MediaStore` и `library/sort`,
   стирание старого файла базы, `UnavailableRescan` по пути.
+
+### D3b: `CoreLibraryRepository` поверх ядра
+
+Сделано 2026-09-25, не закоммичено.
+
+- **Ответ автора: экраны переключаются на ядро в D3c.** До D3c в DI
+  остаётся Room: `CoreLibraryRepository` написан и проходит контракт, но
+  приложение его ещё не использует. В D3c чтение и скан переключаются одним
+  шагом, и ни в одном коммите библиотека не пустая.
+- **Модель:**
+  - `LibraryTrack.id` — `TrackId`;
+  - `uri` — путь к файлу. У Room до D3c — `content://`, а `id` — `_ID`
+    строкой;
+  - `duration` может быть `null`: `TrackRow` неизвестную не показывает;
+  - `modifiedAt` ушёл.
+
+  Поля `Album` и `Artist` прежние, строятся из `CoreAlbum` и `CoreArtist`.
+- **`LibraryRepository`:**
+  - убраны `knownVersions`, `upsert` и `markMissing`;
+  - добавлен `suspend sortKeys(names)`: папки сортируются ключами
+    хранилища, у ядра — `core.library.sortKeys`.
+
+  `LibraryFolder.tree(tracks, sortKeys)` стал `suspend` и спрашивает ключи
+  всех имён одним вызовом; пустое дерево — `LibraryFolder.EMPTY`.
+- **Старый сканер до D3c:**
+  - `library/scan/ScanStore.kt`: `ScannedTrack` — бывший `LibraryTrack` с
+    `_ID` и `modifiedAt` — и интерфейс `ScanStore`;
+  - `RoomLibraryRepository` реализует и фасад, и `ScanStore`;
+  - тесты сканера пишут в `FakeScanStore`.
+- **`CoreLibraryRepository`:**
+  - поток читает ядро по сигналу `catalogChanges`, `distinctUntilChanged`,
+    работа идёт в IO;
+  - отказ ядра уходит в `CoreErrors` через фасад и в лог, а список остаётся
+    прежним;
+  - `sortKeys` при отказе ядра отдаёт имена как есть;
+  - пустую строку поиска в ядро не отправляет;
+  - `albumTracks` — через `findAlbum`;
+  - строки без пути не показывает: сетевые источники — эпик E.
+- **`PlinthCore.catalogChanges`** — `StateFlow<Long>`. Его двигают:
+  - каждая записанная пачка скана (прогресс `WRITING`);
+  - конец скана, в том числе неудачный;
+  - `seedForTest` и `hideForTest`.
+- **Тестовый API ffi** — `api/test_api.rs`:
+  - `seed_for_test(files)` пишет файлы тем же путём, что скан: `normalized`
+    плюс `scan::write`;
+  - `hide_for_test(paths)` — `set_availability` плюс `prune_catalog`.
+
+  В Kotlin — `PlinthCore.seedForTest` и `hideForTest`, `CoreTestFile`.
+- **Контракт:**
+  - наполняется абстрактными `seed` и `hide` (`TaggedFile`);
+  - треки сравниваются по названию;
+  - удалены тесты `upsert` и `knownVersions`;
+  - Room из контракта выпал: исполнителей не делит. Его контракт-тест
+    сократился до `RoomLibraryRepositoryTest` — 40 000 пропавших разом.
+
+  Фейк ведёт себя как ядро. В контракт вписаны намеренные отличия ядра от
+  v0.1:
+  - исполнители делятся разделителями;
+  - поиск не замечает знаков, запрос без слов (« % ») ничего не находит;
+  - альбом и исполнитель узнаются по имени без регистра, диакритики и знаков
+    и показываются так, как пришли первыми;
+  - равные по ключам треки и альбомы стоят в порядке добавления;
+  - альбом без тега исполнителя альбома принадлежит основному артисту трека.
+    Трек знает этого владельца (`albumOwner`), по нему открывается экран
+    альбома.
+- **В ядре найдено и исправлено** — D3a разошёлся с v0.1:
+  - трек без исполнителя стоял первым среди треков с равным названием, теперь
+    последним;
+  - диск без номера стоял последним в альбоме, теперь первым; обложка
+    берётся в том же порядке;
+  - альбом без исполнителя стоял первым среди одноимённых, теперь последним.
+    Касается списка альбомов, альбомов исполнителя, треков по альбому и
+    треков исполнителя: порядок один — `BY_ALBUM`;
+  - запрос без слов находил всё, теперь ничего.
+- **Обложки:**
+  - `RoutedArtworkSource`: путь (`/…`) идёт в `CoreArtworkSource` — ядро
+    плюс `EmbeddedArtworkSource.decode`; остальное — в
+    `EmbeddedArtworkSource`;
+  - `core.library.artwork` — тихий вызов (`quietCall`): отказ приходит
+    исключением, но не в `CoreErrors`. Файл мог пропасть после скана, а
+    `Storage` показал бы человеку «сбой ядра».
+- **Media3 и путь без схемы.** Путь играет, но `setUri(String)` разбирает его
+  как адрес:
+  - имя с `#` или `?` не играло — `FAILED_RUNTIME_CHECK`;
+  - имя с `%` — «файл не найден».
+
+  Теперь `MediaItemMapper` превращает путь в `Uri.fromFile`. Проверяет
+  `LocalPathPlaybackTest`: `#`, `?`, `%`, кириллица.
+- **Проверено:**
+  - `cargo test` 299 (+7), clippy `-D warnings`, fmt;
+  - JVM 456 + 456, ktlint и detekt, в том числе по androidTest;
+  - шесть мутаций фейка ловит контракт: деление исполнителей, знаки в
+    поиске, владелец альбома, диск без номера, альбом без исполнителя, трек
+    без исполнителя;
+  - инструментальные на API 36 (`ANDROID_SERIAL=emulator-5554`) — 142/142.
+    Из них `CoreLibraryRepositoryContractTest` — 39, `CoreArtworkSourceTest`
+    — 5, `LocalPathPlaybackTest` — 5, `CoreScanTest` — 4;
+  - мутацию «поток не слушает `catalogChanges`» контракт на ядре ловит
+    (`lists_follow_later_writes`, `lists_follow_later_hiding`).
+- **Эмулятор:** на образе API 36 падает системный Bluetooth («Bluetooth keeps
+  stopping»). Это не Plinth и тестам не мешает; диалог закрывается
+  `am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS`.
+- **Для D3c:**
+  - переключить DI на `CoreLibraryRepository`;
+  - `LibraryScanWorkTest` читает фонотеку из графа;
+  - фейк и `LibraryFolder` пользуются `SortKeys`, `NaturalOrder` и
+    `CodePointOrder` из `library/sort`. При удалении сортировки на Kotlin им
+    нужна своя копия: фейку — в `sharedTest`.

@@ -1,20 +1,17 @@
 package io.github.puflik.plinth.library.scan
 
 import com.google.common.truth.Truth.assertThat
-import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.model.FolderConfig
-import io.github.puflik.plinth.library.model.LibraryTrack
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 class LibraryScannerTest {
     private val source = FakeScanSource()
-    private val repository = FakeLibraryRepository()
-    private val scanner = LibraryScanner(source, repository)
+    private val store = FakeScanStore()
+    private val scanner = LibraryScanner(source, store)
 
     @Test
     fun `first scan stores tracks of scanned folders only`() =
@@ -39,7 +36,7 @@ class LibraryScannerTest {
 
             scanner.scan(FolderConfig.DEFAULT)
 
-            val track = repository.tracks().first().single()
+            val track = store.present().single()
             assertThat(track.title).isEqualTo("file-1")
             assertThat(track.discNumber).isEqualTo(2)
             assertThat(track.trackNumber).isEqualTo(3)
@@ -78,7 +75,7 @@ class LibraryScannerTest {
             scanner.scan(FolderConfig.DEFAULT)
             // Доступ отозвали: MediaStore отдаёт только файлы самого приложения — пустоту.
             source.files = emptyList()
-            val blind = LibraryScanner(source, repository, canRead = { false })
+            val blind = LibraryScanner(source, store, canRead = { false })
 
             val failure = runCatching { blind.scan(FolderConfig.DEFAULT) }.exceptionOrNull()
 
@@ -157,9 +154,9 @@ class LibraryScannerTest {
             assertThat(result.updated).isEqualTo(total - LibraryScanner.WRITE_CHUNK)
         }
 
-    private suspend fun ids(): List<Long> = repository.tracks().first().map(LibraryTrack::id)
+    private fun ids(): List<Long> = store.present().map(ScannedTrack::id)
 
-    private suspend fun titles(): List<String> = repository.tracks().first().map(LibraryTrack::title)
+    private fun titles(): List<String> = store.present().map(ScannedTrack::title)
 
     private fun row(
         id: Long,

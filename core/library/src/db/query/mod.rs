@@ -77,29 +77,35 @@ const TRACK_JOINS: &str = "
     LEFT JOIN album a ON a.id = v.album
     LEFT JOIN track_user u ON u.track = t.id";
 
-/// Порядок внутри альбома: диск, номер, без номера — в конце диска.
-const ON_ALBUM: &str = "v.disc IS NULL, v.disc, v.number IS NULL, v.number, t.title_sort, t.id";
+/// Порядок альбомов в списке треков: по названию и исполнителю; без
+/// исполнителя — в конце одноимённых, треки без альбома — в конце списка.
+const BY_ALBUM: &str = "a.id IS NULL, a.title_sort, a.artist_credit = '', a.artist_sort, a.id";
+
+/// Порядок внутри альбома: диск, номер, без номера — в конце диска. Диск без
+/// номера — первым: у однодисковых альбомов тега диска обычно нет.
+const ON_ALBUM: &str = "v.disc IS NOT NULL, v.disc, v.number IS NULL, v.number, t.title_sort, t.id";
 
 impl Database {
     /// Видимые треки в порядке `sort`. `search` — каждое слово запроса есть в
     /// названии, исполнителе, альбоме или исполнителе альбома, без учёта
-    /// регистра, диакритики и знаков; пустой запрос — без фильтра.
+    /// регистра, диакритики и знаков; запрос без слов ничего не находит.
     pub fn track_list(&self, sort: TrackSort, search: Option<&str>) -> Result<Vec<TrackRow>, CoreError> {
         let order = match sort {
-            TrackSort::Title => "t.title_sort, t.artist_sort, t.id".to_owned(),
+            TrackSort::Title => "t.title_sort, t.artist_credit = '', t.artist_sort, t.id".to_owned(),
             TrackSort::Artist => {
                 format!("t.artist_credit = '', t.artist_sort, a.id IS NULL, a.title_sort, a.id, {ON_ALBUM}")
             }
-            TrackSort::Album => format!("a.id IS NULL, a.title_sort, a.artist_sort, a.id, {ON_ALBUM}"),
+            TrackSort::Album => format!("{BY_ALBUM}, {ON_ALBUM}"),
             TrackSort::RecentlyAdded => "t.added_at DESC, t.id DESC".to_owned(),
             TrackSort::MostPlayed => "play_count DESC, t.title_sort, t.id".to_owned(),
         };
-        let rows = self.track_rows("", [], &order)?;
-        let words: Vec<String> =
-            search.map(normalize).unwrap_or_default().split(' ').filter(|w| !w.is_empty()).map(str::to_owned).collect();
+        let Some(search) = search else { return self.track_rows("", [], &order) };
+        let search = normalize(search);
+        let words: Vec<&str> = search.split(' ').filter(|w| !w.is_empty()).collect();
         if words.is_empty() {
-            return Ok(rows);
+            return Ok(Vec::new());
         }
+        let rows = self.track_rows("", [], &order)?;
         Ok(rows.into_iter().filter(|row| matches(row, &words)).collect())
     }
 
@@ -117,10 +123,10 @@ impl Database {
 }
 
 /// Все слова запроса нашлись в полях строки.
-fn matches(row: &TrackRow, words: &[String]) -> bool {
+fn matches(row: &TrackRow, words: &[&str]) -> bool {
     let fields = [Some(&row.title), Some(&row.artist_credit), row.album_title.as_ref(), row.album_artist.as_ref()];
     let text = normalize(&fields.into_iter().flatten().map(String::as_str).collect::<Vec<_>>().join(" "));
-    words.iter().all(|word| text.contains(word.as_str()))
+    words.iter().all(|word| text.contains(word))
 }
 
 fn read_row(row: &Row<'_>) -> rusqlite::Result<TrackRow> {
@@ -276,7 +282,7 @@ pub(crate) mod testing {
 #[cfg(test)]
 mod tests {
     use super::TrackSort;
-    use super::testing::library;
+    use super::testing::{Library, library};
     use crate::db::Database;
 
     fn titles(db: &Database, sort: TrackSort, search: Option<&str>) -> Vec<String> {
@@ -393,7 +399,44 @@ mod tests {
         assert_eq!(titles(&lib.db, TrackSort::Title, Some("елка")), ["Прованс"]);
         assert!(titles(&lib.db, TrackSort::Title, Some("lost")).is_empty(), "пропавший не находится");
         assert!(titles(&lib.db, TrackSort::Title, Some("creep abbey")).is_empty());
-        assert_eq!(titles(&lib.db, TrackSort::Title, Some(" % ")).len(), 9, "запрос из знаков — без фильтра");
+    }
+
+    /// Искать нечего — ничего и не находится, как в поиске v0.1; весь список —
+    /// это запрос без поиска.
+    #[test]
+    fn search_without_words_finds_nothing() {
+        let lib = library();
+
+        assert!(titles(&lib.db, TrackSort::Title, Some("")).is_empty());
+        assert!(titles(&lib.db, TrackSort::Title, Some(" % ")).is_empty(), "знаки — не слова");
+        assert_eq!(titles(&lib.db, TrackSort::Title, None).len(), 9);
+    }
+
+    /// Одноимённые альбомы — по исполнителю; альбом без исполнителя — в конце.
+    #[test]
+    fn by_album_puts_the_same_titled_album_without_artist_last() {
+        let mut lib = Library::new();
+        let zz = lib.artist("Zz");
+        let (nobody, theirs) = (lib.album("Bootleg", "", &[]), lib.album("Bootleg", "Zz", &[zz]));
+        lib.track("anonymous", "", &[], Some((nobody, None, None)), true);
+        lib.track("known", "Zz", &[zz], Some((theirs, None, None)), true);
+
+        assert_eq!(titles(&lib.db, TrackSort::Album, None), ["known", "anonymous"]);
+    }
+
+    /// Равные названия — по исполнителю без артикля; без исполнителя — в конце.
+    #[test]
+    fn equal_titles_follow_artist_and_no_artist_goes_last() {
+        let mut lib = Library::new();
+        let (coldplay, beatles) = (lib.artist("Coldplay"), lib.artist("The Beatles"));
+        lib.track("Intro", "", &[], None, true);
+        lib.track("Intro", "Coldplay", &[coldplay], None, true);
+        lib.track("Intro", "The Beatles", &[beatles], None, true);
+
+        let artists: Vec<String> =
+            lib.db.track_list(TrackSort::Title, None).unwrap().into_iter().map(|row| row.artist_credit).collect();
+
+        assert_eq!(artists, ["The Beatles", "Coldplay", ""]);
     }
 
     #[test]

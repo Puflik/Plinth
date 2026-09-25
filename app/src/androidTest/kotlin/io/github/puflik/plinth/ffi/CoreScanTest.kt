@@ -78,6 +78,23 @@ class CoreScanTest {
         assertThat(core.library.tracks()).isEmpty()
     }
 
+    /**
+     * Списки перечитывают ядро по сигналу (D3b): его двигают каждая записанная
+     * пачка и конец скана — и конец скана, который ничего не записал.
+     */
+    @Test
+    fun a_scan_signals_catalog_changes() {
+        putProbe()
+        val before = core.catalogChanges.value
+
+        scan()
+        val afterWrite = core.catalogChanges.value
+        scan()
+
+        assertThat(afterWrite).isAtLeast(before + 2)
+        assertThat(core.catalogChanges.value).isAtLeast(afterWrite + 1)
+    }
+
     @Test
     fun tags_are_read_on_the_device() {
         putProbe(asset = "tags/plinth-m4a.m4a", name = "tagged.m4a", mime = "audio/mp4")

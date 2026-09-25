@@ -4,26 +4,28 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.library.scan.ScannedTrack
 import io.github.puflik.plinth.library.sort.SortKeys
 import kotlin.time.Duration
 
 /**
- * Строка трека в базе v0.1 (C3.1) — [LibraryTrack] и то, что нужно SQL.
+ * Строка трека в базе v0.1 (C3.1) — [ScannedTrack] и то, что нужно SQL.
  *
  * Упрощённая модель: не `Track/Version/Source` — та приходит в v0.2 вместе
  * с ядром на Rust. Таблиц альбомов и исполнителей нет: их собирают запросы
  * `GROUP BY` по трекам (`TrackDao`).
  *
  * Сверх тегов в строке лежит:
- * - [albumOwner] — чей альбом ([LibraryTrack.albumOwner]); по нему альбомы
+ * - [albumOwner] — чей альбом ([ScannedTrack.albumOwner]); по нему альбомы
  *   группируются, а экран альбома выбирает треки;
  * - ключи сортировки (`*_key`, [SortKeys]) — считаются при записи, SQL
  *   сортирует по ним обычным сравнением строк. Нет значения — нет и ключа;
  * - [missing] — файла больше нет: трек скрыт из всех списков, но строка
  *   остаётся и оживает, если файл вернётся.
  *
- * @property mediaStoreId `_ID` из `MediaStore` — [LibraryTrack.id], он же
+ * @property mediaStoreId `_ID` из `MediaStore` — [ScannedTrack.id], он же
  *   первичный ключ: по нему сканер заменяет строку при следующем обходе.
  */
 @Entity(
@@ -65,9 +67,10 @@ data class TrackEntity(
     @ColumnInfo(name = "album_owner_key")
     val albumOwnerKey: String?,
 ) {
+    /** Трек для экранов: до D3c его `id` — `_ID` строкой; нулевая длительность — неизвестная. */
     fun toLibraryTrack(): LibraryTrack =
         LibraryTrack(
-            id = mediaStoreId,
+            id = TrackId(mediaStoreId.toString()),
             uri = uri,
             title = title,
             artist = artist,
@@ -75,15 +78,14 @@ data class TrackEntity(
             albumArtist = albumArtist,
             discNumber = discNumber,
             trackNumber = trackNumber,
-            duration = duration,
+            duration = duration.takeIf(Duration::isPositive),
             folder = folder,
-            modifiedAt = modifiedAt,
         )
 
     companion object {
         /** Строка для записи: трек виден, ключи посчитаны заново. */
         fun of(
-            track: LibraryTrack,
+            track: ScannedTrack,
             keys: SortKeys,
         ): TrackEntity =
             TrackEntity(

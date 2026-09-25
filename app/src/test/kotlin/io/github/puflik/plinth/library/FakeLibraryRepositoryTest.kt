@@ -8,4 +8,18 @@ package io.github.puflik.plinth.library
  */
 class FakeLibraryRepositoryTest : LibraryRepositoryContractTest() {
     override fun createRepository(): LibraryRepository = FakeLibraryRepository()
+
+    override suspend fun seed(
+        repository: LibraryRepository,
+        files: List<TaggedFile>,
+    ) {
+        (repository as FakeLibraryRepository).add(files)
+    }
+
+    override suspend fun hide(
+        repository: LibraryRepository,
+        paths: List<String>,
+    ) {
+        (repository as FakeLibraryRepository).hide(paths)
+    }
 }

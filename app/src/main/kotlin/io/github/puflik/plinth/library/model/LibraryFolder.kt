@@ -1,7 +1,6 @@
 package io.github.puflik.plinth.library.model
 
 import io.github.puflik.plinth.library.sort.CodePointOrder
-import io.github.puflik.plinth.library.sort.SortKeys
 
 /**
  * Папка фонотеки (C4.1) — файловая структура как есть, собранная из
@@ -11,7 +10,8 @@ import io.github.puflik.plinth.library.sort.SortKeys
  * @property path путь от корня хранилища с `/` в конце: `Music/Queen/`;
  *   у корня — пустая строка.
  * @property name последняя часть пути; у корня — пустая строка.
- * @property folders подпапки в естественном порядке имён, без артиклей.
+ * @property folders подпапки в порядке имён — как названия в списках хранилища:
+ *   естественном, без артиклей.
  * @property tracks треки этой папки в том порядке, в каком пришли.
  */
 data class LibraryFolder(
@@ -40,16 +40,29 @@ data class LibraryFolder(
     }
 
     companion object {
-        /** Дерево от корня хранилища; треки внутри папок сохраняют порядок [tracks]. */
-        fun tree(
+        /** Дерево без треков. */
+        val EMPTY = LibraryFolder(path = "", name = "", folders = emptyList(), tracks = emptyList())
+
+        /**
+         * Дерево от корня хранилища; треки внутри папок сохраняют порядок [tracks].
+         * Имена папок упорядочены ключами [sortKeys] — `LibraryRepository.sortKeys`,
+         * сравнёнными по кодовым точкам; ключи всех имён запрашиваются разом.
+         */
+        suspend fun tree(
             tracks: List<LibraryTrack>,
-            keys: SortKeys = SortKeys(),
-        ): LibraryFolder = build(path = "", tracks.map { segments(it.folder) to it }, keys)
+            sortKeys: suspend (List<String>) -> List<String>,
+        ): LibraryFolder {
+            if (tracks.isEmpty()) return EMPTY
+            val placed = tracks.map { segments(it.folder) to it }
+            val names = placed.flatMap { (segments, _) -> segments }.distinct()
+            val keys = if (names.isEmpty()) emptyMap() else names.zip(sortKeys(names)).toMap()
+            return build(path = "", placed, keys)
+        }
 
         private fun build(
             path: String,
             tracks: List<Pair<List<String>, LibraryTrack>>,
-            keys: SortKeys,
+            keys: Map<String, String>,
         ): LibraryFolder {
             val (here, deeper) = tracks.partition { (segments, _) -> segments.isEmpty() }
             val folders =
@@ -57,7 +70,7 @@ data class LibraryFolder(
                     .groupBy({ (segments, _) -> segments.first() }, { (segments, track) -> segments.drop(1) to track })
                     .map { (name, inside) -> build(path + asPath(name), inside, keys) }
                     .sortedWith(
-                        compareBy(CodePointOrder) { folder: LibraryFolder -> keys.of(folder.name) }
+                        compareBy(CodePointOrder) { folder: LibraryFolder -> keys.getValue(folder.name) }
                             .thenBy(CodePointOrder, LibraryFolder::name),
                     )
             return LibraryFolder(path, path.dropLast(1).substringAfterLast('/'), folders, here.map { it.second })

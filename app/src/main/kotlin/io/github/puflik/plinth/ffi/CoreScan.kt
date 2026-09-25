@@ -8,10 +8,10 @@ import io.github.puflik.plinth.ffi.generated.ScanProgress as RustScanProgress
 import io.github.puflik.plinth.ffi.generated.ScanReport as RustScanReport
 
 /**
- * Скан библиотеки ядром (D1) — `api/scan_api.rs`. Ядро само обходит тома по
- * прямым путям, а не через `MediaStore`, и видит файлы в любых папках.
- * Теги пока не читаются — название из имени файла (D2). `ScanWorker`
- * переключится на этот скан в D3.
+ * Скан библиотеки ядром (D1, D2) — `api/scan_api.rs`. Ядро само обходит тома
+ * по прямым путям, а не через `MediaStore`, видит файлы в любых папках и само
+ * читает теги. Каждая записанная пачка и конец скана двигают
+ * `PlinthCore.catalogChanges`. `ScanWorker` переключится на этот скан в D3c.
  */
 class CoreScan internal constructor(
     private val core: PlinthCore,
@@ -28,14 +28,23 @@ class CoreScan internal constructor(
         excluded: List<String> = emptyList(),
         onProgress: (CoreScanProgress) -> Boolean = { true },
     ): CoreScanReport =
-        core.call {
-            it.scan(volumes.map(File::getPath), RustFolderConfig(included, excluded), Listener(onProgress)).toApp()
+        try {
+            core.call {
+                it.scan(volumes.map(File::getPath), RustFolderConfig(included, excluded), Listener(onProgress)).toApp()
+            }
+        } finally {
+            // Пропавшие и вернувшиеся файлы отмечаются в самом конце, после пачек.
+            core.catalogChanged()
         }
 
-    private class Listener(
+    private inner class Listener(
         private val onProgress: (CoreScanProgress) -> Boolean,
     ) : RustScanListener {
-        override fun progress(progress: RustScanProgress): Boolean = onProgress(progress.toApp())
+        override fun progress(progress: RustScanProgress): Boolean {
+            val app = progress.toApp()
+            if (app.phase == CoreScanPhase.WRITING) core.catalogChanged()
+            return onProgress(app)
+        }
     }
 }
 

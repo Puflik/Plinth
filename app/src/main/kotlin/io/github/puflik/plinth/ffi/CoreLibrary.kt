@@ -10,8 +10,8 @@ class CoreLibrary internal constructor(
 ) {
     /**
      * Треки в порядке [sort]; [search] — каждое слово есть в названии,
-     * исполнителе, альбоме или исполнителе альбома, без учёта регистра и
-     * диакритики.
+     * исполнителе, альбоме или исполнителе альбома, без учёта регистра,
+     * диакритики и знаков. Запрос без слов ничего не находит.
      */
     fun tracks(
         sort: CoreTrackSort = CoreTrackSort.TITLE,
@@ -44,8 +44,12 @@ class CoreLibrary internal constructor(
     /** Лайк, оценка и счётчики трека; не слушали и не оценивали — пустые. */
     fun userData(track: TrackId): TrackUserData = core.call { it.userData(track.value).toApp() }
 
-    /** Обложка файла [path]: встроенная, иначе `cover.jpg` рядом; `null` — нет. */
-    fun artwork(path: String): CoreArtwork? = core.call { it.artwork(path)?.toApp() }
+    /**
+     * Обложка файла [path]: встроенная, иначе `cover.jpg` рядом; `null` — нет.
+     * Файл не прочитался — [CoreFailure], но не в `CoreErrors`: файл мог
+     * пропасть после скана, и это не сбой ядра.
+     */
+    fun artwork(path: String): CoreArtwork? = core.quietCall { it.artwork(path)?.toApp() }
 
     /** Ключи сортировки названий — тот же порядок, что у списков ядра. */
     fun sortKeys(texts: List<String>): List<String> = core.call { it.sortKeys(texts) }

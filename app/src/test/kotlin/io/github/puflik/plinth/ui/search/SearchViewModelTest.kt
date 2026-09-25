@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
@@ -29,7 +30,8 @@ import kotlin.time.Duration.Companion.minutes
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelTest {
     private val dispatcher = StandardTestDispatcher()
-    private val library = CountingRepository(FakeLibraryRepository())
+    private val fake = FakeLibraryRepository()
+    private val library = CountingRepository(fake)
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val viewModel by lazy { SearchViewModel(library, playback) }
@@ -50,7 +52,7 @@ class SearchViewModelTest {
     @Test
     fun `typed text shows at once, results only after a pause`() =
         runTest(dispatcher) {
-            library.upsert(listOf(yesterday, bohemian))
+            fake.upsert(listOf(yesterday, bohemian))
             backgroundScope.launch { viewModel.uiState.collect {} }
 
             viewModel.onQuery("b")
@@ -75,7 +77,7 @@ class SearchViewModelTest {
     @Test
     fun `cleared query shows nothing without asking the library`() =
         runTest(dispatcher) {
-            library.upsert(listOf(yesterday))
+            fake.upsert(listOf(yesterday))
             backgroundScope.launch { viewModel.uiState.collect {} }
             viewModel.onQuery("yes")
             advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
@@ -93,7 +95,7 @@ class SearchViewModelTest {
     @Test
     fun `query without matches is marked as searched`() =
         runTest(dispatcher) {
-            library.upsert(listOf(yesterday))
+            fake.upsert(listOf(yesterday))
             backgroundScope.launch { viewModel.uiState.collect {} }
 
             viewModel.onQuery("zzz")
@@ -107,7 +109,7 @@ class SearchViewModelTest {
     @Test
     fun `tapped result plays the results from it`() =
         runTest(dispatcher) {
-            library.upsert(listOf(yesterday, bohemian))
+            fake.upsert(listOf(yesterday, bohemian))
             backgroundScope.launch { viewModel.uiState.collect {} }
             viewModel.onQuery("e")
             advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
@@ -140,12 +142,11 @@ class SearchViewModelTest {
         title: String,
         artist: String,
     ) = LibraryTrack(
-        id = id,
-        uri = "content://media/external/audio/media/$id",
+        id = TrackId("track-$id"),
+        uri = "/storage/emulated/0/Music/track-$id.mp3",
         title = title,
         artist = artist,
         duration = 3.minutes,
         folder = "Music/",
-        modifiedAt = 0,
     )
 }

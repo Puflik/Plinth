@@ -53,7 +53,7 @@ data class LibraryUiState(
     val tracks: List<LibraryTrack> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
-    val folder: LibraryFolder = LibraryFolder.tree(emptyList()),
+    val folder: LibraryFolder = LibraryFolder.EMPTY,
     val loaded: Boolean = false,
     val scannedFolders: List<String> = emptyList(),
     val prompt: OnboardingStep? = null,
@@ -108,7 +108,9 @@ class LibraryViewModel
                 albumSort.flatMapLatest(repository::albums),
                 repository.artists(),
                 folderPath,
-            ) { tracks, albums, artists, path -> Lists(tracks, albums, artists, LibraryFolder.tree(tracks).open(path)) }
+            ) { tracks, albums, artists, path ->
+                Lists(tracks, albums, artists, LibraryFolder.tree(tracks, repository::sortKeys).open(path))
+            }
 
         private val setup: Flow<Setup> =
             combine(folderSettings.folders, onboarding.record) { folders, record ->

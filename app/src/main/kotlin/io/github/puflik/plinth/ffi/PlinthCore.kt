@@ -3,6 +3,10 @@ package io.github.puflik.plinth.ffi
 import io.github.puflik.plinth.diagnostics.log.LogLevel
 import io.github.puflik.plinth.ffi.generated.Core
 import io.github.puflik.plinth.ffi.generated.CoreException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.io.File
 import io.github.puflik.plinth.ffi.generated.panicForTest as corePanicForTest
 import io.github.puflik.plinth.ffi.generated.start as coreStart
@@ -19,6 +23,8 @@ import io.github.puflik.plinth.ffi.generated.start as coreStart
  *
  * Отказ ядра приходит исключением [CoreFailure]. Отказ вызова API к тому же
  * уходит в [errors] — дальше `ErrorPresenter` решает, говорить ли человеку.
+ *
+ * Изменения каталога видны в [catalogChanges]: по нему списки перечитывают ядро.
  */
 class PlinthCore(
     private val logLevel: LogLevel,
@@ -33,9 +39,17 @@ class PlinthCore(
             Core.open(dataDir.path)
         }
 
+    private val changes = MutableStateFlow(0L)
+
     val library = CoreLibrary(this)
     val journal = CoreJournal(this)
     val scan = CoreScan(this)
+
+    /**
+     * Сигнал «каталог изменился» (D3b) — счётчик. Его двигают запись каждой
+     * пачки скана и конец скана: экраны видят музыку, не дожидаясь конца.
+     */
+    val catalogChanges: StateFlow<Long> = changes.asStateFlow()
 
     /** Запускает ядро — логгер и хук паники, — если оно ещё не запущено. */
     @Throws(CoreFailure::class)
@@ -58,10 +72,36 @@ class PlinthCore(
         }
     }
 
+    /**
+     * Кладёт [files] в каталог новыми треками — как их записал бы скан, без
+     * чтения файлов. Для контракта фонотеки на эмуляторе.
+     */
+    @Throws(CoreFailure::class)
+    fun seedForTest(files: List<CoreTestFile>) {
+        call { core -> core.seedForTest(files.map(CoreTestFile::toRust)) }
+        catalogChanged()
+    }
+
+    /** Файлы [paths] пропали — их треки скрываются отовсюду, как после скана. */
+    @Throws(CoreFailure::class)
+    fun hideForTest(paths: List<String>) {
+        call { it.hideForTest(paths) }
+        catalogChanged()
+    }
+
     /** Закрывает ядро и снимает замок с его файлов; после этого фасад не используют. */
     override fun close() {
         if (opened.isInitialized()) opened.value.close()
     }
+
+    /** Каталог изменился — списки перечитают ядро. */
+    internal fun catalogChanged() = changes.update { it + 1 }
+
+    /**
+     * Вызов API, отказ которого — не сбой ядра, а свойство данных (файл
+     * пропал после скана): исключением, но не в [errors].
+     */
+    internal fun <T> quietCall(block: (Core) -> T): T = mapped { block(opened.value) }
 
     /** Вызов API: отказ — исключением и в поток [errors]. */
     internal fun <T> call(block: (Core) -> T): T =

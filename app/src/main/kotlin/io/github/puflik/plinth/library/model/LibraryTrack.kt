@@ -1,24 +1,27 @@
 package io.github.puflik.plinth.library.model
 
+import io.github.puflik.plinth.ffi.TrackId
 import kotlin.time.Duration
 
 /**
- * Трек фонотеки v0.1 (C3) — то, что сканер узнал о файле из `MediaStore`.
+ * Трек фонотеки (C3, D3b) — строка списка, какой её отдаёт хранилище.
  *
- * Упрощённая модель: в v0.2 её сменит `Track/Version/Source` ядра на Rust.
  * Типов Android здесь нет — адрес файла хранится строкой, как в `AudioSource`.
  *
- * @property id идентификатор `MediaStore` (`_ID`): по нему сканер узнаёт файл
- *   при следующем обходе.
- * @property uri `content://` файла — из него собирается `AudioSource.LocalFile`.
+ * @property id трек ядра — тот, на который ссылаются лайки, плейлисты и
+ *   история. Пока фонотеку читает Room (до D3c) — `_ID` из `MediaStore` строкой.
+ * @property uri путь к файлу — из него собирается `AudioSource.LocalFile`.
+ *   Пока фонотеку читает Room — `content://` файла.
  * @property title название; без тега — имя файла, пустым не бывает.
+ * @property albumArtist исполнитель альбома; `null` — трек не на альбоме или
+ *   у альбома нет исполнителя.
  * @property discNumber номер диска с единицы; `null` — тега нет.
  * @property trackNumber номер трека на диске с единицы; `null` — тега нет.
+ * @property duration длительность; `null` — неизвестна.
  * @property folder папка от корня хранилища: `Music/Queen/`.
- * @property modifiedAt время изменения файла, секунды эпохи — как `DATE_MODIFIED`.
  */
 data class LibraryTrack(
-    val id: Long,
+    val id: TrackId,
     val uri: String,
     val title: String,
     val artist: String? = null,
@@ -26,9 +29,8 @@ data class LibraryTrack(
     val albumArtist: String? = null,
     val discNumber: Int? = null,
     val trackNumber: Int? = null,
-    val duration: Duration,
+    val duration: Duration?,
     val folder: String,
-    val modifiedAt: Long,
 ) {
     init {
         require(uri.isNotBlank()) { "uri трека не может быть пустым" }

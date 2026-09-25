@@ -2,6 +2,7 @@ package io.github.puflik.plinth.ffi
 
 import kotlin.time.Duration
 import kotlin.time.Instant
+import io.github.puflik.plinth.ffi.generated.TestFile as RustTestFile
 
 // Типы API ядра для остального приложения (A3). Сгенерированные UniFFI
 // типы за пределы пакета `ffi` не выходят (ADR 0010, `FfiBoundaryTest`):
@@ -121,6 +122,38 @@ class CoreArtwork(
     val mime: String?,
     val data: ByteArray,
 )
+
+/**
+ * Файл с тегами для `PlinthCore.seedForTest` — как его прочёл бы скан.
+ *
+ * @property uri путь к файлу: по нему трек играет и по нему скрывается.
+ * @property title `null` или пусто — название из имени файла.
+ * @property artist строка исполнителя; на артистов её делит ядро.
+ */
+data class CoreTestFile(
+    val uri: String,
+    val folder: String,
+    val title: String? = null,
+    val artist: String? = null,
+    val album: String? = null,
+    val albumArtist: String? = null,
+    val disc: Int? = null,
+    val number: Int? = null,
+    val duration: Duration? = null,
+) {
+    internal fun toRust() =
+        RustTestFile(
+            uri = uri,
+            folder = folder,
+            title = title,
+            artist = artist,
+            album = album,
+            albumArtist = albumArtist,
+            disc = disc?.toUInt(),
+            number = number?.toUInt(),
+            durationMs = duration?.inWholeMilliseconds?.toULong(),
+        )
+}
 
 /** Лайк, оценка (1–5) и счётчики трека; не слушали и не оценивали — пустые. */
 data class TrackUserData(

@@ -5,3 +5,4 @@
 mod journal_api;
 mod library_api;
 mod scan_api;
+mod test_api;

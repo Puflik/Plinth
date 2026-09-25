@@ -6,7 +6,7 @@
 use plinth_types::{ArtistId, CoreError};
 use rusqlite::Row;
 
-use super::{ON_ALBUM, PLAYABLE, TrackRow};
+use super::{BY_ALBUM, ON_ALBUM, PLAYABLE, TrackRow};
 use crate::db::Database;
 use crate::db::sql::{Storage, id};
 use crate::text::normalize;
@@ -43,7 +43,7 @@ impl Database {
         let filter = "WHERE t.id IN (SELECT ta.track FROM track_artist ta
                                      JOIN artist ar ON ar.id = ta.artist
                                      WHERE ar.name_normalized = ?1)";
-        let order = format!("a.id IS NULL, a.title_sort, a.artist_sort, a.id, {ON_ALBUM}");
+        let order = format!("{BY_ALBUM}, {ON_ALBUM}");
         self.track_rows(filter, [normalize(name)], &order)
     }
 }

@@ -1,9 +1,11 @@
 package io.github.puflik.plinth.audio.media3
 
+import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.TrackInfo
+import java.io.File
 
 /**
  * `AudioSource` → `MediaItem` (B2.2).
@@ -12,6 +14,10 @@ import io.github.puflik.plinth.audio.engine.TrackInfo
  * логах и событиях плеера. Подписи [TrackInfo] становятся `mediaMetadata`
  * элемента — их видит сессия, а значит, уведомление и экран блокировки.
  * ExoPlayer ставит их выше тегов файла, а пустые поля добирает из тегов.
+ *
+ * Путь к файлу без схемы (фонотека ядра, D3b) становится `file://` через
+ * [Uri.fromFile]: прочитанный как адрес, он потерял бы имя после `#` или `?`,
+ * а `%` принял бы за экранирование.
  */
 internal object MediaItemMapper {
     /**
@@ -25,18 +31,20 @@ internal object MediaItemMapper {
         info: TrackInfo? = null,
     ): MediaItem =
         when (source) {
-            is AudioSource.LocalFile -> item(source.key, source.uri, info)
+            is AudioSource.LocalFile -> item(source.key, local(source.uri), info)
             is AudioSource.Remote -> {
                 if (source.headers.isNotEmpty()) {
                     throw UnsupportedOperationException("заголовки потока пока не поддержаны: ${source.headers.keys}")
                 }
-                item(source.key, source.url, info)
+                item(source.key, Uri.parse(source.url), info)
             }
         }
 
+    private fun local(uri: String): Uri = if (uri.startsWith('/')) Uri.fromFile(File(uri)) else Uri.parse(uri)
+
     private fun item(
         id: String,
-        uri: String,
+        uri: Uri,
         info: TrackInfo?,
     ): MediaItem =
         MediaItem

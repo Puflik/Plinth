@@ -16,6 +16,16 @@ class MediaItemMapperTest {
         assertThat(item.localConfiguration?.uri?.toString()).isEqualTo(SAF_URI)
     }
 
+    /** Путь фонотеки ядра (D3b) — файл, а не адрес: `#`, `?` и `%` — часть имени. */
+    @Test
+    fun local_path_becomes_a_file_uri_with_the_whole_name() {
+        val item = MediaItemMapper.map(AudioSource.LocalFile(PATH))
+
+        assertThat(item.localConfiguration?.uri?.scheme).isEqualTo("file")
+        assertThat(item.localConfiguration?.uri?.path).isEqualTo(PATH)
+        assertThat(item.mediaId).isEqualTo(PATH)
+    }
+
     @Test
     fun source_key_becomes_media_id() {
         val source = AudioSource.LocalFile(SAF_URI)
@@ -59,5 +69,6 @@ class MediaItemMapperTest {
     private companion object {
         const val SAF_URI = "content://com.android.externalstorage.documents/document/primary%3AMusic%2Ftrack.flac"
         const val STREAM_URL = "https://example.org/stream.opus"
+        const val PATH = "/storage/emulated/0/Music/AC/DC #1 ?live 100%.mp3"
     }
 }

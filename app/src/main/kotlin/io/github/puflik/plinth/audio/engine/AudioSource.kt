@@ -14,8 +14,8 @@ sealed interface AudioSource {
     val key: String
 
     /**
-     * Локальный файл: `content://` от SAF или `file://`.
-     * В первой вертикали приходит из `ACTION_OPEN_DOCUMENT`.
+     * Локальный файл: `content://` от SAF, `file://` или путь к файлу —
+     * так трек хранит фонотека ядра (D3b).
      */
     data class LocalFile(
         val uri: String,

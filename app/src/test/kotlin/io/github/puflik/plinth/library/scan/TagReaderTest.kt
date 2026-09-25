@@ -1,7 +1,6 @@
 package io.github.puflik.plinth.library.scan
 
 import com.google.common.truth.Truth.assertThat
-import io.github.puflik.plinth.library.model.LibraryTrack
 import org.junit.Test
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -13,7 +12,7 @@ class TagReaderTest {
 
         assertThat(track)
             .isEqualTo(
-                LibraryTrack(
+                ScannedTrack(
                     id = 7,
                     uri = "content://media/external/audio/media/7",
                     title = "Mustapha",

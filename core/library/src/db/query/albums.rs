@@ -39,7 +39,7 @@ impl Database {
     /// Альбомы, на которых есть видимые треки.
     pub fn album_list(&self, sort: AlbumSort) -> Result<Vec<AlbumRow>, CoreError> {
         let order = match sort {
-            AlbumSort::Title => "a.title_sort, a.artist_sort, a.id",
+            AlbumSort::Title => "a.title_sort, a.artist_credit = '', a.artist_sort, a.id",
             AlbumSort::Artist => "a.artist_credit = '', a.artist_sort, a.title_sort, a.id",
         };
         self.album_rows("", [], order)
@@ -52,7 +52,7 @@ impl Database {
                                      JOIN track_artist ta ON ta.track = w.track
                                      JOIN artist ar ON ar.id = ta.artist
                                      WHERE ar.name_normalized = ?1)";
-        self.album_rows(filter, [normalize(name)], "a.title_sort, a.artist_sort, a.id")
+        self.album_rows(filter, [normalize(name)], "a.title_sort, a.artist_credit = '', a.artist_sort, a.id")
     }
 
     /// Альбом с названием `title` и исполнителем `artist` (`None` —
@@ -67,7 +67,7 @@ impl Database {
             "WITH visible AS ({VISIBLE} {PLAYABLE})
              SELECT a.id, a.title, nullif(a.artist_credit, '') AS artist_credit, count(*) AS track_count,
                     (SELECT w.uri FROM visible w WHERE w.album = a.id
-                     ORDER BY w.disc IS NULL, w.disc, w.number IS NULL, w.number, w.title_sort, w.track
+                     ORDER BY w.disc IS NOT NULL, w.disc, w.number IS NULL, w.number, w.title_sort, w.track
                      LIMIT 1) AS cover_uri
              FROM album a JOIN visible vt ON vt.album = a.id
              {filter}
@@ -92,7 +92,7 @@ fn read_album_row(row: &Row<'_>) -> rusqlite::Result<AlbumRow> {
 #[cfg(test)]
 mod tests {
     use super::AlbumSort;
-    use crate::db::query::testing::library;
+    use crate::db::query::testing::{Library, library};
 
     #[test]
     fn albums_by_title_with_counts_and_covers() {
@@ -122,6 +122,38 @@ mod tests {
         let titles: Vec<String> = lib.db.album_list(AlbumSort::Artist).unwrap().into_iter().map(|a| a.title).collect();
 
         assert_eq!(titles, ["Abbey Road", "Pablo Honey", "Now 99"]);
+    }
+
+    /// Одноимённые альбомы — по исполнителю; без исполнителя — в конце, как в
+    /// списке по исполнителю.
+    #[test]
+    fn same_titled_albums_put_the_unknown_artist_last() {
+        let mut lib = Library::new();
+        let zz = lib.artist("Zz");
+        let (nobody, theirs) = (lib.album("Bootleg", "", &[]), lib.album("Bootleg", "Zz", &[zz]));
+        lib.track("a", "", &[], Some((nobody, None, None)), true);
+        lib.track("b", "Zz", &[zz], Some((theirs, None, None)), true);
+
+        let owners: Vec<Option<String>> =
+            lib.db.album_list(AlbumSort::Title).unwrap().into_iter().map(|a| a.artist_credit).collect();
+
+        assert_eq!(owners, [Some("Zz".to_owned()), None]);
+    }
+
+    /// Диск без номера — первым: у однодисковых альбомов тега диска обычно нет.
+    /// Обложка — от первого трека в этом же порядке.
+    #[test]
+    fn a_disc_without_number_goes_first_and_gives_the_cover() {
+        let mut lib = Library::new();
+        let album = lib.album("Mellon Collie", "", &[]);
+        lib.track("d1-t1", "", &[], Some((album, Some(1), Some(1))), true);
+        lib.track("none-t5", "", &[], Some((album, None, Some(5))), true);
+
+        let row = lib.db.album_list(AlbumSort::Title).unwrap().remove(0);
+        let tracks: Vec<String> = lib.db.album_tracks(row.id).unwrap().into_iter().map(|t| t.title).collect();
+
+        assert_eq!(tracks, ["none-t5", "d1-t1"]);
+        assert_eq!(row.cover_uri.as_deref(), Some("/storage/emulated/0/Music/none-t5.mp3"));
     }
 
     /// Альбом, все треки которого пропали, скрыт.

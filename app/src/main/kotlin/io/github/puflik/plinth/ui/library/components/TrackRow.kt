@@ -22,7 +22,8 @@ import io.github.puflik.plinth.ui.common.formatTime
 import io.github.puflik.plinth.ui.library.TrackAction
 
 /**
- * Строка трека (C4.2): название, исполнитель и альбом, длительность.
+ * Строка трека (C4.2): название, исполнитель и альбом, длительность — если
+ * она известна.
  * Одна на все списки — треки, папки, альбом, поиск. Касание — играть список
  * с этого трека, долгое нажатие — меню очереди (D1.2).
  */
@@ -44,7 +45,7 @@ fun TrackRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             },
-            trailingContent = { Text(formatTime(track.duration)) },
+            trailingContent = track.duration?.let { duration -> { Text(formatTime(duration)) } },
             modifier =
                 Modifier.combinedClickable(
                     onClick = { onAction(TrackAction.PLAY) },

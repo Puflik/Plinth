@@ -18,7 +18,6 @@ import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.RoomLibraryRepository
 import io.github.puflik.plinth.library.db.PlinthDatabase
-import io.github.puflik.plinth.library.db.dao.TrackDao
 import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.library.scan.DataStoreFolderSettings
 import io.github.puflik.plinth.library.scan.LibraryScanner
@@ -60,19 +59,20 @@ object LibraryModule {
     @Provides
     fun provideFolderSettings(store: DataStore<Preferences>): FolderSettings = DataStoreFolderSettings(store)
 
-    @Provides
-    fun provideTrackDao(database: PlinthDatabase): TrackDao = database.trackDao()
-
     /** Артикли по умолчанию; настраиваемый список придёт вместе с экраном настроек. */
     @Provides
     fun provideSortKeys(): SortKeys = SortKeys()
 
+    /** До D3c экраны читают Room, а сканер `MediaStore` пишет в неё же; в D3c их сменит ядро. */
     @Provides
     @Singleton
-    fun provideLibraryRepository(
-        dao: TrackDao,
+    fun provideRoomLibrary(
+        database: PlinthDatabase,
         keys: SortKeys,
-    ): LibraryRepository = RoomLibraryRepository(dao, keys)
+    ): RoomLibraryRepository = RoomLibraryRepository(database.trackDao(), keys)
+
+    @Provides
+    fun provideLibraryRepository(room: RoomLibraryRepository): LibraryRepository = room
 
     @Provides
     fun provideScanSource(
@@ -84,8 +84,8 @@ object LibraryModule {
     fun provideLibraryScanner(
         @ApplicationContext context: Context,
         source: ScanSource,
-        repository: LibraryRepository,
-    ): LibraryScanner = LibraryScanner(source, repository, canRead = { MediaPermission.isGranted(context) })
+        room: RoomLibraryRepository,
+    ): LibraryScanner = LibraryScanner(source, room, canRead = { MediaPermission.isGranted(context) })
 
     /** Конфигурацию WorkManager даёт `PlinthApplication`: воркеры строит Hilt. */
     @Provides

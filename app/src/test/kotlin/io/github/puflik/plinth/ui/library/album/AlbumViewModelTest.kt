@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
@@ -103,14 +104,13 @@ class AlbumViewModelTest {
         artist: String?,
         number: Int,
     ) = LibraryTrack(
-        id = id,
-        uri = "content://media/external/audio/media/$id",
+        id = TrackId("track-$id"),
+        uri = "/storage/emulated/0/Music/track-$id.mp3",
         title = title,
         artist = artist,
         album = album,
         trackNumber = number,
         duration = 3.minutes,
         folder = "Music/",
-        modifiedAt = 0,
     )
 }

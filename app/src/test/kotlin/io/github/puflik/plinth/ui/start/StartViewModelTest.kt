@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.ui.start
 
 import com.google.common.truth.Truth.assertThat
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.settings.FakeStartSettings
@@ -98,13 +99,12 @@ class StartViewModelTest {
 
     private fun track() =
         LibraryTrack(
-            id = 1,
-            uri = "content://media/external/audio/media/1",
+            id = TrackId("track-1"),
+            uri = "/storage/emulated/0/Music/track-1.mp3",
             title = "Yesterday",
             artist = "The Beatles",
             album = "Help!",
             duration = 2.minutes,
             folder = "Music/",
-            modifiedAt = 0,
         )
 }

@@ -1,6 +1,5 @@
 package io.github.puflik.plinth.library.scan
 
-import io.github.puflik.plinth.library.model.LibraryTrack
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -18,9 +17,9 @@ object TagReader {
     private const val UNKNOWN = "<unknown>"
     private const val DISC_FACTOR = 1000
 
-    fun read(row: MediaStoreRow): LibraryTrack {
+    fun read(row: MediaStoreRow): ScannedTrack {
         val track = row.track?.takeIf { it > 0 }
-        return LibraryTrack(
+        return ScannedTrack(
             id = row.id,
             uri = row.uri,
             title = tag(row.title) ?: fileTitle(row.displayName) ?: row.id.toString(),

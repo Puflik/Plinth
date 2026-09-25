@@ -17,7 +17,7 @@ use crate::session::Core;
 impl Core {
     /// Треки в порядке `sort`; `search` — каждое слово есть в названии,
     /// исполнителе, альбоме или исполнителе альбома, без учёта регистра,
-    /// диакритики и знаков.
+    /// диакритики и знаков. Запрос без слов ничего не находит.
     pub fn tracks(&self, sort: TrackSort, search: Option<String>) -> Result<Vec<TrackRow>, CoreError> {
         panic::guard(|| self.with(|state| state.db.track_list(sort, search.as_deref())))
     }

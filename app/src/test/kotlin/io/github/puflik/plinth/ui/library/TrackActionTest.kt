@@ -2,6 +2,7 @@ package io.github.puflik.plinth.ui.library
 
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.model.LibraryTrack
 import org.junit.Test
 import kotlin.time.Duration.Companion.minutes
@@ -12,15 +13,14 @@ class TrackActionTest {
     fun `queue item keeps titles and the album owner`() {
         val track =
             LibraryTrack(
-                id = 1,
-                uri = "content://media/external/audio/media/1",
+                id = TrackId("track-1"),
+                uri = "/storage/emulated/0/Music/track-1.mp3",
                 title = "Bicycle Race",
                 artist = "Queen",
                 album = "Now 1",
                 albumArtist = "Various Artists",
                 duration = 3.minutes,
                 folder = "Music/",
-                modifiedAt = 1,
             )
 
         val item = track.toQueueItem()

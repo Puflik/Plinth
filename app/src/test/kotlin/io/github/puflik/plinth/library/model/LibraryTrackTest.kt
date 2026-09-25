@@ -1,8 +1,10 @@
 package io.github.puflik.plinth.library.model
 
 import com.google.common.truth.Truth.assertThat
+import io.github.puflik.plinth.ffi.TrackId
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 class LibraryTrackTest {
@@ -35,15 +37,22 @@ class LibraryTrackTest {
         assertThrows(IllegalArgumentException::class.java) { track(trackNumber = 0) }
     }
 
+    /** Длительность знают не все форматы без чтения файла целиком. */
+    @Test
+    fun `duration may be unknown`() {
+        assertThat(track(duration = null).duration).isNull()
+    }
+
     private fun track(
-        uri: String = "content://media/external/audio/media/1",
+        uri: String = "/storage/emulated/0/Music/Queen/Bohemian Rhapsody.flac",
         title: String = "Bohemian Rhapsody",
         artist: String? = null,
         albumArtist: String? = null,
         discNumber: Int? = null,
         trackNumber: Int? = null,
+        duration: Duration? = 6.minutes,
     ) = LibraryTrack(
-        id = 1,
+        id = TrackId("0192f4a0-0000-7000-8000-000000000001"),
         uri = uri,
         title = title,
         artist = artist,
@@ -51,8 +60,7 @@ class LibraryTrackTest {
         albumArtist = albumArtist,
         discNumber = discNumber,
         trackNumber = trackNumber,
-        duration = 6.minutes,
+        duration = duration,
         folder = "Music/Queen/",
-        modifiedAt = 0,
     )
 }

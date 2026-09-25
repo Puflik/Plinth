@@ -5,6 +5,8 @@ import io.github.puflik.plinth.library.db.entity.TrackEntity
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.library.scan.ScanStore
+import io.github.puflik.plinth.library.scan.ScannedTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.SearchQuery
 import io.github.puflik.plinth.library.sort.SortKeys
@@ -14,17 +16,18 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
- * Фонотека на Room (C3.3) — реализация фасада для v0.1.
+ * Фонотека на Room (C3.3) — реализация фасада для v0.1 и хранилище её
+ * сканера ([ScanStore]). Уходит в D3c, когда экраны переключатся на ядро.
  *
  * Сортирует и группирует SQLite; здесь только выбор запроса и перевод строк
- * в модель. Ключи сортировки считаются при записи — поэтому [keys] нужны
- * только [upsert]. Требования — `LibraryRepositoryContractTest`, тот же, что
- * проходит `FakeLibraryRepository`.
+ * в модель. Ключи сортировки считаются при записи. Общий контракт фасада
+ * Room не проходит: исполнителей не делит, поиск замечает знаки.
  */
 class RoomLibraryRepository(
     private val dao: TrackDao,
     private val keys: SortKeys,
-) : LibraryRepository {
+) : LibraryRepository,
+    ScanStore {
     override fun tracks(sort: TrackSort): Flow<List<LibraryTrack>> =
         when (sort) {
             TrackSort.TITLE -> dao.tracksByTitle()
@@ -60,7 +63,9 @@ class RoomLibraryRepository(
     override suspend fun knownVersions(): Map<Long, Long> =
         dao.knownVersions().associate { it.mediaStoreId to it.modifiedAt }
 
-    override suspend fun upsert(tracks: Collection<LibraryTrack>) {
+    override suspend fun sortKeys(names: List<String>): List<String> = names.map(keys::of)
+
+    override suspend fun upsert(tracks: Collection<ScannedTrack>) {
         dao.upsert(tracks.map { TrackEntity.of(it, keys) })
     }
 

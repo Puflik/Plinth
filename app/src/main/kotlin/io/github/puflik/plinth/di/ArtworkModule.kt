@@ -9,13 +9,17 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.puflik.plinth.artwork.ArtworkCache
 import io.github.puflik.plinth.artwork.ArtworkLoader
+import io.github.puflik.plinth.artwork.RoutedArtworkSource
+import io.github.puflik.plinth.artwork.embedded.CoreArtworkSource
 import io.github.puflik.plinth.artwork.embedded.EmbeddedArtworkSource
+import io.github.puflik.plinth.ffi.PlinthCore
 import kotlinx.coroutines.CoroutineDispatcher
 import javax.inject.Singleton
 
 /**
  * Обложки (E2): один загрузчик и один кэш на процесс — иначе каждый экран
- * разбирал бы одни и те же файлы заново.
+ * разбирал бы одни и те же файлы заново. Файлы фонотеки ядра (пути)
+ * разбирает ядро, `content://` — система (D3b).
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -24,10 +28,15 @@ object ArtworkModule {
     @Singleton
     fun provideArtworkLoader(
         @ApplicationContext context: Context,
+        core: PlinthCore,
         @IoDispatcher io: CoroutineDispatcher,
     ): ArtworkLoader<ImageBitmap> =
         ArtworkLoader(
-            source = EmbeddedArtworkSource(context, io),
+            source =
+                RoutedArtworkSource(
+                    paths = CoreArtworkSource(core, io),
+                    uris = EmbeddedArtworkSource(context, io),
+                ),
             cache = ArtworkCache(Runtime.getRuntime().maxMemory() / CACHE_SHARE, EmbeddedArtworkSource::bytesOf),
         )
 
