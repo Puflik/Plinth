@@ -14,6 +14,13 @@ use uuid::Uuid;
 
 use crate::CoreError;
 
+/// Общее у всех идентификаторов сущностей: 16 байт UUID. По нему хранилище
+/// читает и пишет любой из них одним кодом.
+pub trait EntityId: Copy {
+    fn from_bytes(bytes: [u8; 16]) -> Self;
+    fn as_bytes(&self) -> &[u8; 16];
+}
+
 macro_rules! ids {
     ($($(#[$doc:meta])* $name:ident),+ $(,)?) => {$(
         $(#[$doc])*
@@ -27,12 +34,15 @@ macro_rules! ids {
                 Self(Uuid::now_v7())
             }
 
-            /// Из 16 байт — так идентификатор лежит в SQLite (BLOB).
-            pub fn from_bytes(bytes: [u8; 16]) -> Self {
+        }
+
+        /// 16 байт — так идентификатор лежит в SQLite (BLOB).
+        impl EntityId for $name {
+            fn from_bytes(bytes: [u8; 16]) -> Self {
                 Self(Uuid::from_bytes(bytes))
             }
 
-            pub fn as_bytes(&self) -> &[u8; 16] {
+            fn as_bytes(&self) -> &[u8; 16] {
                 self.0.as_bytes()
             }
         }
@@ -94,7 +104,7 @@ impl FromStr for Mbid {
 
 #[cfg(test)]
 mod tests {
-    use super::{Mbid, PlaylistEntryId, TrackId};
+    use super::{EntityId, Mbid, PlaylistEntryId, TrackId};
     use crate::CoreError;
 
     #[test]

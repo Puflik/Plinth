@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 plinth-types.workspace = true
+rusqlite.workspace = true
+unicode-normalization.workspace = true
 
 [lints]
 workspace = true

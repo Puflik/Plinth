@@ -22,6 +22,9 @@ uniffi = "0.32.2"
 log = "0.4.34"
 thiserror = "2.0.21"
 uuid = { version = "1.26.1", features = ["v7"] }
+# SQLite из исходников (B2): системную библиотеку Android из NDK не слинковать.
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+unicode-normalization = "0.1.25"
 # Позиция в плейлисте (B1.3): serde не нужен — формат задаём сами.
 fractional_index = { version = "2.0.2", default-features = false }
 
