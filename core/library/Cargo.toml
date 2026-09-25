@@ -1,0 +1,14 @@
+# Модель библиотеки (B1); дальше — SQLite, миграции, сканер (B2, B3, D).
+[package]
+name = "plinth-library"
+description = "Модель и хранилище библиотеки Plinth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+plinth-types.workspace = true
+
+[lints]
+workspace = true

@@ -1,12 +1,13 @@
 # Rust-ядро Plinth (A1.1). Крейты:
 #   types           — общие типы и ошибки, не зависит ни от одного крейта ядра
+#   library         — модель библиотеки: Track / Version / Source и остальное (B1)
 #   ffi             — граница с Kotlin (UniFFI), единственный cdylib
 #   uniffi-bindgen  — генератор Kotlin-биндингов, запускается на машине сборки
 # Как собрать — docs/BUILD.md, что пересекает границу — docs/adr/0010-ffi-boundary.md.
 
 [workspace]
 resolver = "3"
-members = ["types", "ffi", "uniffi-bindgen"]
+members = ["types", "library", "ffi", "uniffi-bindgen"]
 
 [workspace.package]
 # Версия ядра идёт вместе с версией приложения, в котором ядро появилось.
@@ -20,6 +21,9 @@ plinth-types = { path = "types" }
 uniffi = "0.32.2"
 log = "0.4.34"
 thiserror = "2.0.21"
+uuid = { version = "1.26.1", features = ["v7"] }
+# Позиция в плейлисте (B1.3): serde не нужен — формат задаём сами.
+fractional_index = { version = "2.0.2", default-features = false }
 
 # Ни одна функция, видимая из Kotlin, не паникует (A3.3): unwrap, expect и
 # panic! в коде ядра — ошибка CI (`clippy -D warnings`). В тестах можно —
