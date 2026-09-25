@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.ui.settings
 
 import android.app.LocaleManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -21,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.diagnostics.log.AppLog
 import io.github.puflik.plinth.settings.AppLanguage
 
 /**
@@ -64,12 +66,24 @@ internal fun LazyListScope.languageChoice(
     }
 }
 
-/** Системный экран «Язык приложения» для Plinth (Android 13+). */
+/**
+ * Системный экран «Язык приложения» для Plinth (Android 13+). На прошивках без
+ * него (ревью №8) — сведения о приложении, где язык бывает; нет и их — ничего.
+ */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 internal fun openLanguageSettings(context: Context) {
-    context.startActivity(
-        Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.fromParts("package", context.packageName, null)),
-    )
+    val app = Uri.fromParts("package", context.packageName, null)
+    val screens = listOf(Settings.ACTION_APP_LOCALE_SETTINGS, Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+    val opened =
+        screens.any { action ->
+            try {
+                context.startActivity(Intent(action, app))
+                true
+            } catch (expected: ActivityNotFoundException) {
+                false
+            }
+        }
+    if (!opened) AppLog.w("Settings", "no screen to choose the app language")
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -221,24 +220,13 @@ private fun PlayerCore(
     controls: PlayerControls,
     panels: PanelControls,
     onOpenArtist: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    PlayerFrame(
+        frame = { size -> PanelArea(panels = panels, state = state, frame = size.clip(RoundedCornerShape(12.dp))) },
+        dots = { PanelDots(selected = panels.panel, onSelect = panels.onPanel) },
+        modifier = modifier,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            PanelArea(
-                panels = panels,
-                state = state,
-                frame =
-                    Modifier
-                        .fillMaxWidth(ARTWORK_WIDTH)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp)),
-            )
-            PanelDots(selected = panels.panel, onSelect = panels.onPanel)
-        }
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = state.title ?: stringResource(R.string.player_nothing_open),
@@ -391,5 +379,4 @@ private val PlaybackError.messageRes: Int
         }
 
 private const val NO_TIME = "--:--"
-private const val ARTWORK_WIDTH = 0.8f
 private val PLAY_SIZE = 64.dp

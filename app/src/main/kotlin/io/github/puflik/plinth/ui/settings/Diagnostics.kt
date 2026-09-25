@@ -20,11 +20,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.ui.common.rememberSafeUriHandler
 import kotlinx.coroutines.launch
 
 /**
@@ -39,7 +39,7 @@ fun CrashReportOffer(
 ) {
     val hasCrash by viewModel.hasCrash.collectAsState()
     val scope = rememberCoroutineScope()
-    val uriHandler = LocalUriHandler.current
+    val uriHandler = rememberSafeUriHandler()
     val saved = stringResource(R.string.report_saved)
     val failed = stringResource(R.string.report_save_failed)
     val toGitHub = stringResource(R.string.report_on_github)
@@ -57,7 +57,8 @@ fun CrashReportOffer(
         }
     if (hasCrash) {
         AlertDialog(
-            onDismissRequest = viewModel::dismissCrash,
+            // Касание мимо и «Назад» — не отказ: отчёт остаётся (ревью №14). Отказ — только «Не сейчас».
+            onDismissRequest = viewModel::closeCrashOffer,
             title = { Text(stringResource(R.string.crash_title)) },
             text = { Text(stringResource(R.string.crash_text)) },
             confirmButton = { TextButton(onClick = save) { Text(stringResource(R.string.crash_save)) } },

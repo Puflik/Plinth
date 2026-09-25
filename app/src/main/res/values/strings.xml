@@ -22,6 +22,7 @@
     <string name="library_permission_allow">Allow access</string>
     <string name="library_permission_denied">Access to music is turned off. Turn it on in the app settings to see your library.</string>
     <string name="library_permission_open_settings">Open settings</string>
+    <string name="library_permission_ask_again">Ask again</string>
     <string name="library_scanning">Scanning your music…</string>
     <string name="library_scan_progress">Scanning your music: %1$d of %2$d</string>
     <plurals name="library_found">
@@ -39,6 +40,7 @@
     <string name="library_next_title">What’s next</string>
     <string name="library_next_text">Online search arrives in version 0.2: music beyond this device, right in Plinth.</string>
     <string name="library_next_releases">Releases on GitHub</string>
+    <string name="link_no_app">No app on this phone can open the link</string>
 
     <string name="action_back">Back</string>
     <string name="library_sort">Sort</string>

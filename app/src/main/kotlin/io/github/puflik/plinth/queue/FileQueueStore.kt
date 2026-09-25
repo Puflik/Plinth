@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.queue
 
 import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.diagnostics.log.AppLog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -60,21 +61,20 @@ class FileQueueStore(
             }
         }
 
-    override suspend fun saveQueue(queue: PlaybackQueue) =
+    override suspend fun saveQueue(queue: PlaybackQueue) {
         exclusive {
-            write(queueFile) { writeQueue(queue) }
-            write(positionFile) { writeLong(0) }
+            // Очередь не записалась — прежняя остаётся вместе со своей позицией.
+            if (write(queueFile) { writeQueue(queue) }) write(positionFile) { writeLong(0) }
         }
+    }
 
-    override suspend fun savePosition(position: Duration) =
-        exclusive {
-            write(positionFile) { writeLong(position.inWholeMilliseconds) }
-        }
+    override suspend fun savePosition(position: Duration) {
+        exclusive { write(positionFile) { writeLong(position.inWholeMilliseconds) } }
+    }
 
-    override suspend fun savePlayedAt(at: Instant) =
-        exclusive {
-            write(playedFile) { writeLong(at.toEpochMilliseconds()) }
-        }
+    override suspend fun savePlayedAt(at: Instant) {
+        exclusive { write(playedFile) { writeLong(at.toEpochMilliseconds()) } }
+    }
 
     /** Время последней игры; не читается — неизвестно, но очередь из-за него не теряется. */
     private fun readPlayedAt(): Instant? =
@@ -90,18 +90,28 @@ class FileQueueStore(
 
     private suspend fun <T> exclusive(block: () -> T): T = lock.withLock { withContext(io) { block() } }
 
+    /**
+     * Запись с заменой файла; `false` — не вышло. Нет места или доступа —
+     * не повод ронять процесс (план 17.6): прежний файл цел, приложение
+     * играет дальше, в лог — предупреждение.
+     */
     private fun write(
         file: File,
         block: DataOutputStream.() -> Unit,
-    ) {
-        directory.mkdirs()
-        val temporary = File(directory, "${file.name}.tmp")
-        DataOutputStream(temporary.outputStream().buffered()).use(block)
-        if (!temporary.renameTo(file)) {
-            file.delete()
-            check(temporary.renameTo(file)) { "не удалось заменить $file" }
+    ): Boolean =
+        try {
+            directory.mkdirs()
+            val temporary = File(directory, "${file.name}.tmp")
+            DataOutputStream(temporary.outputStream().buffered()).use(block)
+            if (!temporary.renameTo(file)) {
+                file.delete()
+                if (!temporary.renameTo(file)) throw IOException("не удалось заменить ${file.name}")
+            }
+            true
+        } catch (e: IOException) {
+            AppLog.w(TAG, "${file.name} not saved", e)
+            false
         }
-    }
 
     private fun DataOutputStream.writeQueue(queue: PlaybackQueue) {
         writeInt(VERSION)
@@ -222,5 +232,6 @@ class FileQueueStore(
         const val VERSION = 2
         const val NO_CONTEXT = "none"
         const val NO_DURATION = -1L
+        const val TAG = "QueueStore"
     }
 }

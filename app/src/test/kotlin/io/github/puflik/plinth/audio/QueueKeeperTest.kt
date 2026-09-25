@@ -5,6 +5,7 @@ import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.queue.PlaybackQueue
+import io.github.puflik.plinth.queue.QueueAction
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.QueueStore
@@ -92,6 +93,38 @@ class QueueKeeperTest {
             controller.seekTo(12.seconds)
             assertThat(store.saved?.position).isEqualTo(12.seconds)
             assertThat(store.positionWrites).isEqualTo(3)
+        }
+
+    @Test
+    fun `editing the queue on pause keeps the saved second`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (controller, keeper) = keeper()
+            keeper.start()
+            controller.play(QueueContext.Tracks, tracks, start = 0)
+            controller.seekTo(150.seconds)
+            controller.togglePlayPause()
+
+            controller.perform(QueueAction.PLAY_NEXT, tracks[2])
+            controller.toggleShuffle()
+            controller.cycleRepeat()
+            controller.removeUpcoming(0, controller.queue.value.upcoming[0])
+
+            assertThat(store.saved?.queue).isEqualTo(controller.queue.value)
+            assertThat(store.saved?.position).isEqualTo(150.seconds)
+        }
+
+    @Test
+    fun `another track in the queue starts from the beginning`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (controller, keeper) = keeper()
+            keeper.start()
+            controller.play(QueueContext.Tracks, tracks, start = 0)
+            controller.seekTo(150.seconds)
+
+            controller.next()
+
+            assertThat(store.saved?.queue?.current).isEqualTo(tracks[1])
+            assertThat(store.saved?.position).isEqualTo(Duration.ZERO)
         }
 
     @Test

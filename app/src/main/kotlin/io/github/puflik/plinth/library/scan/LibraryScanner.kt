@@ -33,16 +33,23 @@ data class ScanResult(
  * Треки пишутся порциями по [WRITE_CHUNK]: после каждой — отчёт о прогрессе
  * и точка отмены. Отменённый скан оставляет записанное, следующий допишет
  * остальное: записанные порции он уже увидит неизменёнными.
+ *
+ * [canRead] — есть ли доступ к музыке; без него скан не начинается
+ * (`SecurityException`, как при отзыве доступа посреди скана) и хранилище не
+ * трогает.
  */
 class LibraryScanner(
     private val source: ScanSource,
     private val repository: LibraryRepository,
+    private val canRead: () -> Boolean = { true },
 ) {
     /** @param onProgress записано треков и сколько всего записать; первый отчёт — `0` сразу после сверки. */
     suspend fun scan(
         folders: FolderConfig,
         onProgress: suspend (written: Int, total: Int) -> Unit = { _, _ -> },
     ): ScanResult {
+        // Без доступа к музыке MediaStore отдаёт лишь файлы приложения, и вся фонотека ушла бы в пропавшие.
+        if (!canRead()) throw SecurityException("no access to music")
         val rows = source.rows().filter { folders.includes(it.folder) }
         val diff = ScanDiff.of(repository.knownVersions(), rows.associate { it.id to it.dateModified })
         val changed = rows.filter { it.id in diff.changed }

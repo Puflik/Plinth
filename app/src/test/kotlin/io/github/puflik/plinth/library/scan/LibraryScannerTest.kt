@@ -72,6 +72,21 @@ class LibraryScannerTest {
         }
 
     @Test
+    fun `without access to music the library is left as it was`() =
+        runTest {
+            source.files = listOf(row(id = 1), row(id = 2))
+            scanner.scan(FolderConfig.DEFAULT)
+            // Доступ отозвали: MediaStore отдаёт только файлы самого приложения — пустоту.
+            source.files = emptyList()
+            val blind = LibraryScanner(source, repository, canRead = { false })
+
+            val failure = runCatching { blind.scan(FolderConfig.DEFAULT) }.exceptionOrNull()
+
+            assertThat(failure).isInstanceOf(SecurityException::class.java)
+            assertThat(ids()).containsExactly(1L, 2L)
+        }
+
+    @Test
     fun `files that are gone go missing`() =
         runTest {
             source.files = listOf(row(id = 1), row(id = 2))

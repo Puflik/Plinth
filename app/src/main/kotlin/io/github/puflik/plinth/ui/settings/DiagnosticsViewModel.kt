@@ -66,4 +66,13 @@ class DiagnosticsViewModel
             mutableHasCrash.value = false
             viewModelScope.launch { withContext(io) { crashes.clear() } }
         }
+
+        /**
+         * Диалог закрыт касанием мимо или «Назад» (ревью №14) — это не отказ:
+         * отчёт остаётся на диске, «Сохранить лог» его выгрузит, а при
+         * следующем запуске предложение появится снова.
+         */
+        fun closeCrashOffer() {
+            mutableHasCrash.value = false
+        }
     }

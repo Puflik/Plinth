@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-25
+
+Fixes from the review of the first wave and a run on Android 8 and 11.
+
+### Fixed
+
+- Editing the queue while paused (play next, add to queue, shuffle, repeat,
+  removing a track) no longer resets the saved position to 0:00.
+- A full phone storage no longer crashes the app during playback: the queue,
+  the log and the playback marker just skip the write.
+- The player fits the screen in landscape and on small phones with large
+  fonts: the cover shrinks, the controls stay visible.
+- Revoking access to music no longer marks the whole library as missing.
+- Play works again after "Stop" from a Bluetooth remote, car or watch, and
+  after a playback error — it retries the same track.
+- Tapping the notification or the media card opens the app.
+- Headset "play" resumes the music even after a long pause, when Android has
+  already closed the playback service.
+- File paths with spaces no longer leak into the saved log.
+- Links and the language setting no longer crash the app on phones without a
+  browser or without the per-app language screen.
+- The "Why music stops" dialog no longer shows up after a reboot or after the
+  battery ran out.
+- Closing the crash report dialog by accident no longer deletes the report.
+- Error messages no longer pile up while the app is in the background.
+- After dismissing the permission dialog with Back on Android 11+, access can
+  be asked for again.
+- FLAC on Android 8.0 and ALAC on Android 8–11, which the system cannot
+  decode, are reported as unsupported and skipped instead of playing silence.
+- On Android 8 the folder picker shows the phone storage right away.
+
+### Changed
+
+- The app is excluded from Android backup and device-to-device transfer:
+  nothing leaves the device.
+
 ## [0.1.0] - 2026-09-24
 
 The first wave, "Sound": a player for the music files on your phone. This is
@@ -65,5 +101,6 @@ an early pre-release — online sources, playlists and sync come in later waves.
 - CI builds and tests both flavors (`github`, `fdroid`); architecture decision
   records in `docs/adr/`, a contributing guide in `CONTRIBUTING.md`.
 
-[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Puflik/Plinth/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Puflik/Plinth/releases/tag/v0.1.0

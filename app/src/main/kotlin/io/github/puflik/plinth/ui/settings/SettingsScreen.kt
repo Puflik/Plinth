@@ -5,7 +5,6 @@ import android.os.Build
 import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -30,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -39,6 +37,7 @@ import io.github.puflik.plinth.R
 import io.github.puflik.plinth.diagnostics.vendor.Vendor
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
+import io.github.puflik.plinth.ui.common.rememberSafeUriHandler
 
 /**
  * Вкладка «Настройки»: стартовый экран (F3), язык приложения (12.12, только
@@ -61,7 +60,7 @@ fun SettingsScreen(
     val language = rememberAppLanguage()
     val context = LocalContext.current
     val saveLog = rememberLogSaver(diagnostics)
-    val uriHandler = LocalUriHandler.current
+    val uriHandler = rememberSafeUriHandler()
     var vendorGuide by remember { mutableStateOf(false) }
     if (vendorGuide) {
         VendorGuideDialog(
@@ -169,7 +168,7 @@ private fun Rescan(
 internal fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
     val context = LocalContext.current
     val picker =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+        rememberLauncherForActivityResult(OpenFolder()) { uri: Uri? ->
             if (uri != null) {
                 val folder = uri.authority?.let { TreeFolder.path(it, DocumentsContract.getTreeDocumentId(uri)) }
                 if (folder != null) {

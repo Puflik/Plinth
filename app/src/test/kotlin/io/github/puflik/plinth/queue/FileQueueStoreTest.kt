@@ -165,6 +165,25 @@ class FileQueueStoreTest {
             assertThat(store.load()).isNull()
         }
 
+    @Test
+    fun `failed write does not throw and keeps what was saved`() =
+        runTest {
+            val queue = PlaybackQueue.EMPTY.play(QueueContext.Tracks, album, start = 0)
+            store.saveQueue(queue)
+            store.savePosition(83.seconds)
+            store.savePlayedAt(Instant.fromEpochSeconds(1_700_000_000))
+            // Временный файл не создать — как на заполненном диске (ENOSPC).
+            listOf("queue.bin.tmp", "position.bin.tmp", "played.bin.tmp")
+                .forEach { temp.root.resolve("queue/$it").mkdirs() }
+
+            store.saveQueue(queue.next()!!)
+            store.savePosition(90.seconds)
+            store.savePlayedAt(Instant.fromEpochSeconds(1_800_000_000))
+
+            assertThat(store.load())
+                .isEqualTo(SavedQueue(queue, 83.seconds, Instant.fromEpochSeconds(1_700_000_000)))
+        }
+
     private fun item(
         name: String,
         artist: String? = "Queen",

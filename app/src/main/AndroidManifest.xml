@@ -21,9 +21,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!--
+      Резервной копии и переноса нет (ревью №7): ссылки очереди и базы на
+      новом телефоне указывают на чужие файлы, а мастер обещает, что ничего не
+      покидает устройство. На Android 12+ allowBackup="false" не выключает
+      перенос «телефон → телефон» — его закрывают data_extraction_rules.
+    -->
     <application
         android:name=".PlinthApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -55,6 +61,19 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!--
+          Медиакнопка, когда службы уже нет (ревью №12): после паузы система
+          закрывает службу, и без приёмника «play» на гарнитуре уходил в никуда.
+          Приёмник Media3 поднимает PlaybackService, возобновление — в ней.
+        -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
 
         <!--
           WorkManager настраивает PlinthApplication (воркеры строит Hilt),

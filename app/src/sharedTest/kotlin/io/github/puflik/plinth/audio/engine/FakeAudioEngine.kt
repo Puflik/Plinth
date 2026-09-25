@@ -84,6 +84,15 @@ class FakeAudioEngine : AudioEngine {
         emit(PlaybackEvent.TrackEnded)
     }
 
+    /**
+     * «Стоп» с внешнего пульта — Bluetooth, магнитолы, часов (ревью №4):
+     * ExoPlayer уходит в `STATE_IDLE` с тем же треком, движок сообщает [PlaybackState.Idle].
+     */
+    fun stopFromOutside() {
+        checkAlive()
+        moveTo(PlaybackState.Idle)
+    }
+
     /** Прерывает воспроизведение заданной ошибкой. */
     fun failWith(error: PlaybackError) {
         checkAlive()

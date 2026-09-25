@@ -19,13 +19,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.diagnostics.vendor.Vendor
 import io.github.puflik.plinth.diagnostics.vendor.VendorIntents
+import io.github.puflik.plinth.ui.common.rememberSafeUriHandler
 
 /** Один раз после убитой игры — «Почему музыка останавливается» (G2.4). */
 @Composable
@@ -48,7 +48,7 @@ fun VendorGuideDialog(
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
+    val uriHandler = rememberSafeUriHandler()
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(stringResource(R.string.vendor_guide_title)) },

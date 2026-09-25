@@ -23,6 +23,26 @@ class LogRedactorTest {
         assertThat(redacted).contains("open failed: ENOENT")
     }
 
+    /** Ревью №6: пробел в имени папки или файла не обрывает вырезание. */
+    @Test
+    fun `path with spaces is cut out whole`() {
+        val message =
+            "java.io.FileNotFoundException: /storage/emulated/0/Music/Pink Floyd/The Wall/01 In the Flesh.flac: " +
+                "open failed: ENOENT (No such file or directory)"
+
+        val redacted = redactor.redact(message)
+
+        assertThat(redacted)
+            .isEqualTo("java.io.FileNotFoundException: <path>.flac: open failed: ENOENT (No such file or directory)")
+    }
+
+    @Test
+    fun `cyrillic path with spaces is cut out whole`() {
+        val redacted = redactor.redact("Не открыть /storage/emulated/0/Музыка/Моя папка/Песня про меня.mp3")
+
+        assertThat(redacted).isEqualTo("Не открыть <path>.mp3")
+    }
+
     @Test
     fun `document uri with an encoded path keeps only its scheme`() {
         val message =
