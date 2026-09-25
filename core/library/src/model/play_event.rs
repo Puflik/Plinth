@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use plinth_types::{PlayEventId, SourceId, Timestamp, TrackId, VersionId};
 
-/// Одно прослушивание (B1.3) — факт, без выводов: засчитывать ли его в
-/// счётчик, решает проекция (C3). Живёт в журнале. Контекст — для
+/// Одно прослушивание (B1.3) — факт, без выводов. Живёт в журнале; засчитать
+/// ли его в счётчик, говорит [`PlayEvent::counts`], а применяет проекция (C3). Контекст — для
 /// рекомендаций: время суток, день недели, устройство вывода, что играло до.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayEvent {
@@ -34,6 +34,11 @@ pub enum OutputDevice {
     Unknown,
 }
 
+/// Правило Last.fm и ListenBrainz (C3): засчитано, если слушали половину
+/// трека или 4 минуты — что раньше. Треки короче 30 с не считаются.
+const COUNT_AFTER: Duration = Duration::from_secs(4 * 60);
+const SHORTEST_COUNTED: Duration = Duration::from_secs(30);
+
 const MINUTE_MS: i64 = 60_000;
 const HOUR_MS: i64 = 60 * MINUTE_MS;
 const DAY_MS: i64 = 24 * HOUR_MS;
@@ -45,6 +50,18 @@ impl PlayEvent {
         let share = (self.listened.as_secs_f64() / length.as_secs_f64()).min(1.0);
         #[expect(clippy::cast_possible_truncation, reason = "доля от 0 до 1, точности f32 хватает")]
         Some(share as f32)
+    }
+
+    /// Засчитывается ли прослушивание в счётчик и «последнее прослушивание»
+    /// трека. История хранит все факты, поэтому правило можно поменять:
+    /// счётчики пересчитает пересборка проекции.
+    pub fn counts(&self) -> bool {
+        let threshold = match self.track_length {
+            Some(length) if length < SHORTEST_COUNTED => return false,
+            Some(length) => (length / 2).min(COUNT_AFTER),
+            None => COUNT_AFTER,
+        };
+        self.listened >= threshold
     }
 
     /// Местный час начала, 0–23.
@@ -102,6 +119,30 @@ mod tests {
         assert_eq!(play(500, Some(240)).completion(), Some(1.0));
         assert_eq!(play(60, None).completion(), None);
         assert_eq!(play(60, Some(0)).completion(), None);
+    }
+
+    /// Правило Last.fm: половина трека или 4 минуты — что раньше.
+    #[test]
+    fn counts_after_half_the_track_or_four_minutes() {
+        assert!(play(90, Some(180)).counts());
+        assert!(!play(89, Some(180)).counts());
+
+        assert!(play(240, Some(600)).counts());
+        assert!(!play(239, Some(600)).counts());
+    }
+
+    /// Совсем короткие треки — джинглы, интро — не считаются вовсе.
+    #[test]
+    fn tracks_shorter_than_thirty_seconds_never_count() {
+        assert!(!play(29, Some(29)).counts());
+        assert!(play(15, Some(30)).counts());
+    }
+
+    /// Длины нет — остаются 4 минуты.
+    #[test]
+    fn without_a_length_four_minutes_count() {
+        assert!(play(240, None).counts());
+        assert!(!play(239, None).counts());
     }
 
     /// Время суток и день недели — местные, по поясу на момент прослушивания.

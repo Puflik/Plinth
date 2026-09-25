@@ -1,0 +1,19 @@
+# CRDT-журнал пользовательских данных на yrs (C2) и его проекция в SQLite (C3).
+[package]
+name = "plinth-sync"
+description = "Журнал пользовательских данных Plinth и его проекция в базу"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+plinth-types.workspace = true
+plinth-library.workspace = true
+yrs.workspace = true
+crc32fast.workspace = true
+uuid.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

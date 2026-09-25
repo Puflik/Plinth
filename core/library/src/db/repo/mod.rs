@@ -4,9 +4,14 @@
 
 mod album_repo;
 mod artist_repo;
+mod blocklist_repo;
 mod history_repo;
+mod journal_repo;
+mod merge_repo;
 mod playlist_repo;
+mod setting_repo;
 mod source_repo;
+mod subscription_repo;
 mod track_repo;
 
 #[cfg(test)]

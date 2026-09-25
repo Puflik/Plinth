@@ -12,11 +12,34 @@ mod sql;
 
 use std::path::PathBuf;
 
+use plinth_types::CoreError;
 use rusqlite::Connection;
+
+use sql::Storage;
 
 /// Открытая база. Репозитории — методы в `repo/*`.
 pub struct Database {
     conn: Connection,
+}
+
+impl Database {
+    /// Выполняет `work` одной транзакцией: ошибка — откат всего, что успели.
+    /// Внутри нельзя звать методы, которые сами открывают транзакцию
+    /// (`save_track`, `save_album`, `save_artist`).
+    pub fn in_transaction<T>(&self, work: impl FnOnce(&Self) -> Result<T, CoreError>) -> Result<T, CoreError> {
+        let tx = self.conn.unchecked_transaction().storage()?;
+        let result = work(self)?;
+        tx.commit().storage()?;
+        Ok(result)
+    }
+}
+
+/// Какое состояние журнала отражает проекция (C3): идентификатор журнала и
+/// номер его последней записи. Не совпала с журналом — проекцию пересобирают.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JournalMark {
+    pub journal: i64,
+    pub seq: i64,
 }
 
 /// Результат [`Database::open`].

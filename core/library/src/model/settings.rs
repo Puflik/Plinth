@@ -16,3 +16,35 @@ pub enum VersionPreference {
 pub struct SyncedSettings {
     pub version_preference: VersionPreference,
 }
+
+/// Одна настройка со значением — то, что меняет операция журнала (C2).
+/// Настройки независимы: правка одной на телефоне и другой на планшете не
+/// спорят между собой.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    VersionPreference(VersionPreference),
+}
+
+impl SyncedSettings {
+    /// Настройки с одной изменённой.
+    pub fn with(self, setting: Setting) -> Self {
+        match setting {
+            Setting::VersionPreference(version_preference) => Self { version_preference },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Setting, SyncedSettings, VersionPreference};
+
+    #[test]
+    fn a_setting_changes_only_itself() {
+        let settings = SyncedSettings::default();
+
+        let changed = settings.with(Setting::VersionPreference(VersionPreference::Clean));
+
+        assert_eq!(settings.version_preference, VersionPreference::Original);
+        assert_eq!(changed.version_preference, VersionPreference::Clean);
+    }
+}

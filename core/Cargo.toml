@@ -1,13 +1,14 @@
 # Rust-ядро Plinth (A1.1). Крейты:
 #   types           — общие типы и ошибки, не зависит ни от одного крейта ядра
-#   library         — модель библиотеки: Track / Version / Source и остальное (B1)
+#   library         — модель библиотеки и её SQLite: Track / Version / Source и остальное (B)
+#   sync            — CRDT-журнал пользовательских данных и его проекция в базу (C)
 #   ffi             — граница с Kotlin (UniFFI), единственный cdylib
 #   uniffi-bindgen  — генератор Kotlin-биндингов, запускается на машине сборки
 # Как собрать — docs/BUILD.md, что пересекает границу — docs/adr/0010-ffi-boundary.md.
 
 [workspace]
 resolver = "3"
-members = ["types", "library", "ffi", "uniffi-bindgen"]
+members = ["types", "library", "sync", "ffi", "uniffi-bindgen"]
 
 [workspace.package]
 # Версия ядра идёт вместе с версией приложения, в котором ядро появилось.
@@ -18,6 +19,7 @@ publish = false
 
 [workspace.dependencies]
 plinth-types = { path = "types" }
+plinth-library = { path = "library" }
 uniffi = "0.32.2"
 log = "0.4.34"
 thiserror = "2.0.21"
@@ -27,6 +29,10 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 unicode-normalization = "0.1.25"
 # Позиция в плейлисте (B1.3): serde не нужен — формат задаём сами.
 fractional_index = { version = "2.0.2", default-features = false }
+# CRDT-журнал (C1, docs/adr/0006-crdt-library.md).
+yrs = "0.28.0"
+# Контрольная сумма кадров журнала (C2): порча файла не въедет в документ.
+crc32fast = "1.5.0"
 
 # Ни одна функция, видимая из Kotlin, не паникует (A3.3): unwrap, expect и
 # panic! в коде ядра — ошибка CI (`clippy -D warnings`). В тестах можно —

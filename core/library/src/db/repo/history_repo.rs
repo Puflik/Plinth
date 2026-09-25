@@ -7,15 +7,19 @@ use crate::db::sql::{Storage, id, millis, opt_duration, opt_id, opt_timestamp, t
 use crate::model::{PlayEvent, Rating, TrackUserData};
 
 impl Database {
-    /// Прослушивание в историю. Счётчики [`TrackUserData`] отсюда не
-    /// пересчитываются: правило «засчитать» — дело проекции журнала (C3).
-    pub fn record_play(&self, event: &PlayEvent) -> Result<(), CoreError> {
+    /// Прослушивание в историю; `false` — такое уже записано. Счётчики
+    /// [`TrackUserData`] отсюда не пересчитываются: это дело проекции
+    /// журнала (C3) по правилу [`PlayEvent::counts`].
+    pub fn record_play(&self, event: &PlayEvent) -> Result<bool, CoreError> {
         self.conn()
-            .execute(
+            .prepare_cached(
                 "INSERT INTO play_event(id, track, version, source, started_at, utc_offset_minutes, listened_ms,
                                         track_length_ms, skipped_at_ms, output, previous_track)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-                params![
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                 ON CONFLICT(id) DO NOTHING",
+            )
+            .and_then(|mut statement| {
+                statement.execute(params![
                     event.id.as_bytes(),
                     event.track.as_bytes(),
                     event.version.map(|v| *v.as_bytes()),
@@ -27,10 +31,17 @@ impl Database {
                     event.skipped_at.map(millis),
                     event.output.code(),
                     event.previous_track.map(|t| *t.as_bytes())
-                ],
-            )
+                ])
+            })
             .storage()
-            .map(drop)
+            .map(|inserted| inserted == 1)
+    }
+
+    /// Последние прослушивания всей библиотеки, новые первыми.
+    pub fn recent_plays(&self, limit: u32) -> Result<Vec<PlayEvent>, CoreError> {
+        let mut statement =
+            self.conn().prepare("SELECT * FROM play_event ORDER BY started_at DESC, id DESC LIMIT ?1").storage()?;
+        statement.query_map([limit], read_play).storage()?.collect::<Result<_, _>>().storage()
     }
 
     /// Последние прослушивания трека, новые первыми.
@@ -42,21 +53,39 @@ impl Database {
         statement.query_map(params![track.as_bytes(), limit], read_play).storage()?.collect::<Result<_, _>>().storage()
     }
 
+    /// Сохраняет пользовательское о треке. Пустое — без лайка, оценки и
+    /// прослушиваний — строки не оставляет: так база после «лайк → снять»
+    /// та же, что после пересборки из журнала (C3).
     pub fn save_user_data(&self, data: &TrackUserData) -> Result<(), CoreError> {
+        if *data == TrackUserData::empty(data.track) {
+            return self
+                .conn()
+                .execute("DELETE FROM track_user WHERE track = ?1", [data.track.as_bytes()])
+                .storage()
+                .map(drop);
+        }
         self.conn()
-            .execute(
+            .prepare_cached(
                 "INSERT OR REPLACE INTO track_user(track, liked, rating, play_count, last_played_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
+            )
+            .and_then(|mut statement| {
+                statement.execute(params![
                     data.track.as_bytes(),
                     data.liked,
                     data.rating.map(Rating::stars),
                     data.play_count,
                     data.last_played_at.map(Timestamp::as_millis)
-                ],
-            )
+                ])
+            })
             .storage()
             .map(drop)
+    }
+
+    /// Все непустые пользовательские данные, по треку.
+    pub fn all_user_data(&self) -> Result<Vec<TrackUserData>, CoreError> {
+        let mut statement = self.conn().prepare("SELECT * FROM track_user ORDER BY track").storage()?;
+        statement.query_map([], read_user_data).storage()?.collect::<Result<_, _>>().storage()
     }
 
     /// Пользовательское о треке; не слушали и не оценивали — пустое.
@@ -156,6 +185,43 @@ mod tests {
         db.save_user_data(&data).unwrap();
 
         assert_eq!(db.user_data(track).unwrap(), data);
+    }
+
+    /// Пустые данные строки не оставляют: база после «лайк → снять» та же,
+    /// что без лайка вовсе, — так проекция совпадает с пересборкой (C3).
+    #[test]
+    fn emptied_user_data_leaves_no_row() {
+        let db = db();
+        let track = TrackId::new();
+        db.save_user_data(&TrackUserData { liked: true, ..TrackUserData::empty(track) }).unwrap();
+        assert_eq!(db.all_user_data().unwrap().len(), 1);
+
+        db.save_user_data(&TrackUserData::empty(track)).unwrap();
+
+        assert!(db.all_user_data().unwrap().is_empty());
+    }
+
+    /// Повтор той же записи истории — не ошибка и не второе прослушивание.
+    #[test]
+    fn recording_the_same_play_twice_is_a_no_op() {
+        let db = db();
+        let event = play(TrackId::new(), 1_000);
+
+        assert!(db.record_play(&event).unwrap());
+        assert!(!db.record_play(&event).unwrap());
+
+        assert_eq!(db.plays_of(event.track, 10).unwrap(), vec![event]);
+    }
+
+    #[test]
+    fn recent_plays_span_all_tracks_newest_first() {
+        let db = db();
+        let (old, new) = (play(TrackId::new(), 1_000), play(TrackId::new(), 2_000));
+        db.record_play(&old).unwrap();
+        db.record_play(&new).unwrap();
+
+        assert_eq!(db.recent_plays(10).unwrap(), vec![new, old]);
+        assert_eq!(db.recent_plays(1).unwrap(), vec![new]);
     }
 
     /// Оценку вне 1–5 база не примет, даже если её записали в обход модели.

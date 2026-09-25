@@ -32,6 +32,13 @@ impl Database {
         statement.query_map([], read_playlist).storage()?.collect::<Result<_, _>>().storage()
     }
 
+    pub fn rename_playlist(&self, id: PlaylistId, name: &str) -> Result<(), CoreError> {
+        self.conn()
+            .execute("UPDATE playlist SET name = ?2 WHERE id = ?1", params![id.as_bytes(), name])
+            .storage()
+            .map(drop)
+    }
+
     /// Удаляет плейлист вместе с записями.
     pub fn delete_playlist(&self, id: PlaylistId) -> Result<(), CoreError> {
         self.conn().execute("DELETE FROM playlist WHERE id = ?1", [id.as_bytes()]).storage().map(drop)
@@ -50,6 +57,17 @@ impl Database {
                     entry.position.to_string(),
                     entry.added_at.as_millis()
                 ],
+            )
+            .storage()
+            .map(drop)
+    }
+
+    /// Переставляет запись: новая позиция, остальное прежнее.
+    pub fn move_entry(&self, id: PlaylistEntryId, position: &Position) -> Result<(), CoreError> {
+        self.conn()
+            .execute(
+                "UPDATE playlist_entry SET position = ?2 WHERE id = ?1",
+                params![id.as_bytes(), position.to_string()],
             )
             .storage()
             .map(drop)
@@ -168,6 +186,34 @@ mod tests {
         db.delete_playlist(playlist.id).unwrap();
         assert_eq!(db.playlist(playlist.id).unwrap(), None);
         assert!(db.entries(playlist.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn renaming_keeps_everything_but_the_name() {
+        let db = db();
+        let playlist = mix();
+        filled(&db, &playlist);
+
+        db.rename_playlist(playlist.id, "Road").unwrap();
+
+        let renamed = db.playlist(playlist.id).unwrap().unwrap();
+        assert_eq!(renamed, Playlist { name: "Road".to_owned(), ..playlist.clone() });
+        assert_eq!(db.entries(playlist.id).unwrap().len(), 5);
+    }
+
+    #[test]
+    fn moving_by_id_rewrites_only_the_position() {
+        let db = db();
+        let playlist = mix();
+        let entries = filled(&db, &playlist);
+        let position = position_for(&entries, 5, Some(entries[0].id));
+
+        db.move_entry(entries[0].id, &position).unwrap();
+
+        let after = db.entries(playlist.id).unwrap();
+        assert_eq!(after.last().map(|e| e.id), Some(entries[0].id));
+        assert_eq!(after.last().map(|e| e.position.clone()), Some(position));
+        assert_eq!(after.last().map(|e| e.track), Some(entries[0].track));
     }
 
     #[test]

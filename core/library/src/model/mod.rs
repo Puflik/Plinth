@@ -29,7 +29,7 @@ pub use blocklist::{BlockEntry, BlockTarget};
 pub use merge_decision::{DecidedBy, IdentityBasis, MergeDecision, TrackPair, Verdict};
 pub use play_event::{OutputDevice, PlayEvent};
 pub use playlist::{Playlist, PlaylistEntry, PlaylistKind, ordered_entries, position_for};
-pub use settings::{SyncedSettings, VersionPreference};
+pub use settings::{Setting, SyncedSettings, VersionPreference};
 pub use source::{AudioSpec, CacheState, ProviderId, Source, SourceLocation};
 pub use subscription::Subscription;
 pub use track::{Rating, Track, TrackUserData};

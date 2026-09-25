@@ -5,7 +5,9 @@ use plinth_types::{Availability, Format};
 use rusqlite::Row;
 
 use super::sql::invalid;
-use crate::model::{CacheState, Explicitness, OutputDevice, PlaylistKind, VersionKind};
+use crate::model::{
+    CacheState, Explicitness, IdentityBasis, OutputDevice, PlaylistKind, Verdict, VersionKind, VersionPreference,
+};
 
 pub(crate) trait Code: Sized + Copy + 'static {
     const ALL: &'static [Self];
@@ -81,6 +83,23 @@ codes!(OutputDevice {
     OutputDevice::Unknown => "unknown",
 });
 
+codes!(Verdict {
+    Verdict::Merge => "merge",
+    Verdict::Split => "split",
+});
+
+codes!(IdentityBasis {
+    IdentityBasis::Mbid => "mbid",
+    IdentityBasis::Fingerprint => "fingerprint",
+    IdentityBasis::Normalized => "normalized",
+});
+
+codes!(VersionPreference {
+    VersionPreference::Original => "original",
+    VersionPreference::Clean => "clean",
+    VersionPreference::Any => "any",
+});
+
 pub(crate) fn column<T: Code>(row: &Row<'_>, column: &str) -> rusqlite::Result<T> {
     let text: String = row.get(column)?;
     T::from_code(&text).ok_or_else(|| invalid(column, &text))
@@ -97,7 +116,9 @@ mod tests {
     use std::collections::HashSet;
 
     use super::Code;
-    use crate::model::{CacheState, Explicitness, OutputDevice, PlaylistKind, VersionKind};
+    use crate::model::{
+        CacheState, Explicitness, IdentityBasis, OutputDevice, PlaylistKind, Verdict, VersionKind, VersionPreference,
+    };
     use plinth_types::{Availability, Format};
 
     fn round_trips<T: Code + PartialEq + std::fmt::Debug>() {
@@ -118,5 +139,8 @@ mod tests {
         round_trips::<CacheState>();
         round_trips::<PlaylistKind>();
         round_trips::<OutputDevice>();
+        round_trips::<Verdict>();
+        round_trips::<IdentityBasis>();
+        round_trips::<VersionPreference>();
     }
 }

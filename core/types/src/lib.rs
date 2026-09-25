@@ -15,8 +15,8 @@ mod time;
 pub use availability::Availability;
 pub use error::CoreError;
 pub use id::{
-    AlbumId, ArtistId, EntityId, Mbid, MergeDecisionId, PlayEventId, PlaylistEntryId, PlaylistId, SourceId, TrackId,
-    VersionId,
+    AlbumId, ArtistId, DeviceId, EntityId, Mbid, MergeDecisionId, PlayEventId, PlaylistEntryId, PlaylistId, SourceId,
+    TrackId, VersionId,
 };
 pub use position::Position;
 pub use quality::{Bitrate, Format, QualityTier};
