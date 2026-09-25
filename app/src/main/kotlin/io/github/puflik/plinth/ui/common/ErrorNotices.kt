@@ -90,6 +90,7 @@ private fun Resources.text(notice: ErrorNotice): String =
                 getQuantityString(R.plurals.error_stopped_many, notice.count, notice.count)
             }
         ErrorNotice.CoreFailed -> getString(R.string.error_core_failed)
+        ErrorNotice.LibraryRestored -> getString(R.string.notice_library_restored)
     }
 
 private fun Resources.name(track: FailedTrack): String = track.title ?: getString(R.string.error_untitled)

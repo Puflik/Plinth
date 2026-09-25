@@ -12,20 +12,23 @@ import kotlinx.coroutines.launch
  *
  * Несостоявшийся запуск — ошибка в логе, а не падение. Экраны зовут ядро
  * сами (D3c): первый же вызов попробует открыть его снова, а отказ уйдёт в
- * `CoreErrors`, где его покажет `ErrorPresenter`.
- * Восстановление при открытии — база испорчена или собрана из журнала —
- * тоже пока только в логе; «Восстанавливаю библиотеку» на экране — D3.
+ * [errors]. Базу, собранную заново — испорченную или отставшую от журнала, —
+ * [errors] тоже узнают: «Библиотека восстановлена».
  */
 class CoreInitializer(
     private val core: PlinthCore,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
+    private val errors: CoreErrors,
 ) {
     fun start() {
         scope.launch(io) {
             runCatching { core.open() }
                 .onSuccess { report ->
-                    if (report.databaseRecovered || report.restoredFromJournal) AppLog.w(TAG, "core restored: $report")
+                    if (report.databaseRecovered || report.restoredFromJournal) {
+                        AppLog.w(TAG, "core restored: $report")
+                        errors.libraryRestored()
+                    }
                 }.onFailure { AppLog.e(TAG, "core did not open", it) }
         }
     }

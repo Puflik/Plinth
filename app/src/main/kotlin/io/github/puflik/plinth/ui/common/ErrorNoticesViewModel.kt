@@ -20,5 +20,5 @@ class ErrorNoticesViewModel
         core: CoreErrors,
         presenter: ErrorPresenter,
     ) : ViewModel() {
-        val notices: Flow<ErrorNotice> = merge(playback.errors, core.errors).mapNotNull(presenter::present)
+        val notices: Flow<ErrorNotice> = merge(playback.errors, core.events).mapNotNull(presenter::present)
     }

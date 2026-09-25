@@ -37,6 +37,13 @@ sealed interface AppError {
     data class CoreFailed(
         val problem: CoreProblem,
     ) : AppError
+
+    /**
+     * Ядро при открытии собрало базу заново (A3.2, D3): она была испорчена
+     * или отстала от журнала. Лайки, плейлисты и история вернулись из
+     * журнала, треки вернёт скан.
+     */
+    data object LibraryRestored : AppError
 }
 
 /** Вид ошибки ядра — категории `CoreError` в Rust (ADR 0010). */

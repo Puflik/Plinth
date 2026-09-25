@@ -27,6 +27,13 @@ class ErrorPresenterTest {
             .isEqualTo(ErrorNotice.Skipped(gone, count = 1))
     }
 
+    /** База ядра собрана заново из журнала — сказать один раз: лайки на месте, треки вернёт скан. */
+    @Test
+    fun `a restored library is told once`() {
+        assertThat(presenter.present(AppError.LibraryRestored)).isEqualTo(ErrorNotice.LibraryRestored)
+        assertThat(presenter.present(AppError.LibraryRestored)).isNull()
+    }
+
     /** Сохранённую очередь вернула система, человек звука не ждал — сама справилась. */
     @Test
     fun `skips while restoring the queue are quiet and told later`() {

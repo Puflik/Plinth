@@ -18,6 +18,8 @@ import javax.inject.Singleton
  *   «что-то пошло не так» и предложение сохранить лог. Сеть, мусор
  *   провайдера и пропавший трек объясняют сами экраны (баннер «офлайн»,
  *   серый трек) — строка внизу для них лишняя.
+ * - База собрана заново из журнала — один раз: пустые списки иначе
+ *   напугали бы, а лайки и плейлисты на месте.
  *
  * Помнит, о каких файлах сказано, поэтому один на процесс.
  */
@@ -27,6 +29,7 @@ class ErrorPresenter
     constructor() {
         private val told = mutableSetOf<String>()
         private var toldCoreFailed = false
+        private var toldRestored = false
 
         /** Что сказать о [error]; `null` — ничего, только лог. */
         fun present(error: AppError): ErrorNotice? =
@@ -35,6 +38,13 @@ class ErrorPresenter
                 is AppError.PlaybackStopped ->
                     if (error.whileRestoring) null else ErrorNotice.Stopped(error.track, error.skipped.size + 1)
                 is AppError.CoreFailed -> coreFailed(error.problem)
+                AppError.LibraryRestored ->
+                    if (toldRestored) {
+                        null
+                    } else {
+                        toldRestored = true
+                        ErrorNotice.LibraryRestored
+                    }
             }
 
         private fun coreFailed(problem: CoreProblem): ErrorNotice? =
@@ -71,4 +81,7 @@ sealed interface ErrorNotice {
 
     /** Ядро не справилось: «что-то пошло не так» и предложение сохранить лог. */
     data object CoreFailed : ErrorNotice
+
+    /** База собрана заново: лайки и плейлисты на месте, треки вернёт скан. */
+    data object LibraryRestored : ErrorNotice
 }

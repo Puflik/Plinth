@@ -41,7 +41,8 @@ object CoreModule {
         core: PlinthCore,
         @ApplicationScope scope: CoroutineScope,
         @IoDispatcher io: CoroutineDispatcher,
-    ): CoreInitializer = CoreInitializer(core, scope, io)
+        errors: CoreErrors,
+    ): CoreInitializer = CoreInitializer(core, scope, io, errors)
 }
 
 /** Ядро для инструментальных тестов, куда Hilt не внедряет. */

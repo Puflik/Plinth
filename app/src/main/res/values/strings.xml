@@ -179,6 +179,7 @@
     <string name="error_problem_unknown">playback failed</string>
     <string name="error_untitled">untitled track</string>
     <string name="error_core_failed">Something went wrong</string>
+    <string name="notice_library_restored">Library restored: likes and playlists are safe, tracks are coming back with the scan</string>
     <string name="error_skipped_one">Skipped “%1$s”: %2$s</string>
     <plurals name="error_skipped_many">
         <item quantity="one">Skipped %d track that can’t be played</item>
