@@ -5,11 +5,11 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.MediaStore.MediaColumns
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.diagnostics.log.LogLevel
 import org.junit.After
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -24,6 +24,7 @@ import java.util.UUID
  * D2: теги читает `lofty` в той же `.so` — на устройстве, а не только в
  * `cargo test` на ПК.
  */
+@SdkSuppress(minSdkVersion = Build.VERSION_CODES.Q) // MediaStore.RELATIVE_PATH — с Android 10.
 class CoreScanTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val resolver = context.contentResolver
@@ -33,7 +34,6 @@ class CoreScanTest {
 
     @Before
     fun setUp() {
-        assumeTrue("MediaStore.RELATIVE_PATH — с Android 10", Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
         removeProbe()
         core = PlinthCore(LogLevel.INFO, dataDir, CoreErrors())
     }
@@ -42,7 +42,7 @@ class CoreScanTest {
     fun tearDown() {
         if (::core.isInitialized) core.close()
         dataDir.deleteRecursively()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) removeProbe()
+        removeProbe()
     }
 
     @Test
