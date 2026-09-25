@@ -10,11 +10,14 @@
 
 use std::time::Duration;
 
-use plinth_library::db::query::{TrackRow, TrackSort};
+use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, TrackRow, TrackSort};
 use plinth_library::model::{
     OutputDevice, PlayEvent, Playlist, PlaylistKind, Rating, SyncedSettings, TrackUserData, VersionPreference,
 };
-use plinth_types::{AlbumId, PlayEventId, PlaylistEntryId, PlaylistId, SourceId, Timestamp, TrackId, VersionId};
+use plinth_library::scan::Artwork;
+use plinth_types::{
+    AlbumId, ArtistId, PlayEventId, PlaylistEntryId, PlaylistId, SourceId, Timestamp, TrackId, VersionId,
+};
 
 macro_rules! text_ids {
     ($($id:ident),+ $(,)?) => {$(
@@ -26,7 +29,7 @@ macro_rules! text_ids {
     )+};
 }
 
-text_ids!(TrackId, AlbumId, VersionId, SourceId, PlaylistId, PlaylistEntryId, PlayEventId);
+text_ids!(TrackId, AlbumId, ArtistId, VersionId, SourceId, PlaylistId, PlaylistEntryId, PlayEventId);
 
 uniffi::custom_type!(Timestamp, i64, {
     remote,
@@ -44,6 +47,7 @@ uniffi::custom_type!(Rating, u8, {
 pub enum TrackSort {
     Title,
     Artist,
+    Album,
     RecentlyAdded,
     MostPlayed,
 }
@@ -55,9 +59,43 @@ pub struct TrackRow {
     pub artist_credit: String,
     pub album: Option<AlbumId>,
     pub album_title: Option<String>,
+    pub album_artist: Option<String>,
+    pub disc: Option<u16>,
+    pub number: Option<u16>,
     pub duration: Option<Duration>,
+    pub uri: Option<String>,
+    pub folder: Option<String>,
     pub liked: bool,
     pub play_count: u32,
+}
+
+#[uniffi::remote(Enum)]
+pub enum AlbumSort {
+    Title,
+    Artist,
+}
+
+#[uniffi::remote(Record)]
+pub struct AlbumRow {
+    pub id: AlbumId,
+    pub title: String,
+    pub artist_credit: Option<String>,
+    pub track_count: u32,
+    pub cover_uri: Option<String>,
+}
+
+#[uniffi::remote(Record)]
+pub struct ArtistRow {
+    pub id: ArtistId,
+    pub name: String,
+    pub album_count: u32,
+    pub track_count: u32,
+}
+
+#[uniffi::remote(Record)]
+pub struct Artwork {
+    pub mime: Option<String>,
+    pub data: Vec<u8>,
 }
 
 #[uniffi::remote(Record)]

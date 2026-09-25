@@ -165,11 +165,15 @@ mod tests {
         );
     }
 
-    struct PanickingLogger;
+    /// Ломается только в потоке своего теста: логгер глобальный, и остальные
+    /// тесты, которые пишут в лог параллельно, не должны падать от чужой поломки.
+    struct PanickingLogger(std::thread::ThreadId);
 
     impl CoreLogger for PanickingLogger {
         fn log(&self, _record: CoreLogRecord) {
-            panic!("logger is broken");
+            if std::thread::current().id() == self.0 {
+                panic!("logger is broken");
+            }
         }
     }
 
@@ -179,7 +183,7 @@ mod tests {
     fn broken_logger_does_not_abort_the_process() {
         let _serial = serial();
         install_hook();
-        crate::logging::install(Arc::new(PanickingLogger), CoreLogLevel::Debug);
+        crate::logging::install(Arc::new(PanickingLogger(std::thread::current().id())), CoreLogLevel::Debug);
 
         let outcome = std::panic::catch_unwind(|| guard::<()>(|| panic!("first")));
 

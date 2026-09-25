@@ -1,9 +1,13 @@
-//! Чтение библиотеки (A3.1): списки экранов одним вызовом, строки готовы к
-//! показу. Каталог в базе появится со сканером (D1); запросы экранов под
-//! замену Room — альбомы, исполнители, естественная сортировка — D3.
+//! Чтение библиотеки (A3.1, D3): списки экранов одним вызовом, строки готовы
+//! к показу. Видны только треки, которые можно сыграть; названия — в
+//! естественном порядке и без ведущего артикля (`plinth_library::sort`).
 
-use plinth_library::db::query::{TrackRow, TrackSort};
+use std::path::Path;
+
+use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, TrackRow, TrackSort};
 use plinth_library::model::TrackUserData;
+use plinth_library::scan::{Artwork, artwork};
+use plinth_library::sort::sort_key;
 use plinth_types::{AlbumId, CoreError, TrackId};
 
 use crate::panic;
@@ -11,8 +15,9 @@ use crate::session::Core;
 
 #[uniffi::export]
 impl Core {
-    /// Все треки в порядке `sort`; `search` — по названию и исполнителю, без
-    /// учёта регистра, диакритики и знаков.
+    /// Треки в порядке `sort`; `search` — каждое слово есть в названии,
+    /// исполнителе, альбоме или исполнителе альбома, без учёта регистра,
+    /// диакритики и знаков.
     pub fn tracks(&self, sort: TrackSort, search: Option<String>) -> Result<Vec<TrackRow>, CoreError> {
         panic::guard(|| self.with(|state| state.db.track_list(sort, search.as_deref())))
     }
@@ -22,30 +27,83 @@ impl Core {
         panic::guard(|| self.with(|state| state.db.album_tracks(album)))
     }
 
+    /// Альбомы с видимыми треками: число треков и файл-обложка.
+    pub fn albums(&self, sort: AlbumSort) -> Result<Vec<AlbumRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.album_list(sort)))
+    }
+
+    /// Альбом по названию и исполнителю — так его открывает экран по ссылке.
+    pub fn find_album(&self, title: String, artist: Option<String>) -> Result<Option<AlbumId>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.find_album(&title, artist.as_deref())))
+    }
+
+    /// Исполнители видимых треков со счётчиками альбомов и треков.
+    pub fn artists(&self) -> Result<Vec<ArtistRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.artist_list()))
+    }
+
+    /// Треки исполнителя `name`: альбомы по названию, внутри — диск и номер.
+    pub fn artist_tracks(&self, name: String) -> Result<Vec<TrackRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.artist_tracks(&name)))
+    }
+
+    /// Альбомы, где есть треки исполнителя `name`.
+    pub fn artist_albums(&self, name: String) -> Result<Vec<AlbumRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.artist_albums(&name)))
+    }
+
     /// Лайк, оценка и счётчики трека; не слушали и не оценивали — пустые.
     pub fn user_data(&self, track: TrackId) -> Result<TrackUserData, CoreError> {
         panic::guard(|| self.with(|state| state.db.user_data(track)))
+    }
+
+    /// Обложка файла `path`: встроенная, иначе `cover.jpg` рядом. Читает файл,
+    /// а не базу, — замок ядра не берёт.
+    pub fn artwork(&self, path: String) -> Result<Option<Artwork>, CoreError> {
+        panic::guard(|| artwork(Path::new(&path)))
+    }
+
+    /// Ключи сортировки названий — для того, что Kotlin собирает сам (папки):
+    /// тот же порядок, что у списков ядра.
+    pub fn sort_keys(&self, texts: Vec<String>) -> Result<Vec<String>, CoreError> {
+        panic::guard(|| Ok(texts.iter().map(|text| sort_key(text)).collect()))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use plinth_library::db::query::TrackSort;
-    use plinth_library::model::Track;
-    use plinth_types::{Timestamp, TrackId};
+    use std::fs;
+    use std::path::Path;
+    use std::sync::Arc;
 
+    use plinth_library::db::query::{AlbumSort, TrackSort};
+    use plinth_library::scan::FolderConfig;
+
+    use crate::api::scan_api::ScanListener;
     use crate::session::Core;
     use crate::testing::Scratch;
 
-    fn track(title: &str) -> Track {
-        Track {
-            id: TrackId::new(),
-            title: title.to_owned(),
-            artist_credit: "Radiohead".to_owned(),
-            artists: Vec::new(),
-            mbid_work: None,
-            added_at: Timestamp::from_millis(1),
+    struct Quiet;
+
+    impl ScanListener for Quiet {
+        fn progress(&self, _progress: plinth_library::scan::ScanProgress) -> bool {
+            true
         }
+    }
+
+    /// Том с фикстурами тегов приложения: MP3, FLAC и M4A альбома «Fixtures»
+    /// и MP3 без тегов.
+    fn scanned() -> (Scratch, Scratch, Arc<Core>) {
+        let (data, volume) = (Scratch::new(), Scratch::new());
+        let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/src/androidTest/assets/tags");
+        let folder = volume.0.join("Music/Fixtures");
+        fs::create_dir_all(&folder).unwrap();
+        for name in ["plinth-mp3.mp3", "plinth-flac.flac", "plinth-m4a.m4a", "plinth-untagged.mp3"] {
+            fs::copy(assets.join(name), folder.join(name)).unwrap();
+        }
+        let core = Core::open(data.path()).unwrap();
+        core.scan(vec![volume.path()], FolderConfig::default(), Arc::new(Quiet)).unwrap();
+        (data, volume, core)
     }
 
     #[test]
@@ -54,28 +112,60 @@ mod tests {
         let core = Core::open(dir.path()).unwrap();
 
         assert!(core.tracks(TrackSort::Title, None).unwrap().is_empty());
+        assert!(core.albums(AlbumSort::Title).unwrap().is_empty());
+        assert!(core.artists().unwrap().is_empty());
     }
 
-    /// Строка списка несёт и каталог, и пользовательское из журнала.
+    /// Строка списка несёт каталог, файл и пользовательское из журнала.
     #[test]
-    fn track_rows_show_likes_and_follow_search() {
+    fn track_rows_show_likes_files_and_follow_search() {
+        let (_data, _volume, core) = scanned();
+        let tishina = core.tracks(TrackSort::Title, Some("тишина".to_owned())).unwrap().remove(0);
+
+        core.like(tishina.id).unwrap();
+
+        let rows = core.tracks(TrackSort::Album, None).unwrap();
+        let summary: Vec<(&str, bool)> = rows.iter().map(|r| (r.title.as_str(), r.liked)).collect();
+        assert_eq!(
+            summary,
+            [("FLAC Silence", false), ("M4A Silence", false), ("Тишина", true), ("plinth-untagged", false)]
+        );
+        assert_eq!(rows[2].folder.as_deref(), Some("Music/Fixtures/"));
+        assert!(rows[2].uri.as_deref().is_some_and(|uri| uri.ends_with("plinth-mp3.mp3")));
+        assert_eq!((rows[2].disc, rows[2].number), (Some(2), Some(3)));
+    }
+
+    #[test]
+    fn albums_artists_and_their_tracks() {
+        let (_data, _volume, core) = scanned();
+
+        let albums = core.albums(AlbumSort::Title).unwrap();
+        let artists: Vec<(String, u32)> =
+            core.artists().unwrap().into_iter().map(|a| (a.name, a.track_count)).collect();
+        let found = core.find_album("fixtures".to_owned(), Some("Plinth Various".to_owned())).unwrap();
+        let plinth: Vec<String> =
+            core.artist_tracks("Plinth".to_owned()).unwrap().into_iter().map(|t| t.title).collect();
+
+        assert_eq!(albums.len(), 1);
+        assert_eq!((albums[0].title.as_str(), albums[0].track_count), ("Fixtures", 3));
+        assert_eq!(found, Some(albums[0].id));
+        assert_eq!(core.album_tracks(albums[0].id).unwrap().len(), 3);
+        assert_eq!(artists, [("Plinth".to_owned(), 2), ("The Plinth".to_owned(), 1)]);
+        assert_eq!(plinth, ["FLAC Silence", "Тишина"]);
+        assert_eq!(core.artist_albums("The Plinth".to_owned()).unwrap()[0].title, "Fixtures");
+    }
+
+    #[test]
+    fn artwork_and_sort_keys() {
         let dir = Scratch::new();
         let core = Core::open(dir.path()).unwrap();
-        let (creep, karma) = (track("Creep"), track("Karma Police"));
-        core.with(|state| {
-            state.db.save_track(&creep)?;
-            state.db.save_track(&karma)
-        })
-        .unwrap();
+        let cover =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/src/androidTest/assets/artwork/plinth-cover.mp3");
 
-        core.like(creep.id).unwrap();
+        let art = core.artwork(cover.to_string_lossy().into_owned()).unwrap().unwrap();
+        let keys = core.sort_keys(vec!["The 10 Bears".to_owned(), "2 Bears".to_owned()]).unwrap();
 
-        let rows = core.tracks(TrackSort::Title, None).unwrap();
-        assert_eq!(
-            rows.iter().map(|r| (r.title.as_str(), r.liked)).collect::<Vec<_>>(),
-            [("Creep", true), ("Karma Police", false)]
-        );
-        let found = core.tracks(TrackSort::Title, Some("karma".to_owned())).unwrap();
-        assert_eq!(found.iter().map(|r| r.id).collect::<Vec<_>>(), [karma.id]);
+        assert_eq!(art.mime.as_deref(), Some("image/jpeg"));
+        assert!(keys[1] < keys[0], "{keys:?}");
     }
 }

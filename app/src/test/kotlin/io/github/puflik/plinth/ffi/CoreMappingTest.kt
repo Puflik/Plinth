@@ -5,6 +5,8 @@ import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import io.github.puflik.plinth.ffi.generated.AlbumRow as RustAlbumRow
+import io.github.puflik.plinth.ffi.generated.ArtistRow as RustArtistRow
 import io.github.puflik.plinth.ffi.generated.OutputDevice as RustOutputDevice
 import io.github.puflik.plinth.ffi.generated.PlayEvent as RustPlayEvent
 import io.github.puflik.plinth.ffi.generated.TrackRow as RustTrackRow
@@ -26,7 +28,12 @@ class CoreMappingTest {
                 artistCredit = "Radiohead",
                 album = "0192f7c4-0000-7000-8000-000000000002",
                 albumTitle = "Pablo Honey",
+                albumArtist = "Radiohead",
+                disc = 1u,
+                number = 2u,
                 duration = java.time.Duration.ofMillis(238_500),
+                uri = "/storage/emulated/0/Music/Radiohead/Creep.mp3",
+                folder = "Music/Radiohead/",
                 liked = true,
                 playCount = 47u,
             )
@@ -39,11 +46,27 @@ class CoreMappingTest {
                     artistCredit = "Radiohead",
                     album = AlbumId("0192f7c4-0000-7000-8000-000000000002"),
                     albumTitle = "Pablo Honey",
+                    albumArtist = "Radiohead",
+                    disc = 1,
+                    number = 2,
                     duration = 238_500.milliseconds,
+                    uri = "/storage/emulated/0/Music/Radiohead/Creep.mp3",
+                    folder = "Music/Radiohead/",
                     liked = true,
                     playCount = 47,
                 ),
             )
+    }
+
+    @Test
+    fun `albums and artists keep every field`() {
+        val album = "0192f7c4-0000-7000-8000-000000000002"
+        val artist = "0192f7c4-0000-7000-8000-000000000003"
+
+        assertThat(RustAlbumRow(album, "Pablo Honey", "Radiohead", 12u, "/m/Creep.mp3").toApp())
+            .isEqualTo(CoreAlbum(AlbumId(album), "Pablo Honey", "Radiohead", 12, "/m/Creep.mp3"))
+        assertThat(RustArtistRow(artist, "Radiohead", 3u, 40u).toApp())
+            .isEqualTo(CoreArtist(ArtistId(artist), "Radiohead", 3, 40))
     }
 
     @Test

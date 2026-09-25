@@ -3,6 +3,10 @@ package io.github.puflik.plinth.ffi
 import kotlin.time.Instant
 import kotlin.time.toJavaDuration
 import kotlin.time.toKotlinDuration
+import io.github.puflik.plinth.ffi.generated.AlbumRow as RustAlbumRow
+import io.github.puflik.plinth.ffi.generated.AlbumSort as RustAlbumSort
+import io.github.puflik.plinth.ffi.generated.ArtistRow as RustArtistRow
+import io.github.puflik.plinth.ffi.generated.Artwork as RustArtwork
 import io.github.puflik.plinth.ffi.generated.NewPlay as RustNewPlay
 import io.github.puflik.plinth.ffi.generated.OutputDevice as RustOutputDevice
 import io.github.puflik.plinth.ffi.generated.PlayEvent as RustPlayEvent
@@ -25,10 +29,21 @@ internal fun RustTrackRow.toApp() =
         artistCredit = artistCredit,
         album = album?.let(::AlbumId),
         albumTitle = albumTitle,
+        albumArtist = albumArtist,
+        disc = disc?.toInt(),
+        number = number?.toInt(),
         duration = duration?.toKotlinDuration(),
+        uri = uri,
+        folder = folder,
         liked = liked,
         playCount = playCount.toInt(),
     )
+
+internal fun RustAlbumRow.toApp() = CoreAlbum(AlbumId(id), title, artistCredit, trackCount.toInt(), coverUri)
+
+internal fun RustArtistRow.toApp() = CoreArtist(ArtistId(id), name, albumCount.toInt(), trackCount.toInt())
+
+internal fun RustArtwork.toApp() = CoreArtwork(mime, data)
 
 internal fun RustTrackUserData.toApp() =
     TrackUserData(
@@ -79,8 +94,15 @@ internal fun CoreTrackSort.toRust() =
     when (this) {
         CoreTrackSort.TITLE -> RustTrackSort.TITLE
         CoreTrackSort.ARTIST -> RustTrackSort.ARTIST
+        CoreTrackSort.ALBUM -> RustTrackSort.ALBUM
         CoreTrackSort.RECENTLY_ADDED -> RustTrackSort.RECENTLY_ADDED
         CoreTrackSort.MOST_PLAYED -> RustTrackSort.MOST_PLAYED
+    }
+
+internal fun CoreAlbumSort.toRust() =
+    when (this) {
+        CoreAlbumSort.TITLE -> RustAlbumSort.TITLE
+        CoreAlbumSort.ARTIST -> RustAlbumSort.ARTIST
     }
 
 internal fun VersionPreference.toRust() =

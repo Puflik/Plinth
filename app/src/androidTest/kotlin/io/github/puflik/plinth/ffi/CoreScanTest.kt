@@ -20,6 +20,9 @@ import java.util.UUID
  * прямым путям (`/storage/emulated/0/Music/…`), без `MediaStore`. Файл
  * кладётся через `MediaStore`, как его положил бы любой другой плеер;
  * своё приложение видит и без разрешения на музыку.
+ *
+ * D2: теги читает `lofty` в той же `.so` — на устройстве, а не только в
+ * `cargo test` на ПК.
  */
 class CoreScanTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -47,14 +50,16 @@ class CoreScanTest {
         val uri = putProbe()
 
         val first = scan()
+        val found = core.library.tracks().map { it.title }
         val second = scan()
         resolver.delete(uri, null, null)
         val gone = scan()
 
         assertThat(first.added).isEqualTo(1)
-        assertThat(core.library.tracks().map { it.title }).containsExactly(PROBE_TITLE)
+        assertThat(found).containsExactly(PROBE_TITLE)
         assertThat(second.added + second.changed + second.missing).isEqualTo(0)
         assertThat(gone.missing).isEqualTo(1)
+        assertThat(core.library.tracks()).isEmpty() // пропавший трек из списков скрыт
     }
 
     @Test
@@ -73,22 +78,40 @@ class CoreScanTest {
         assertThat(core.library.tracks()).isEmpty()
     }
 
+    @Test
+    fun tags_are_read_on_the_device() {
+        putProbe(asset = "tags/plinth-m4a.m4a", name = "tagged.m4a", mime = "audio/mp4")
+
+        val report = scan()
+
+        val track = core.library.tracks().single()
+        assertThat(report.unreadableFiles).isEqualTo(0)
+        assertThat(listOf(track.title, track.artistCredit, track.albumTitle))
+            .containsExactly("M4A Silence", "The Plinth", "Fixtures")
+            .inOrder()
+        assertThat(track.duration).isNotNull()
+    }
+
     private fun scan() = core.scan.scan(volumes(), listOf(FOLDER))
 
     @Suppress("DEPRECATION") // Корень основного тома; тома SD-карт в D3 даст StorageManager.
     private fun volumes() = listOf(Environment.getExternalStorageDirectory())
 
-    private fun putProbe(): android.net.Uri {
+    private fun putProbe(
+        asset: String = "formats/silence.mp3",
+        name: String = "$PROBE_TITLE.mp3",
+        mime: String = "audio/mpeg",
+    ): android.net.Uri {
         val pending =
             ContentValues().apply {
-                put(MediaColumns.DISPLAY_NAME, "$PROBE_TITLE.mp3")
-                put(MediaColumns.MIME_TYPE, "audio/mpeg")
+                put(MediaColumns.DISPLAY_NAME, name)
+                put(MediaColumns.MIME_TYPE, mime)
                 put(MediaColumns.RELATIVE_PATH, FOLDER)
                 put(MediaColumns.IS_PENDING, 1)
             }
         val uri = checkNotNull(resolver.insert(collection(), pending)) { "MediaStore не принял файл" }
         checkNotNull(resolver.openOutputStream(uri)).use { out ->
-            assets.open("formats/silence.mp3").use { it.copyTo(out) }
+            assets.open(asset).use { it.copyTo(out) }
         }
         resolver.update(uri, ContentValues().apply { put(MediaColumns.IS_PENDING, 0) }, null, null)
         return uri

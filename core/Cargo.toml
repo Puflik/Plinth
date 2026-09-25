@@ -34,6 +34,9 @@ fractional_index = { version = "2.0.2", default-features = false }
 yrs = "0.28.0"
 # Контрольная сумма кадров журнала (C2): порча файла не въедет в документ.
 crc32fast = "1.5.0"
+# Теги (D2, docs/adr/0009-tag-library.md). Фича по умолчанию остаётся:
+# без id3v2_compression_support 0.25.4 не собирается.
+lofty = "0.25.4"
 
 # Ни одна функция, видимая из Kotlin, не паникует (A3.3): unwrap, expect и
 # panic! в коде ядра — ошибка CI (`clippy -D warnings`). В тестах можно —

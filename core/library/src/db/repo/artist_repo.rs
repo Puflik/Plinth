@@ -4,6 +4,7 @@ use rusqlite::{OptionalExtension, Row, params};
 use crate::db::Database;
 use crate::db::sql::{Storage, atomically, id, opt_mbid};
 use crate::model::Artist;
+use crate::sort::sort_key;
 use crate::text::normalize;
 
 impl Database {
@@ -12,18 +13,21 @@ impl Database {
             tx.execute(
                 // UPSERT, а не REPLACE: REPLACE удаляет строку, и каскад стёр бы
                 // связи артиста с треками и альбомами.
-                "INSERT INTO artist(id, name, name_normalized, sort_name, mbid, bio)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO artist(id, name, name_normalized, sort_name, mbid, bio, name_sort)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(id) DO UPDATE SET
                      name = excluded.name, name_normalized = excluded.name_normalized,
-                     sort_name = excluded.sort_name, mbid = excluded.mbid, bio = excluded.bio",
+                     sort_name = excluded.sort_name, mbid = excluded.mbid, bio = excluded.bio,
+                     name_sort = excluded.name_sort",
                 params![
                     artist.id.as_bytes(),
                     artist.name,
                     normalize(&artist.name),
                     artist.sort_name,
                     artist.mbid.map(|m| m.to_string()),
-                    artist.bio
+                    artist.bio,
+                    // Имя для сортировки из тегов («Beatles, The») сильнее артикля.
+                    sort_key(artist.sort_name.as_deref().unwrap_or(&artist.name))
                 ],
             )
             .storage()?;

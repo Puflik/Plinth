@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             last_checked_at: None,
         })?;
         // Учёт сканера (схема v2): каким файл был при последнем скане.
-        db.save_file_stamp(file, Timestamp::from_millis(1_758_000_000_000), 4_096 * u64::from(number))?;
+        db.save_file_stamp(file, Timestamp::from_millis(1_758_000_000_000), 4_096 * u64::from(number), "Music/")?;
         db.save_user_data(&TrackUserData {
             track: track.id,
             liked: number == 2,

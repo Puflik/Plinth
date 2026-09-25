@@ -6,4 +6,5 @@
 pub mod db;
 pub mod model;
 pub mod scan;
+pub mod sort;
 pub mod text;

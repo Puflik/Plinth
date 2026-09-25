@@ -1,5 +1,5 @@
-//! Сканер библиотеки (D1): обход папок, сравнение с каталогом, чтение
-//! тегов, запись каталога.
+//! Сканер библиотеки (D1, D2): обход папок, сравнение с каталогом, чтение
+//! тегов, запись каталога — треков, версий, источников, артистов и альбомов.
 //!
 //! Этапы разделены, чтобы долгий скан не держал базу: обход и чтение
 //! тегов идут без неё, запись — пачками, каждая своей транзакцией. Доступ к
@@ -10,6 +10,7 @@
 //! Поэтому пропавший файл только помечается недоступным: ID трека, на
 //! который ссылаются лайки и плейлисты, остаётся.
 
+mod catalog;
 mod diff;
 mod folder_config;
 mod progress;
@@ -23,7 +24,10 @@ use plinth_types::{Availability, CoreError, SourceId, Timestamp, TrackId, Versio
 pub use diff::{ScanDiff, diff};
 pub use folder_config::FolderConfig;
 pub use progress::{Progress, ScanPhase, ScanProgress};
-pub use tags::{FileNameOnly, TagReader, Tags};
+pub use tags::{
+    ArtistSplit, Artwork, FileNameOnly, FileTags, RawTags, TagReader, Tags, artwork, embedded_artwork, normalized,
+    read_raw,
+};
 pub use walker::{FoundFile, Walk, walk};
 
 use crate::db::Database;
@@ -52,6 +56,8 @@ pub struct ScannedFile {
     /// Каким каталог знал файл; `None` — новый.
     pub known: Option<KnownFile>,
     pub tags: Tags,
+    /// Прочлись ли теги. Изменённый файл с битыми тегами каталог не трогает.
+    pub readable: bool,
 }
 
 /// Итог скана — для лога и экрана.
@@ -62,7 +68,8 @@ pub struct ScanReport {
     pub changed: u32,
     pub returned: u32,
     pub missing: u32,
-    /// Файлы, теги которых не прочлись: добавлены под именем файла.
+    /// Файлы, теги которых не прочлись: новые добавлены под именем файла,
+    /// изменённые остались какими были и перечитаются следующим сканом.
     pub unreadable_files: u32,
     pub unreadable_folders: u32,
     pub missing_volumes: u32,
@@ -125,12 +132,15 @@ pub fn read(diff: &ScanDiff, reader: &dyn TagReader, progress: Progress<'_>) -> 
     let mut unreadable = 0;
     let mut files = Vec::with_capacity(queue.len());
     for (index, (known, file)) in queue.into_iter().enumerate() {
-        let tags = reader.read(Path::new(&file.uri)).unwrap_or_else(|error| {
-            log::warn!("scan: tags are unreadable: {error}");
-            unreadable += 1;
-            Tags::default()
-        });
-        files.push(ScannedFile { file: file.clone(), known, tags });
+        let (tags, readable) = match reader.read(Path::new(&file.uri)) {
+            Ok(tags) => (tags, true),
+            Err(error) => {
+                log::warn!("scan: tags are unreadable: {error}");
+                unreadable += 1;
+                (Tags::default(), false)
+            }
+        };
+        files.push(ScannedFile { file: file.clone(), known, tags, readable });
         let done = count(index + 1);
         if (done.is_multiple_of(REPORT_EVERY) || done == total)
             && !progress(ScanProgress { phase: ScanPhase::Reading, done, total })
@@ -142,22 +152,23 @@ pub fn read(diff: &ScanDiff, reader: &dyn TagReader, progress: Progress<'_>) -> 
 }
 
 /// Пишет файлы в каталог: новые — трек, версия и источник; изменённые —
-/// поверх прежних, с теми же ID.
+/// поверх прежних, с теми же ID. Артисты и альбом — найденные по имени или
+/// новые.
 pub fn write(db: &Database, files: &[ScannedFile], now: Timestamp) -> Result<(), CoreError> {
     for scanned in files {
-        let title =
-            scanned.tags.title.clone().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| file_stem(&scanned.file.uri));
-        let artist = scanned.tags.artist.clone().unwrap_or_default();
         let source = match scanned.known {
-            None => add(db, scanned, title, artist, now)?,
-            Some(known) => update(db, scanned, &known, title, artist, now)?,
+            None => add(db, scanned, now)?,
+            // Без отметки скана файл перечитается в следующий раз.
+            Some(_) if !scanned.readable => continue,
+            Some(known) => update(db, scanned, &known, now)?,
         };
-        db.save_file_stamp(source, scanned.file.modified_at, scanned.file.size)?;
+        db.save_file_stamp(source, scanned.file.modified_at, scanned.file.size, &scanned.file.folder)?;
     }
     Ok(())
 }
 
-/// Вернувшиеся — снова доступны, пропавшие — недоступны.
+/// Вернувшиеся — снова доступны, пропавшие — недоступны. Артисты и альбомы,
+/// которых сменившиеся теги оставили без треков, уходят из каталога.
 pub fn mark(db: &Database, diff: &ScanDiff, now: Timestamp) -> Result<(), CoreError> {
     for file in &diff.returned {
         db.set_availability(file.source, Availability::Available, now)?;
@@ -165,63 +176,73 @@ pub fn mark(db: &Database, diff: &ScanDiff, now: Timestamp) -> Result<(), CoreEr
     for file in &diff.missing {
         db.set_availability(file.source, Availability::Unavailable, now)?;
     }
-    Ok(())
+    db.prune_catalog()
 }
 
-fn add(
-    db: &Database,
-    scanned: &ScannedFile,
-    title: String,
-    artist: String,
-    now: Timestamp,
-) -> Result<SourceId, CoreError> {
-    let track =
-        Track { id: TrackId::new(), title, artist_credit: artist, artists: Vec::new(), mbid_work: None, added_at: now };
+fn add(db: &Database, scanned: &ScannedFile, now: Timestamp) -> Result<SourceId, CoreError> {
+    let tags = &scanned.tags;
+    let track = Track {
+        id: TrackId::new(),
+        title: title(scanned),
+        artist_credit: tags.artist.clone().unwrap_or_default(),
+        artists: catalog::artist_ids(db, &tags.artists)?,
+        mbid_work: None,
+        added_at: now,
+    };
     db.save_track(&track)?;
     let version = Version {
         id: VersionId::new(),
         track: track.id,
         kind: VersionKind::Original,
         explicitness: Explicitness::Unknown,
-        duration: scanned.tags.duration,
-        album: None,
-        release_year: None,
+        duration: tags.duration,
+        album: catalog::placement(db, tags)?,
+        release_year: tags.year,
         mbid_recording: None,
         fingerprint: None,
     };
     db.save_version(&version)?;
-    let source = local_source(SourceId::new(), version.id, &scanned.file, now);
+    let source = local_source(SourceId::new(), version.id, scanned, now);
     db.save_source(&source)?;
     Ok(source.id)
 }
 
-fn update(
-    db: &Database,
-    scanned: &ScannedFile,
-    known: &KnownFile,
-    title: String,
-    artist: String,
-    now: Timestamp,
-) -> Result<SourceId, CoreError> {
+fn update(db: &Database, scanned: &ScannedFile, known: &KnownFile, now: Timestamp) -> Result<SourceId, CoreError> {
+    let tags = &scanned.tags;
     if let Some(mut track) = db.track(known.track)? {
-        track.title = title;
-        track.artist_credit = artist;
+        track.title = title(scanned);
+        track.artist_credit = tags.artist.clone().unwrap_or_default();
+        track.artists = catalog::artist_ids(db, &tags.artists)?;
         db.save_track(&track)?;
     }
     if let Some(mut version) = db.versions_of(known.track)?.into_iter().find(|v| v.id == known.version) {
-        version.duration = scanned.tags.duration.or(version.duration);
+        version.duration = tags.duration.or(version.duration);
+        version.album = catalog::placement(db, tags)?;
+        version.release_year = tags.year;
         db.save_version(&version)?;
     }
-    db.save_source(&local_source(known.source, known.version, &scanned.file, now))?;
+    db.save_source(&local_source(known.source, known.version, scanned, now))?;
     Ok(known.source)
 }
 
-fn local_source(id: SourceId, version: VersionId, file: &FoundFile, now: Timestamp) -> Source {
+/// Название из тегов, без него — имя файла без расширения.
+fn title(scanned: &ScannedFile) -> String {
+    scanned.tags.title.clone().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| file_stem(&scanned.file.uri))
+}
+
+/// Звук — по содержимому файла, если теги прочлись; иначе формат по расширению.
+fn local_source(id: SourceId, version: VersionId, scanned: &ScannedFile, now: Timestamp) -> Source {
+    let file = &scanned.file;
     Source {
         id,
         version,
         location: SourceLocation::Local { uri: file.uri.clone() },
-        audio: AudioSpec { format: file.format, bitrate: None, sample_rate_hz: None, bit_depth: None },
+        audio: scanned.tags.audio.unwrap_or(AudioSpec {
+            format: file.format,
+            bitrate: None,
+            sample_rate_hz: None,
+            bit_depth: None,
+        }),
         availability: Availability::Available,
         last_checked_at: Some(now),
     }

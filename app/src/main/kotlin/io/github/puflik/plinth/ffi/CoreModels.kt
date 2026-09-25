@@ -19,6 +19,11 @@ value class AlbumId(
 )
 
 @JvmInline
+value class ArtistId(
+    val value: String,
+)
+
+@JvmInline
 value class VersionId(
     val value: String,
 )
@@ -44,19 +49,35 @@ value class PlayEventId(
 )
 
 /**
- * Порядок списка треков ядра. Сортировки экранов v0.1 (`library.sort`)
- * переедут в ядро в D3 — тогда два порядка сольются в один.
+ * Порядок списка треков ядра. Названия — в естественном порядке и без
+ * ведущего артикля; пустое (нет исполнителя, нет альбома) — в конце.
  */
 enum class CoreTrackSort {
+    /** По названию, затем по исполнителю. */
     TITLE,
+
+    /** По исполнителю; внутри — альбомы, диск и номер. */
     ARTIST,
+
+    /** По альбому и его исполнителю; внутри — диск и номер. */
+    ALBUM,
     RECENTLY_ADDED,
     MOST_PLAYED,
 }
 
+/** Порядок списка альбомов ядра; альбомы без исполнителя — в конце. */
+enum class CoreAlbumSort {
+    TITLE,
+    ARTIST,
+}
+
 /**
- * Строка списка треков из ядра: песня, её основная версия и пользовательское.
- * `Core` в названии — до D3, где она заменит `LibraryTrack` из Room.
+ * Строка списка треков из ядра: песня, её основная версия, файл и
+ * пользовательское. Видны только треки, которые можно сыграть.
+ *
+ * @property albumArtist исполнитель альбома: album artist, «Various Artists» у сборника.
+ * @property uri путь к файлу, из которого трек играет.
+ * @property folder папка файла от корня тома: `Music/Queen/`.
  */
 data class CoreTrack(
     val id: TrackId,
@@ -64,9 +85,41 @@ data class CoreTrack(
     val artistCredit: String,
     val album: AlbumId?,
     val albumTitle: String?,
+    val albumArtist: String? = null,
+    val disc: Int? = null,
+    val number: Int? = null,
     val duration: Duration?,
+    val uri: String? = null,
+    val folder: String? = null,
     val liked: Boolean,
     val playCount: Int,
+)
+
+/**
+ * Альбом из ядра.
+ *
+ * @property coverUri файл первого трека альбома — его картинка служит обложкой.
+ */
+data class CoreAlbum(
+    val id: AlbumId,
+    val title: String,
+    val artistCredit: String?,
+    val trackCount: Int,
+    val coverUri: String?,
+)
+
+/** Исполнитель из ядра; альбомы и треки — среди видимых. */
+data class CoreArtist(
+    val id: ArtistId,
+    val name: String,
+    val albumCount: Int,
+    val trackCount: Int,
+)
+
+/** Обложка файла: байты картинки как есть и её тип, если известен. */
+class CoreArtwork(
+    val mime: String?,
+    val data: ByteArray,
 )
 
 /** Лайк, оценка (1–5) и счётчики трека; не слушали и не оценивали — пустые. */

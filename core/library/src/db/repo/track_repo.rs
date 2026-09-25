@@ -5,6 +5,7 @@ use crate::db::Database;
 use crate::db::codes::{Code, column};
 use crate::db::sql::{Storage, atomically, first_id, id, millis, opt_duration, opt_id, opt_mbid, timestamp};
 use crate::model::{AlbumPlacement, Fingerprint, Track, Version};
+use crate::sort::sort_key;
 use crate::text::normalize;
 
 impl Database {
@@ -12,12 +13,14 @@ impl Database {
         atomically(self.conn(), |tx| {
             // UPSERT, а не REPLACE: REPLACE удалил бы строку и каскадом — версии трека.
             tx.execute(
-                "INSERT INTO track(id, title, title_normalized, artist_credit, artist_normalized, mbid_work, added_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                "INSERT INTO track(id, title, title_normalized, artist_credit, artist_normalized, mbid_work, added_at,
+                                   title_sort, artist_sort)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                  ON CONFLICT(id) DO UPDATE SET
                      title = excluded.title, title_normalized = excluded.title_normalized,
                      artist_credit = excluded.artist_credit, artist_normalized = excluded.artist_normalized,
-                     mbid_work = excluded.mbid_work, added_at = excluded.added_at",
+                     mbid_work = excluded.mbid_work, added_at = excluded.added_at,
+                     title_sort = excluded.title_sort, artist_sort = excluded.artist_sort",
                 params![
                     track.id.as_bytes(),
                     track.title,
@@ -25,7 +28,9 @@ impl Database {
                     track.artist_credit,
                     normalize(&track.artist_credit),
                     track.mbid_work.map(|m| m.to_string()),
-                    track.added_at.as_millis()
+                    track.added_at.as_millis(),
+                    sort_key(&track.title),
+                    sort_key(&track.artist_credit)
                 ],
             )
             .storage()?;

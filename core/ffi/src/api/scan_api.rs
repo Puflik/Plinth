@@ -1,12 +1,13 @@
-//! Скан библиотеки (A3.1, D1): Kotlin отдаёт тома и папки, ядро само
-//! обходит файлы, пишет каталог пачками и сообщает о ходе колбэком. Теги
-//! пока не читаются — название из имени файла; чтение тегов — D2.
+//! Скан библиотеки (A3.1, D1, D2): Kotlin отдаёт тома и папки, ядро само
+//! обходит файлы, читает теги (`lofty`, ADR 0009), пишет каталог пачками и
+//! сообщает о ходе колбэком. Разделители исполнителей — по умолчанию
+//! (plan.md 13.2); настройка появится вместе с экраном.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use plinth_library::db::Database;
-use plinth_library::scan::{DbAccess, FileNameOnly, FolderConfig, ScanPhase, ScanProgress, ScanReport, scan};
+use plinth_library::scan::{DbAccess, FileTags, FolderConfig, ScanPhase, ScanProgress, ScanReport, scan};
 use plinth_types::{CoreError, Timestamp};
 
 use crate::panic;
@@ -66,7 +67,8 @@ impl Core {
         panic::guard(|| {
             let _scanning = self.scanning()?;
             let roots: Vec<PathBuf> = volumes.into_iter().map(PathBuf::from).collect();
-            scan(self, &roots, &folders, &FileNameOnly, &mut |p| listener.progress(p), Timestamp::now())
+            let reader = FileTags::default();
+            scan(self, &roots, &folders, &reader, &mut |p| listener.progress(p), Timestamp::now())
         })
     }
 }
@@ -124,6 +126,24 @@ mod tests {
         assert_eq!(titles, ["Creep", "Karma Police"]);
         let phases: Vec<ScanPhase> = seen.0.lock().unwrap().iter().map(|p| p.phase).collect();
         assert!(phases.contains(&ScanPhase::Walking) && phases.contains(&ScanPhase::Writing), "{phases:?}");
+    }
+
+    /// Теги читаются по-настоящему: название, исполнитель и альбом из файла.
+    #[test]
+    fn a_scan_reads_real_tags() {
+        let (data, music) = (Scratch::new(), volume(&[]));
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../app/src/androidTest/assets/tags/plinth-m4a.m4a");
+        fs::create_dir_all(music.0.join("Music")).unwrap();
+        fs::copy(fixture, music.0.join("Music/plinth-m4a.m4a")).unwrap();
+        let core = Core::open(data.path()).unwrap();
+
+        let report = core.scan(vec![music.path()], FolderConfig::default(), Arc::new(Seen::default())).unwrap();
+
+        assert_eq!((report.added, report.unreadable_files), (1, 0));
+        let row = core.tracks(TrackSort::Title, None).unwrap().remove(0);
+        assert_eq!((row.title.as_str(), row.artist_credit.as_str()), ("M4A Silence", "The Plinth"));
+        assert_eq!(row.album_title.as_deref(), Some("Fixtures"));
     }
 
     /// Второй скан поверх идущего — отказ, а не два писателя одних файлов.
