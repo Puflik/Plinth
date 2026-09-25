@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Фасад фонотеки (C3.3, D3b) — единственный путь экранов к библиотеке.
  *
- * Реализации — `CoreLibraryRepository` поверх ядра на Rust и, до D3c,
- * `RoomLibraryRepository` v0.1. Здесь нет ни ядра, ни Room, ни Android.
+ * Реализация — `CoreLibraryRepository` поверх ядра на Rust (D3); здесь нет
+ * ни ядра, ни Android.
  * Требования к реализациям записаны в `LibraryRepositoryContractTest`.
  *
  * Чтение — потоками: список обновляется сам, когда скан что-то записал.

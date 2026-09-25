@@ -134,102 +134,84 @@ ExoPlayer разрешает обращаться к себе только из 
 ## Вторая граница: `LibraryRepository`
 
 ```
-     ui/library ──► LibraryRepository (интерфейс) ◄── library/scan (сканер пишет)
+     ui/library ──► LibraryRepository (интерфейс)
           │                 ▲
           │  ┌──────────────┴──────────────┐
-          │  RoomLibraryRepository   FakeLibraryRepository
-          │  (над library/db, Android) (тесты, чистый Kotlin)
+          │  CoreLibraryRepository    FakeLibraryRepository
+          │  (ядро на Rust)           (тесты, ведёт себя как ядро)
           │
-          ├──► LibraryScan (интерфейс) ◄── WorkManagerLibraryScan → ScanWorker → LibraryScanner
+          ├──► LibraryScan (интерфейс) ◄── WorkManagerLibraryScan → ScanWorker → LibraryScanner → ядро
           │                                                            │
           └──► FolderSettings (интерфейс) ◄── DataStoreFolderSettings ◄──┘ (какие папки)
 ```
 
-Весь эпик C временный: в v0.2 Room и сканер заменит ядро на Rust. Переживёт
-его только фасад `LibraryRepository` — и только если экраны ходят в
-библиотеку через него. Фасадов три: `LibraryRepository` — данные и поиск,
-`LibraryScan` — запуск скана и его прогресс, `FolderSettings` — какие папки
-сканировать. Правило сторожит
-`LibraryBoundaryTest`: `ui/**` не импортирует `library/db` и `library/scan`,
-а фасады, модель (`library/model`) и сортировка (`library/sort`) не
-импортируют Android. Требования к
-хранилищу — `LibraryRepositoryContractTest`, устроенный как контракт движка.
+Фонотеку ведёт ядро на Rust (эпик D): каталог, порядок списков, поиск, скан и
+чтение тегов. Фонотека v0.1 — Room и сканер `MediaStore` — удалена в D3c, и
+экраны этого не заметили: в библиотеку они ходят только через фасады.
+Фасадов три: `LibraryRepository` — данные и поиск, `LibraryScan` — запуск
+скана и его ход, `FolderSettings` — какие папки сканировать. Правило
+сторожит `LibraryBoundaryTest`: `ui/**` не импортирует `library/scan`, а
+фасады, модель (`library/model`) и `library/sort` не импортируют Android.
+Требования к хранилищу — `LibraryRepositoryContractTest`: фейк проходит его
+на JVM, ядро — на эмуляторе.
 
 | Тип | Что описывает |
 |---|---|
-| `LibraryTrack` | Трек v0.1: `id` из `MediaStore`, `content://`, теги, папка, время изменения |
-| `Album`, `Artist` | Собираются из треков, своих записей нет. Альбом — название + владелец (исполнитель альбома, иначе трека) |
-| `LibraryFolder` | Дерево папок из `folder` треков: подпапки в естественном порядке, треки — в порядке списка; исчезнувшая папка открывается ближайшей уцелевшей |
-| `NaturalOrder`, `ArticleStripper`, `SortKeys` | Ключ сортировки: без артикля, регистра и диакритики, числа по значению. База сортирует по ключу, посчитанному при записи |
+| `LibraryTrack` | Трек ядра: `TrackId`, путь к файлу, теги, папка; длительность может быть неизвестна |
+| `Album`, `Artist` | Строки ядра. Альбом — название и исполнитель альбома, а без тега — основной артист трека; исполнитель — артист каталога: у «A feat. B» их двое |
+| `LibraryFolder` | Дерево папок из `folder` треков: подпапки по ключам `LibraryRepository.sortKeys`, треки — в порядке списка; исчезнувшая папка открывается ближайшей уцелевшей |
 | `FolderConfig` | Какие папки сканировать: включённые со всеми подпапками, кроме исключённых; умолчание — `Music` и `Download`; правка — `include`, `exclude`, `remove` |
-| `SearchQuery` | Поиск: каждое слово запроса — подстрока названия, исполнителя или альбома, без регистра и надстрочных знаков. Room ищет им же в Kotlin, поверх списка по названию |
-| `CodePointOrder` | Сравнение строк по кодовым точкам, как в SQLite и Rust; им сортирует всё, что сортирует ключи в Kotlin |
+| `CodePointOrder` | Сравнение строк по кодовым точкам, как в SQLite и Rust; им папки сравнивают ключи ядра |
 | `TrackSort`, `AlbumSort` | Варианты порядка списков |
 
-### Как Room держит порядок контракта
+### Фонотека поверх ядра
 
-Контракт один на фейк и на Room, поэтому SQL повторяет компаратор фейка
-один в один, и расхождение ловят те же тесты. Всё держится на трёх приёмах:
+`CoreLibraryRepository` выбирает вызов ядра и переводит строки в модель;
+порядок, группировку и поиск считает ядро (`core/library/src/db/query/`).
+Потоки перечитывают ядро по сигналу `PlinthCore.catalogChanges` — после
+каждой записанной пачки скана и в его конце, — поэтому список растёт по ходу
+скана. Вызовы ядра блокирующие и идут в IO. Отказ ядра уходит в
+`CoreErrors`, а список остаётся прежним.
 
-- **Ключи считаются при записи.** `RoomLibraryRepository.upsert` кладёт в
-  строку рядом с тегом его ключ (`title_key`, `artist_key`, `album_key`,
-  `album_owner_key`) — без артикля, регистра и диакритики, числа дополнены
-  нулями. SQL сортирует ключи обычным сравнением строк — побайтово в UTF-8,
-  то есть по кодовым точкам; фейк сравнивает так же (`CodePointOrder`), а не
-  `String.compareTo` по UTF-16. Нет тега — нет и ключа.
-- **Пустое — в конце: `ORDER BY x IS NULL, x`.** `NULLS LAST` появился в
-  SQLite 3.30, а на Android 8 — 3.18. Исключение — диск: без номера он идёт
-  первым, и это обычный порядок SQLite, где `NULL` меньше любого значения.
-  Равные треки — по `media_store_id`, равные альбомы — по точному названию и
-  владельцу.
-- **Группы — по точным значениям.** Альбом — `GROUP BY album, album_owner`
-  (владелец — исполнитель альбома, иначе трека, хранится готовым),
-  исполнитель — `GROUP BY artist`. Экран альбома ищет треки по
-  `album_owner IS :owner`: у альбома без исполнителей владелец `NULL`, а
-  `NULL = NULL` в SQL ложно.
-
-Пропавший трек помечается (`missing = 1`) и остаётся в таблице: его видит
-`upsert`, но не видит ни один список. `markMissing` режет список `id` на
-порции по 999 — больше параметров одним запросом SQLite до 3.32
-(Android 8–11) не примет.
+Отличия от v0.1, записанные в контракт: строка исполнителя делится на
+артистов; поиск не замечает знаков; альбом и исполнитель узнаются по имени
+без регистра, диакритики и знаков; равные по ключам стоят в порядке
+добавления. Фейк повторяет это в Kotlin, и для ключей у него своя копия
+естественной сортировки (`sharedTest/…/library/sort`) — в приложении её нет.
 
 | Файл | Что делает |
 |---|---|
-| `library/db/PlinthDatabase` | База v1, одна таблица `tracks`; схема каждой версии — в `app/schemas/` |
-| `library/db/entity/TrackEntity` | Строка трека: теги, владелец альбома, ключи, флаг `missing`; перевод из модели и обратно |
-| `library/db/dao/TrackDao` | Запросы списков, альбомы и исполнители через `GROUP BY`, `upsert`, `markMissing` |
-| `library/db/Converters` | `Duration` ↔ миллисекунды |
-| `library/RoomLibraryRepository` | Фасад поверх `TrackDao`: выбирает запрос, переводит строки в модель |
-| `di/LibraryModule` | База — синглтон процесса, фасад поверх неё; `LibraryEntryPoint` для тестов |
+| `library/CoreLibraryRepository` | Фасад над ядром: потоки по сигналу изменений, работа в IO |
+| `ffi/CoreLibrary` | Вызовы ядра: списки, поиск, альбом по названию, обложка файла, ключи сортировки |
+| `library/OldLibraryCleanup` | Стирает базу v0.1 (`plinth.db`) при старте приложения |
+| `di/LibraryModule` | Фасад — синглтон процесса; `LibraryEntryPoint` для тестов |
 
 ### Сканер
 
 ```
-MediaStore (системный сканер уже прочитал теги)
-     │  MediaStoreSource: строки IS_MUSIC → MediaStoreRow
+тома — StorageVolumes: StorageManager, до Android 11 — папки приложения на томах
+     │
+LibraryScanner ── разрешение на музыку, FolderConfig
+     │
+ядро: обход по прямым путям → сверка с каталогом → теги (lofty) → запись пачками
+     │                                                           └─► catalogChanges
      ▼
-LibraryScanner ── FolderConfig: только сканируемые папки
-     │          ── ScanDiff: knownVersions() против _ID + DATE_MODIFIED
-     │          ── TagReader: MediaStoreRow → LibraryTrack
-     ▼
-LibraryRepository.upsert (новые и изменённые) · markMissing (пропавшие)
+ScanResult: найдено, прочитано заново, пропало
 ```
 
-Своей библиотеки тегов в v0.1 нет (решение C2): теги читает системный
-сканер, приложение берёт их из `MediaStore`. Сканер пишет через фасад,
-как любой клиент библиотеки, поэтому на JVM он проверяется на
-`FakeLibraryRepository` и фейковом источнике. Android знает только
-`MediaStoreSource`; остальное — чистый Kotlin.
+Ядро само обходит тома и видит файлы в любых папках, а не только те, что
+знает `MediaStore`. Прямые пути к чужой музыке на Android 10 открывает
+`requestLegacyExternalStorage`, с Android 11 — разрешение на музыку. Без
+разрешения скан не начинается: ядро увидело бы одни файлы приложения, и всё
+прочее ушло бы в пропавшие. Пропавший файл отмечается недоступным, а трек с
+лайками и местом в плейлистах остаётся (ADR 0007).
 
 | Файл `library/scan` | Что делает |
 |---|---|
 | `DataStoreFolderSettings` | `FolderSettings` в DataStore: два набора строк; нет ключа — умолчание (выбор, равный умолчанию, пишется так же), пустой набор — «ничего» |
-| `MediaStoreRow` | Строка `MediaStore` как есть, без типов Android |
-| `MediaStoreSource` | Запрос к `MediaStore`: папка из `RELATIVE_PATH` (Android 10+) или из `DATA` |
-| `TagReader` | Соглашения `MediaStore`: `<unknown>` — нет тега, `TRACK` = диск × 1000 + номер, без названия — имя файла |
-| `ScanDiff` | Что перечитать и что пометить пропавшим — по `_ID` и времени изменения |
-| `LibraryScanner` | Собирает всё вместе и возвращает `ScanResult`: найдено, записано, пропало; пишет порциями по 500 с отчётом о прогрессе и точкой отмены |
-| `ScanWorker` | `CoroutineWorker` от Hilt: скан в фоне, прогресс через `setProgress`, итог — выходные данные |
+| `StorageVolumes` | Корни томов: основное хранилище и SD-карты; вынутая карта в список не попадает |
+| `LibraryScanner` | Скан ядром: разрешение, тома, папки; ход — обработано из всего, итог — `ScanResult`; отмена останавливает ядро на ближайшем отчёте |
+| `ScanWorker` | `CoroutineWorker` от Hilt: скан в фоне, ход через `setProgressAsync`, итог — выходные данные |
 | `WorkManagerLibraryScan` | `LibraryScan` поверх уникальной работы `library-scan` (`KEEP`): состояние работы → `ScanProgress` |
 
 Скан запускает `LibraryViewModel`, когда разрешение становится выданным: при
@@ -415,7 +397,7 @@ ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<Image
 
 `sharedTest` подключён к обоим наборам в `app/build.gradle.kts`. Иначе
 контракт пришлось бы писать дважды: фейки проверяются на JVM, настоящие
-реализации (`Media3Engine`, Room) — на эмуляторе.
+реализации (`Media3Engine`, ядро на Rust) — на эмуляторе.
 
 ## Зависимости
 
@@ -426,9 +408,10 @@ ArtworkImage (ui/common) ── LocalArtworkLoader ──► ArtworkLoader<Image
 - **UI — Compose + Material 3**, одна `Activity`, навигация в `ui/navigation`.
 - **Звук — Media3/ExoPlayer и `media3-session`**, спрятан за `audio/engine`
   ([ADR 0001](adr/0001-stack.md), [0002](adr/0002-audio-engine-abstraction.md)).
-- **Хранение — Room** с компилятором на KSP, спрятан за `LibraryRepository`.
-  Схема выгружается в `app/schemas/` (плагин `androidx.room`). Настройки —
-  **DataStore** (Preferences), очередь — свой файл в `filesDir/queue`.
+- **Хранение — SQLite в ядре на Rust** (эпик B), спрятано за
+  `LibraryRepository`; журнал пользовательских данных — там же (ADR 0007).
+  Room ушёл в D3c. Настройки — **DataStore** (Preferences), очередь — свой
+  файл в `filesDir/queue`.
 - **Фон — WorkManager** для скана библиотеки (`ScanWorker` строит Hilt).
 - **Rust-ядро — UniFFI** (Kotlin-биндинги генерируются при сборке) поверх
   **JNA**; логи — крейт `log` ([ADR 0010](adr/0010-ffi-boundary.md)).

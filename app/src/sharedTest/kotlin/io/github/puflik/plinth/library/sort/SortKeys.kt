@@ -4,8 +4,8 @@ package io.github.puflik.plinth.library.sort
  * Ключ сортировки названий фонотеки: без ведущего артикля и в
  * [естественном порядке][NaturalOrder].
  *
- * Хранилище считает ключи при записи и сортирует по ним, поэтому смена
- * списка артиклей требует пересчитать ключи — но не пересканировать файлы.
+ * Копия ключей ядра (`core/library/src/sort/`) для `FakeLibraryRepository`:
+ * в приложении с D3c названия сортирует ядро, а фейк должен ставить их так же.
  */
 class SortKeys(
     private val articles: ArticleStripper = ArticleStripper(),

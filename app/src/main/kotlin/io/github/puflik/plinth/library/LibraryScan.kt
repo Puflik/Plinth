@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.Flow
  * Фоновый скан фонотеки глазами экранов (C2.4).
  *
  * Лежит рядом с [LibraryRepository], а не в `library/scan`: экранам сканер
- * не виден (`LibraryBoundaryTest`), а в v0.2 его заменит ядро на Rust —
- * управлять сканом экраны будут так же.
+ * не виден (`LibraryBoundaryTest`). Сканирует ядро на Rust (D3c), экраны
+ * управляют сканом так же, как в v0.1.
  */
 interface LibraryScan {
     /** Состояние последнего скана; новый подписчик сразу получает текущее. */
@@ -25,8 +25,8 @@ sealed interface ScanProgress {
     data object Idle : ScanProgress
 
     /**
-     * Скан идёт: записано [written] из [total] новых и изменённых треков.
-     * Пока файлы не сверены, оба — ноль.
+     * Скан идёт: обработано [written] из [total] новых и изменённых файлов.
+     * Пока файлы ищутся, оба — ноль.
      */
     data class Running(
         val written: Int,

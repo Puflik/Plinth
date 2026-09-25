@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.room)
     // A2.2: Rust-ядро — .so в jniLibs и Kotlin-биндинги в generated (build-logic).
     id("plinth.rust")
 }
@@ -123,12 +122,6 @@ android {
     }
 }
 
-// C3.1: схема каждой версии базы ложится в репозиторий. По этим файлам
-// пишутся и проверяются миграции — без них схему прошлой версии не восстановить.
-room {
-    schemaDirectory("$projectDir/schemas")
-}
-
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
 
@@ -152,10 +145,6 @@ dependencies {
 
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
-
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.datastore.preferences)
 

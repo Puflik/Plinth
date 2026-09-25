@@ -27,6 +27,12 @@
       покидает устройство. На Android 12+ allowBackup="false" не выключает
       перенос «телефон → телефон» — его закрывают data_extraction_rules.
     -->
+    <!--
+        requestLegacyExternalStorage — для Android 10: скан ядра читает файлы
+        по прямым путям (D3c), а в новом режиме хранилища Android 10 путь
+        открыт только к своим файлам. С Android 11 флаг не действует: пути к
+        музыке открывает разрешение на неё.
+    -->
     <application
         android:name=".PlinthApplication"
         android:allowBackup="false"
@@ -34,6 +40,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Plinth">

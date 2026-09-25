@@ -8,15 +8,17 @@ import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import io.github.puflik.plinth.diagnostics.log.AppLog
+import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.library.FolderSettings
 import kotlinx.coroutines.flow.first
 
 /**
- * Скан фонотеки в фоне (C2.4): переживает уход с экрана, прогресс — через
- * `setProgress`, итог — через выходные данные работы.
+ * Скан фонотеки в фоне (C2.4, D3c): переживает уход с экрана, ход — через
+ * `setProgressAsync` (его сообщает поток ядра), итог — через выходные данные
+ * работы.
  *
  * Отмена — штатная для `CoroutineWorker`: WorkManager отменяет корутину, и
- * сканер останавливается на ближайшей порции, сохранив записанное.
+ * ядро останавливается на ближайшем отчёте о ходе, сохранив записанное.
  */
 @HiltWorker
 class ScanWorker
@@ -31,13 +33,17 @@ class ScanWorker
             try {
                 val result =
                     scanner.scan(settings.folders.first()) { written, total ->
-                        setProgress(workDataOf(KEY_WRITTEN to written, KEY_TOTAL to total))
+                        setProgressAsync(workDataOf(KEY_WRITTEN to written, KEY_TOTAL to total))
                     }
                 AppLog.i(TAG, "done: ${result.found} tracks")
                 Result.success(workDataOf(KEY_FOUND to result.found))
             } catch (expected: SecurityException) {
                 // Доступа к музыке нет или его отозвали посреди скана: повторять бессмысленно до новой выдачи.
                 AppLog.w(TAG, "no access to music", expected)
+                Result.failure()
+            } catch (failure: CoreFailure) {
+                // Отказ ядра уже ушёл в CoreErrors — сказать ли человеку, решит ErrorPresenter.
+                AppLog.w(TAG, "core scan failed", failure)
                 Result.failure()
             }
 

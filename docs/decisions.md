@@ -3521,3 +3521,71 @@ TECNO CAMON 30 (`CL6`), Android 16 (API 36), HiOS 16.3, ABI **`arm64-v8a`**
   - фейк и `LibraryFolder` пользуются `SortKeys`, `NaturalOrder` и
     `CodePointOrder` из `library/sort`. При удалении сортировки на Kotlin им
     нужна своя копия: фейку — в `sharedTest`.
+
+### D3c: скан через ядро, экраны на ядре, Room удалён
+
+Сделано 2026-09-25, не закоммичено.
+
+- **Экраны читают ядро:** в DI стоит `CoreLibraryRepository`, синглтон
+  процесса.
+- **Скан — ядро:**
+  - `LibraryScanner` переписан: `core.scan` по томам из `StorageVolumes` и
+    папкам из `FolderSettings`;
+  - без разрешения на музыку скан не начинается (`SecurityException`);
+  - отмена корутины останавливает ядро на ближайшем отчёте о ходе;
+  - итог — прежний `ScanResult`: найдено; прочитано заново (новые и
+    изменённые); пропало.
+  - **Ход:** пока файлы ищутся — `0 из 0`; дальше чтение тегов `done/total`;
+    запись показывается как `total/total`, она быстрая. `ScanProgress.Running`
+    теперь значит «обработано файлов», а не «записано треков».
+  - `ScanWorker` передаёт ход через `setProgressAsync`: его сообщает поток
+    ядра. Отказ ядра — `Result.failure()`, сам отказ уже ушёл в `CoreErrors`.
+- **Тома** (`AndroidStorageVolumes`):
+  - с Android 11 — `StorageManager.storageVolumes`, только смонтированные;
+  - до него — начало пути `getExternalFilesDirs` до `/Android/data/`.
+
+  Вынутая карта в список не попадает: скан отметит её треки недоступными, а
+  вернётся карта — снова доступными. ID и лайки при этом остаются.
+- **Android 10:** в манифест добавлен `requestLegacyExternalStorage="true"`.
+  Без него в новом режиме хранилища ядро по прямым путям видит только свои
+  файлы. С Android 11 флаг не действует: пути к музыке открывает
+  разрешение. **Не проверено:** эмулятора с API 29 нет.
+- **`UnavailableRescan`** узнаёт трек фонотеки по пути (`/…`). Адреса
+  `content://` — «Открыть файл» и очередь, сохранённая до 0.2, — скан не
+  запускают.
+- **Старая база** — `OldLibraryCleanup`: при старте `deleteDatabase("plinth.db")`
+  стирает файл вместе с WAL. Шаг остаётся навсегда — он стоит одного
+  обращения к диску.
+- **Удалено:**
+  - `library/db` и `RoomLibraryRepository`;
+  - сканер `MediaStore`: `MediaStoreRow`, `MediaStoreSource`, `ScanDiff`,
+    `TagReader`, `ScanStore`;
+  - `SearchQuery`, `app/schemas`;
+  - Room из сборки: плагин, зависимости, каталог версий, правило R8;
+  - их тесты: `RoomLibraryRepositoryTest`, `MediaStoreScanTest`,
+    `MediaStoreSourceTest`, `ScanDiffTest`, `TagReaderTest`, `FakeScanStore`,
+    JVM-тест сканера.
+- **Сортировка на Kotlin** (`NaturalOrder`, `ArticleStripper`, `SortKeys`)
+  переехала в `sharedTest` — это копия ключей ядра для фейка. В приложении
+  остались `TrackSort` и `AlbumSort` (`SortOption.kt`) и `CodePointOrder` —
+  по нему папки сравнивают ключи ядра.
+- **Тесты:**
+  - новые инструментальные: `LibraryScannerTest` (6),
+    `AndroidStorageVolumesTest`, `OldLibraryCleanupTest`;
+  - `ScanWorkerTest` работает на настоящем ядре и томе в `cacheDir`;
+  - `LibraryScanWorkTest` сквозной: Hilt → WorkManager → ядро → фонотека;
+    ожидание системного сканера из него ушло;
+  - `LibraryGraphTest` проверяет `CoreLibraryRepository`;
+  - приёмочный `ScanPerformanceTest` (5 000 треков) меряет скан ядра. Он
+    идёт только с `-Pacceptance`, в этот раз не запускался.
+- **Документация:** раздел фонотеки в `docs/ARCHITECTURE.md` переписан под
+  ядро.
+- **Проверено:**
+  - JVM 433 + 433: ушли тесты сканера `MediaStore`;
+  - ktlint, detekt, сборка обоих flavor;
+  - инструментальные на API 36 (`ANDROID_SERIAL=emulator-5554`) — 145/145.
+- **Дальше — D3d:**
+  - проверка на эмуляторах 26 и 30 и на телефоне автора: SD-карта, 634
+    трека. На телефон ставить только с разрешения;
+  - приёмочный `ScanPerformanceTest`;
+  - Android 10 — если найдётся устройство или образ.

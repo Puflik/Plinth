@@ -7,22 +7,22 @@ import io.github.puflik.plinth.di.LibraryEntryPoint
 import org.junit.Test
 
 /**
- * Граф приложения отдаёт фонотеку на Room, одну на процесс (C3).
+ * Граф приложения отдаёт фонотеку поверх ядра, одну на процесс (C3, D3c).
  *
  * Пока фасад никто не внедряет, Dagger не проверяет его привязки при сборке:
  * сломанный `LibraryModule` собирался бы молча. Этот тест — первый
- * потребитель. Базу он не открывает: Room открывает файл при первом запросе.
+ * потребитель. Ядро он не открывает: фасад зовёт ядро при первом чтении.
  */
 class LibraryGraphTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Test
-    fun app_graph_gives_one_room_repository() {
+    fun app_graph_gives_one_core_repository() {
         val graph = EntryPointAccessors.fromApplication<LibraryEntryPoint>(context)
 
         val repository = graph.libraryRepository()
 
-        assertThat(repository).isInstanceOf(RoomLibraryRepository::class.java)
+        assertThat(repository).isInstanceOf(CoreLibraryRepository::class.java)
         assertThat(graph.libraryRepository()).isSameInstanceAs(repository)
     }
 }

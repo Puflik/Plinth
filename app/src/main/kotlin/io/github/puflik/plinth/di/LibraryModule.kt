@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
-import androidx.room.Room
 import androidx.work.WorkManager
 import dagger.Module
 import dagger.Provides
@@ -13,40 +12,31 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.puflik.plinth.ffi.PlinthCore
+import io.github.puflik.plinth.library.CoreLibraryRepository
 import io.github.puflik.plinth.library.FolderSettings
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
-import io.github.puflik.plinth.library.RoomLibraryRepository
-import io.github.puflik.plinth.library.db.PlinthDatabase
+import io.github.puflik.plinth.library.OldLibraryCleanup
 import io.github.puflik.plinth.library.permission.MediaPermission
+import io.github.puflik.plinth.library.scan.AndroidStorageVolumes
 import io.github.puflik.plinth.library.scan.DataStoreFolderSettings
 import io.github.puflik.plinth.library.scan.LibraryScanner
-import io.github.puflik.plinth.library.scan.MediaStoreSource
-import io.github.puflik.plinth.library.scan.ScanSource
 import io.github.puflik.plinth.library.scan.WorkManagerLibraryScan
-import io.github.puflik.plinth.library.sort.SortKeys
 import io.github.puflik.plinth.settings.DataStoreSortSettings
 import io.github.puflik.plinth.settings.SortSettings
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import javax.inject.Singleton
 
 /**
- * Граф фонотеки (C2, C3): одна база на процесс, фасад поверх неё, сканер.
- *
- * База — синглтон: Room держит пул соединений и следит за изменениями
- * таблиц, чтобы списки-потоки обновлялись сами; вторая копия на тот же файл
- * не увидела бы записей первой. Экраны получают только [LibraryRepository]
- * и [LibraryScan]; сам сканер нужен лишь `ScanWorker`.
+ * Граф фонотеки (C2, C3, D3c): фасад поверх ядра на Rust, скан ядром, настройки.
+ * Экраны получают только [LibraryRepository] и [LibraryScan]; сам сканер
+ * нужен лишь `ScanWorker`.
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object LibraryModule {
-    @Provides
-    @Singleton
-    fun provideDatabase(
-        @ApplicationContext context: Context,
-    ): PlinthDatabase = Room.databaseBuilder(context, PlinthDatabase::class.java, PlinthDatabase.NAME).build()
-
     @Provides
     @Singleton
     fun provideSettingsStore(
@@ -59,33 +49,28 @@ object LibraryModule {
     @Provides
     fun provideFolderSettings(store: DataStore<Preferences>): FolderSettings = DataStoreFolderSettings(store)
 
-    /** Артикли по умолчанию; настраиваемый список придёт вместе с экраном настроек. */
-    @Provides
-    fun provideSortKeys(): SortKeys = SortKeys()
-
-    /** До D3c экраны читают Room, а сканер `MediaStore` пишет в неё же; в D3c их сменит ядро. */
+    /** Фонотека — ядро на Rust (D3): одна на процесс, как и само ядро. */
     @Provides
     @Singleton
-    fun provideRoomLibrary(
-        database: PlinthDatabase,
-        keys: SortKeys,
-    ): RoomLibraryRepository = RoomLibraryRepository(database.trackDao(), keys)
-
-    @Provides
-    fun provideLibraryRepository(room: RoomLibraryRepository): LibraryRepository = room
-
-    @Provides
-    fun provideScanSource(
-        @ApplicationContext context: Context,
+    fun provideLibraryRepository(
+        core: PlinthCore,
         @IoDispatcher io: CoroutineDispatcher,
-    ): ScanSource = MediaStoreSource(context.contentResolver, io)
+    ): LibraryRepository = CoreLibraryRepository(core, io)
 
     @Provides
     fun provideLibraryScanner(
         @ApplicationContext context: Context,
-        source: ScanSource,
-        room: RoomLibraryRepository,
-    ): LibraryScanner = LibraryScanner(source, room, canRead = { MediaPermission.isGranted(context) })
+        core: PlinthCore,
+        @IoDispatcher io: CoroutineDispatcher,
+    ): LibraryScanner =
+        LibraryScanner(core, AndroidStorageVolumes(context), io, canRead = { MediaPermission.isGranted(context) })
+
+    @Provides
+    fun provideOldLibraryCleanup(
+        @ApplicationContext context: Context,
+        @ApplicationScope scope: CoroutineScope,
+        @IoDispatcher io: CoroutineDispatcher,
+    ): OldLibraryCleanup = OldLibraryCleanup(context, scope, io)
 
     /** Конфигурацию WorkManager даёт `PlinthApplication`: воркеры строит Hilt. */
     @Provides

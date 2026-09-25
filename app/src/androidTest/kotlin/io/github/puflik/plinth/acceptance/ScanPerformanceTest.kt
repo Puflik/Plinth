@@ -6,21 +6,20 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.MediaStore.MediaColumns
 import android.util.Log
-import androidx.room.Room
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
-import io.github.puflik.plinth.library.RoomLibraryRepository
-import io.github.puflik.plinth.library.db.PlinthDatabase
+import io.github.puflik.plinth.diagnostics.log.LogLevel
+import io.github.puflik.plinth.ffi.CoreErrors
+import io.github.puflik.plinth.ffi.PlinthCore
+import io.github.puflik.plinth.library.CoreLibraryRepository
 import io.github.puflik.plinth.library.model.FolderConfig
+import io.github.puflik.plinth.library.scan.AndroidStorageVolumes
 import io.github.puflik.plinth.library.scan.LibraryScanner
-import io.github.puflik.plinth.library.scan.MediaStoreSource
 import io.github.puflik.plinth.library.scan.ScanResult
-import io.github.puflik.plinth.library.sort.SortKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
@@ -30,8 +29,9 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.UUID
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlin.time.measureTimedValue
@@ -46,29 +46,28 @@ import kotlin.time.measureTimedValue
  *
  * Библиотека как у живого человека: 50 исполнителей по 10 альбомов по 10
  * треков, у каждого файла свои теги и своя папка альбома. Файлы кладутся через
- * `MediaStore`, разбирает их системный сканер; замеряется наш скан целиком —
- * запрос к `MediaStore`, сверка, теги, запись в Room на диске. Без разрешения
- * на чтение тест видит только свои файлы: считаются ровно эти 5 000.
+ * `MediaStore` в общее хранилище; замеряется скан ядра целиком (D3c) — обход
+ * тома по прямым путям, сверка, теги через `lofty`, запись каталога на диск.
+ * Без разрешения на чтение тест видит только свои файлы: считаются ровно эти
+ * 5 000.
  */
 @SdkSuppress(minSdkVersion = Build.VERSION_CODES.Q)
 class ScanPerformanceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val resolver = context.contentResolver
-    private val source = MediaStoreSource(resolver, Dispatchers.IO)
-    private lateinit var database: PlinthDatabase
+    private val dataDir = File(context.cacheDir, "scan-performance-" + UUID.randomUUID())
+    private val core = PlinthCore(LogLevel.INFO, dataDir, CoreErrors())
 
     @Before
     fun freshStart() {
         removeFiles()
-        context.deleteDatabase(DATABASE)
-        database = Room.databaseBuilder(context, PlinthDatabase::class.java, DATABASE).build()
     }
 
     @After
     fun cleanUp() {
-        database.close()
-        context.deleteDatabase(DATABASE)
+        core.close()
+        dataDir.deleteRecursively()
         removeFiles()
     }
 
@@ -76,8 +75,7 @@ class ScanPerformanceTest {
     fun five_thousand_tracks_scan_in_under_thirty_seconds() =
         runBlocking {
             putLibrary()
-            awaitSystemScanner()
-            val scanner = LibraryScanner(source, RoomLibraryRepository(database.trackDao(), SortKeys()))
+            val scanner = LibraryScanner(core, AndroidStorageVolumes(context), Dispatchers.IO)
             val folders = FolderConfig(included = listOf(ROOT))
 
             val (first, firstTime) = measureTimedValue { scanner.scan(folders) }
@@ -88,7 +86,7 @@ class ScanPerformanceTest {
             assertThat(again).isEqualTo(ScanResult(found = TRACKS, updated = 0, missing = 0))
             assertThat(firstTime).isLessThan(LIMIT)
             assertThat(againTime).isLessThan(LIMIT)
-            val repository = RoomLibraryRepository(database.trackDao(), SortKeys())
+            val repository = CoreLibraryRepository(core, Dispatchers.IO)
             assertThat(repository.albums().first()).hasSize(ARTISTS * ALBUMS)
             assertThat(repository.artists().first()).hasSize(ARTISTS)
         }
@@ -126,18 +124,6 @@ class ScanPerformanceTest {
             out.write(audio)
         }
         resolver.update(uri, ContentValues().apply { put(MediaColumns.IS_PENDING, 0) }, null, null)
-    }
-
-    /** Ждёт, пока системный сканер разберёт все файлы: длительность есть только у разобранных. */
-    private suspend fun awaitSystemScanner() {
-        val start = TimeSource.Monotonic.markNow()
-        while (true) {
-            val scanned = source.rows().count { it.folder.startsWith(ROOT) && (it.durationMs ?: 0) > 0 }
-            if (scanned == TRACKS) break
-            check(start.elapsedNow() < SYSTEM_SCAN_TIMEOUT) { "системный сканер разобрал $scanned из $TRACKS" }
-            delay(POLL)
-        }
-        Log.i(TAG, "Системный сканер разобрал всё за ${start.elapsedNow()}")
     }
 
     /** Звук из фикстуры без тегов — без её пустого заголовка ID3. */
@@ -205,7 +191,6 @@ class ScanPerformanceTest {
     private companion object {
         const val TAG = "PlinthAcceptance"
         const val ROOT = "Music/PlinthPerf/"
-        const val DATABASE = "scan-performance.db"
         const val FIXTURE = "tags/plinth-untagged.mp3"
         const val ARTISTS = 50
         const val ALBUMS = 10
@@ -213,8 +198,6 @@ class ScanPerformanceTest {
         const val TRACKS = ARTISTS * ALBUMS * TRACKS_PER_ALBUM
         const val PARALLEL_WRITES = 8
         val LIMIT: Duration = 30.seconds
-        val SYSTEM_SCAN_TIMEOUT: Duration = 10.minutes
-        val POLL: Duration = 2.seconds
         val COLLECTION: Uri = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
     }
 }

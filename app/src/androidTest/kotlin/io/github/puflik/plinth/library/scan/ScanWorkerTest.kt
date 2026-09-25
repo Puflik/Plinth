@@ -10,63 +10,84 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
 import com.google.common.truth.Truth.assertThat
 import com.google.common.util.concurrent.Futures
+import io.github.puflik.plinth.diagnostics.log.LogLevel
+import io.github.puflik.plinth.ffi.CoreErrors
+import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.library.FakeFolderSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Test
+import java.io.File
+import java.util.UUID
 
 /**
- * `ScanWorker` сам по себе (C2.4): сканирует папки по умолчанию, публикует
- * прогресс и отдаёт итог выходными данными работы. Источник и хранилище —
- * фейки; настоящий путь через WorkManager и Hilt — в `LibraryScanWorkTest`.
+ * `ScanWorker` сам по себе (C2.4, D3c): сканирует папки из настроек ядром,
+ * публикует ход и отдаёт итог выходными данными работы. Ядро и том — во
+ * временной папке; настоящий путь через WorkManager и Hilt — в
+ * `LibraryScanWorkTest`.
  */
 class ScanWorkerTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
-    private val store = FakeScanStore()
+    private val root = File(context.cacheDir, "worker-" + UUID.randomUUID())
+    private val volume = File(root, "volume")
+    private val core = PlinthCore(LogLevel.INFO, File(root, "core"), CoreErrors())
     private val folders = FakeFolderSettings()
     private val published = mutableListOf<Data>()
+    private var canRead = true
+
+    @After
+    fun tearDown() {
+        core.close()
+        root.deleteRecursively()
+    }
 
     @Test
     fun scan_result_is_the_work_output() =
         runBlocking<Unit> {
-            val worker = worker { listOf(row(id = 1, folder = "Music/"), row(id = 2, folder = "Ringtones/")) }
+            put("Music/a.mp3", "Ringtones/b.mp3")
 
-            val result = worker.doWork()
+            val result = worker().doWork()
 
             assertThat(result).isEqualTo(ListenableWorker.Result.success(workDataOf(ScanWorker.KEY_FOUND to 1)))
-            assertThat(store.present().map(ScannedTrack::id)).containsExactly(1L)
+            assertThat(core.library.tracks().map { it.title }).containsExactly("a")
         }
 
     @Test
-    fun progress_is_published_while_writing() =
+    fun progress_is_published_while_scanning() =
         runBlocking<Unit> {
-            val worker = worker { listOf(row(id = 1, folder = "Music/"), row(id = 2, folder = "Download/")) }
+            put("Music/a.mp3", "Download/b.mp3")
 
-            worker.doWork()
+            worker().doWork()
 
-            val reports = published.map { it.getInt(ScanWorker.KEY_WRITTEN, -1) to it.getInt(ScanWorker.KEY_TOTAL, -1) }
-            assertThat(reports).containsExactly(0 to 2, 2 to 2).inOrder()
+            val reports =
+                synchronized(published) {
+                    published.map { it.getInt(ScanWorker.KEY_WRITTEN, -1) to it.getInt(ScanWorker.KEY_TOTAL, -1) }
+                }
+            assertThat(reports.first()).isEqualTo(0 to 0)
+            assertThat(reports.last()).isEqualTo(2 to 2)
         }
 
     @Test
     fun excluded_folder_from_the_settings_is_not_scanned() =
         runBlocking<Unit> {
             folders.update { it.exclude("Download/") }
-            val worker = worker { listOf(row(id = 1, folder = "Music/"), row(id = 2, folder = "Download/")) }
+            put("Music/a.mp3", "Download/b.mp3")
 
-            worker.doWork()
+            worker().doWork()
 
-            assertThat(store.present().map(ScannedTrack::id)).containsExactly(1L)
+            assertThat(core.library.tracks().map { it.title }).containsExactly("a")
         }
 
     @Test
     fun lost_permission_fails_the_work() =
-        runBlocking<Unit> {
-            val worker = worker { throw SecurityException("разрешение отозвано") }
+        runBlocking {
+            canRead = false
 
-            assertThat(worker.doWork()).isEqualTo(ListenableWorker.Result.failure())
+            assertThat(worker().doWork()).isEqualTo(ListenableWorker.Result.failure())
         }
 
-    private fun worker(source: ScanSource): ScanWorker =
+    private fun worker(): ScanWorker =
         TestListenableWorkerBuilder<ScanWorker>(context)
             .setWorkerFactory(
                 object : WorkerFactory() {
@@ -74,27 +95,24 @@ class ScanWorkerTest {
                         appContext: Context,
                         workerClassName: String,
                         workerParameters: WorkerParameters,
-                    ) = ScanWorker(appContext, workerParameters, LibraryScanner(source, store), folders)
+                    ) = ScanWorker(
+                        appContext,
+                        workerParameters,
+                        LibraryScanner(core, { listOf(volume) }, Dispatchers.IO, canRead = { canRead }),
+                        folders,
+                    )
                 },
             ).setProgressUpdater { _, _, data ->
-                published += data
+                synchronized(published) { published += data }
                 Futures.immediateVoidFuture()
             }.build()
 
-    private fun row(
-        id: Long,
-        folder: String,
-    ) = MediaStoreRow(
-        id = id,
-        uri = "content://media/external/audio/media/$id",
-        displayName = "file-$id.mp3",
-        title = "Track $id",
-        artist = null,
-        album = null,
-        albumArtist = null,
-        track = null,
-        durationMs = 1_000,
-        folder = folder,
-        dateModified = 1_700_000_000,
-    )
+    private fun put(vararg paths: String) {
+        for (path in paths) {
+            File(volume, path).apply {
+                parentFile?.mkdirs()
+                writeText("not audio")
+            }
+        }
+    }
 }

@@ -12,11 +12,11 @@ import kotlinx.coroutines.launch
 /**
  * Трек библиотеки не открылся как недоступный (G3) — повод пересканировать.
  *
- * Помечает пропавшее сканер: источник правды — `MediaStore`, и только он
- * знает, удалён файл или доступ к нему временно закрыт. Скан ставится один
- * раз за запуск — очередь с повтором иначе дёргала бы его на каждом круге.
- * Файлы из «Открыть файл» сканер не видит, битый файл на месте — их это не
- * касается.
+ * Помечает пропавшее скан ядра: он обходит тома и знает, удалён файл или
+ * том вынут. Скан ставится один раз за запуск — очередь с повтором иначе
+ * дёргала бы его на каждом круге. Трек фонотеки узнаётся по пути к файлу
+ * (D3c); файлы из «Открыть файл» (`content://`) скан не видит, битый файл
+ * на месте — их это не касается.
  */
 class UnavailableRescan(
     private val errors: Flow<AppError>,
@@ -32,7 +32,7 @@ class UnavailableRescan(
     }
 
     private fun isGoneFromLibrary(track: FailedTrack) =
-        track.problem == TrackProblem.UNAVAILABLE && track.file.startsWith(MEDIA_STORE)
+        track.problem == TrackProblem.UNAVAILABLE && track.file.startsWith(LIBRARY_PATH)
 
     private val AppError.failedTracks: List<FailedTrack>
         get() =
@@ -45,7 +45,7 @@ class UnavailableRescan(
     private companion object {
         const val TAG = "Scan"
 
-        /** Треки библиотеки — строки `MediaStore`, их адреса начинаются так. */
-        const val MEDIA_STORE = "content://media/"
+        /** Треки фонотеки ядра — пути к файлам, у адресов других источников есть схема. */
+        const val LIBRARY_PATH = "/"
     }
 }

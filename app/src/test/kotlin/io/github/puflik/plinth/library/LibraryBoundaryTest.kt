@@ -7,11 +7,10 @@ import org.junit.Test
 /**
  * Страж границы библиотеки (C3.3).
  *
- * Весь эпик C, кроме `LibraryRepository`, в v0.2 заменяется ядром на Rust.
- * Замена не заденет экраны, только если они ходят в библиотеку через фасад:
- * ни Room (`library/db`), ни сканер (`library/scan`) экранам не видны.
- * Фасад, модель и сортировка — чистый Kotlin, как абстракция движка:
- * их же будет звать десктопный клиент.
+ * В v0.2 эпик C, кроме `LibraryRepository`, заменило ядро на Rust (D3), и
+ * экраны этого не заметили: они ходят в библиотеку только через фасад, а
+ * сканер (`library/scan`) им не виден. Фасад, модель и сортировка — чистый
+ * Kotlin, как абстракция движка: их же будет звать десктопный клиент.
  */
 class LibraryBoundaryTest {
     @Test
@@ -40,6 +39,6 @@ class LibraryBoundaryTest {
         /** Хранилище и управление сканом — всё, что экраны знают о библиотеке. */
         val FACADE = listOf("library/LibraryRepository.kt", "library/LibraryScan.kt", "library/FolderSettings.kt")
         val ANDROID_PACKAGES = listOf("android.", "androidx.", "com.google.android")
-        val LIBRARY_INTERNALS = listOf("io.github.puflik.plinth.library.db", "io.github.puflik.plinth.library.scan")
+        val LIBRARY_INTERNALS = listOf("io.github.puflik.plinth.library.scan")
     }
 }

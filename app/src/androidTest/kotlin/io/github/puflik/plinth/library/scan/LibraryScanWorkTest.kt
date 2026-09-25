@@ -9,7 +9,6 @@ import io.github.puflik.plinth.di.LibraryEntryPoint
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.MediaPermission
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -19,13 +18,13 @@ import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Фоновый скан приложения целиком (C2.4): граф Hilt → WorkManager →
- * `HiltWorkerFactory` → `ScanWorker` → `MediaStore` → база приложения.
+ * Фоновый скан приложения целиком (C2.4, D3c): граф Hilt → WorkManager →
+ * `HiltWorkerFactory` → `ScanWorker` → ядро на Rust → фонотека приложения.
  * Ловит то, чего не видят тесты по частям: воркер, который WorkManager не
  * может построить, или WorkManager, настроенный мимо Hilt.
  *
- * Пишет в настоящую базу приложения и потому убирает за собой: второй скан
- * без фикстур помечает их пропавшими.
+ * Пишет в настоящую фонотеку приложения и потому убирает за собой: второй
+ * скан без фикстур помечает их пропавшими.
  */
 @SdkSuppress(minSdkVersion = Build.VERSION_CODES.Q)
 class LibraryScanWorkTest {
@@ -53,7 +52,6 @@ class LibraryScanWorkTest {
     @Test
     fun background_scan_fills_the_app_library_and_notices_removal() =
         runBlocking<Unit> {
-            fixtures.awaitScanned(MediaStoreSource(context.contentResolver, Dispatchers.IO))
             val scan = graph.libraryScan()
             val library = graph.libraryRepository()
 

@@ -14,6 +14,7 @@ import io.github.puflik.plinth.diagnostics.log.Logger
 import io.github.puflik.plinth.diagnostics.vendor.KillReport
 import io.github.puflik.plinth.diagnostics.vendor.KillWatch
 import io.github.puflik.plinth.ffi.CoreInitializer
+import io.github.puflik.plinth.library.OldLibraryCleanup
 import io.github.puflik.plinth.library.UnavailableRescan
 import javax.inject.Inject
 import kotlin.time.Clock
@@ -63,6 +64,9 @@ class PlinthApplication :
     @Inject
     lateinit var coreInitializer: CoreInitializer
 
+    @Inject
+    lateinit var oldLibraryCleanup: OldLibraryCleanup
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -79,6 +83,8 @@ class PlinthApplication :
         queueKeeper.start()
         // Rust-ядро — в фоне, после логгера: его первая запись идёт в тот же лог (A3).
         coreInitializer.start()
+        // База фонотеки v0.1 на Room больше не нужна: фонотеку ведёт ядро (D3c).
+        oldLibraryCleanup.start()
     }
 
     override val workManagerConfiguration: Configuration

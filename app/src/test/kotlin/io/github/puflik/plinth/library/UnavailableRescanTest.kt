@@ -17,7 +17,7 @@ import org.junit.Test
 class UnavailableRescanTest {
     private val errors = MutableSharedFlow<AppError>(extraBufferCapacity = 8)
     private val scan = CountingScan()
-    private val gone = FailedTrack("Yesterday", "content://media/external/audio/media/7", TrackProblem.UNAVAILABLE)
+    private val gone = FailedTrack("Yesterday", "/storage/emulated/0/Music/Yesterday.mp3", TrackProblem.UNAVAILABLE)
 
     @Test
     fun `unavailable library track asks for one rescan per launch`() =
@@ -47,8 +47,10 @@ class UnavailableRescanTest {
             rescan().start()
             val picked = gone.copy(file = "content://com.android.providers.downloads.documents/document/42")
             val damaged = gone.copy(problem = TrackProblem.UNPLAYABLE)
+            // Очередь, сохранённая до D3c, хранит адреса `MediaStore`: фонотека ядра их не знает.
+            val fromV01 = gone.copy(file = "content://media/external/audio/media/7")
 
-            errors.emit(AppError.TracksSkipped(listOf(picked, damaged)))
+            errors.emit(AppError.TracksSkipped(listOf(picked, damaged, fromV01)))
 
             assertThat(scan.starts).isEqualTo(0)
         }

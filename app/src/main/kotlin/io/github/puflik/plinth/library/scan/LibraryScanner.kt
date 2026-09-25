@@ -1,20 +1,20 @@
 package io.github.puflik.plinth.library.scan
 
+import io.github.puflik.plinth.diagnostics.log.AppLog
+import io.github.puflik.plinth.ffi.CoreScanPhase
+import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.library.model.FolderConfig
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
-
-/** Откуда сканер берёт файлы (C2.1): в приложении — `MediaStoreSource`. */
-fun interface ScanSource {
-    suspend fun rows(): List<MediaStoreRow>
-}
+import kotlinx.coroutines.job
+import kotlinx.coroutines.withContext
 
 /**
  * Итог скана.
  *
  * @property found треков в сканируемых папках.
  * @property updated из них прочитано заново: новые и изменённые.
- * @property missing помечено пропавшими.
+ * @property missing отмечено пропавшими.
  */
 data class ScanResult(
     val found: Int,
@@ -23,49 +23,53 @@ data class ScanResult(
 )
 
 /**
- * Сканер фонотеки (C2.1): сверяет файлы из [source] с хранилищем [store] и
- * пишет в него разницу.
+ * Скан фонотеки ядром (D1–D3c): тома — [volumes], папки — из настроек. Ядро
+ * само обходит файлы, читает теги и пишет каталог пачками; каждая пачка
+ * двигает `PlinthCore.catalogChanges`, и списки растут по ходу скана.
  *
  * Инкрементальный (13.1): неизменённые файлы не перечитываются, пропавшие и
- * оказавшиеся вне сканируемых папок помечаются пропавшими.
+ * оказавшиеся вне сканируемых папок отмечаются недоступными.
  *
- * Треки пишутся порциями по [WRITE_CHUNK]: после каждой — отчёт о прогрессе
- * и точка отмены. Отменённый скан оставляет записанное, следующий допишет
- * остальное: записанные порции он уже увидит неизменёнными.
- *
- * [canRead] — есть ли доступ к музыке; без него скан не начинается
- * (`SecurityException`, как при отзыве доступа посреди скана) и хранилище не
- * трогает.
+ * Без доступа к музыке ([canRead]) скан не начинается (`SecurityException`):
+ * ядро увидело бы одни файлы приложения, и всё прочее ушло бы в пропавшие.
+ * Отмена корутины останавливает ядро на ближайшем отчёте о ходе, записанное
+ * остаётся — следующий скан допишет остальное.
  */
 class LibraryScanner(
-    private val source: ScanSource,
-    private val store: ScanStore,
+    private val core: PlinthCore,
+    private val volumes: StorageVolumes,
+    private val io: CoroutineDispatcher,
     private val canRead: () -> Boolean = { true },
 ) {
-    /** @param onProgress записано треков и сколько всего записать; первый отчёт — `0` сразу после сверки. */
+    /**
+     * @param onProgress обработано новых и изменённых файлов и сколько их всего;
+     *   пока файлы ищутся — оба ноль. Зовётся из потока ядра.
+     */
     suspend fun scan(
         folders: FolderConfig,
-        onProgress: suspend (written: Int, total: Int) -> Unit = { _, _ -> },
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): ScanResult {
-        // Без доступа к музыке MediaStore отдаёт лишь файлы приложения, и вся фонотека ушла бы в пропавшие.
         if (!canRead()) throw SecurityException("no access to music")
-        val rows = source.rows().filter { folders.includes(it.folder) }
-        val diff = ScanDiff.of(store.knownVersions(), rows.associate { it.id to it.dateModified })
-        val changed = rows.filter { it.id in diff.changed }
-        onProgress(0, changed.size)
-        var written = 0
-        for (chunk in changed.chunked(WRITE_CHUNK)) {
-            // Хранилище может писать, не приостанавливаясь, — отмену проверяем сами.
-            currentCoroutineContext().ensureActive()
-            store.upsert(chunk.map(TagReader::read))
-            written += chunk.size
-            onProgress(written, changed.size)
+        val job = currentCoroutineContext().job
+        val report =
+            withContext(io) {
+                core.scan.scan(volumes.roots(), folders.included, folders.excluded) { progress ->
+                    when (progress.phase) {
+                        CoreScanPhase.WALKING -> onProgress(0, 0)
+                        CoreScanPhase.READING -> onProgress(progress.done, progress.total)
+                        // Запись быстрая: для человека файлы уже обработаны.
+                        CoreScanPhase.WRITING -> onProgress(progress.total, progress.total)
+                    }
+                    job.isActive
+                }
+            }
+        if (report.unreadableFolders > 0 || report.missingVolumes > 0) {
+            AppLog.w(TAG, "folders unreadable: ${report.unreadableFolders}, volumes missing: ${report.missingVolumes}")
         }
-        store.markMissing(diff.missing)
-        return ScanResult(found = rows.size, updated = changed.size, missing = diff.missing.size)
+        return ScanResult(found = report.found, updated = report.added + report.changed, missing = report.missing)
     }
 
-    companion object {
-        const val WRITE_CHUNK = 500
+    private companion object {
+        const val TAG = "Scan"
     }
 }
