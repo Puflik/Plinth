@@ -4,6 +4,7 @@ import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
@@ -41,10 +42,12 @@ internal class PlayerListenerAdapter(
 
     private var buffering = false
     private var startReported = false
+    private var undecodable: PlaybackError? = null
 
     /** Новый источник: его стартовую позицию надо сообщить, когда он будет готов. */
     fun onPrepare() {
         startReported = false
+        undecodable = null
     }
 
     /** Плеер освобождается — тикер больше не нужен. */
@@ -56,8 +59,30 @@ internal class PlayerListenerAdapter(
         player: Player,
         events: Player.Events,
     ) {
-        onState(player.toPlaybackState())
+        onState(undecodable?.let(PlaybackState::Error) ?: player.toPlaybackState())
         onProgress(player.toPlaybackProgress())
+    }
+
+    /**
+     * Звук в файле есть, а декодировать его системе нечем (FLAC на Android
+     * 8.0, ALAC до 12-го — Н1–Н2 прогона на старых Android). ExoPlayer такую
+     * дорожку просто не выбирает и «играет» трек по своим часам — время идёт,
+     * звука нет, ошибки нет. Останавливаем его и говорим честно: формат не
+     * поддерживается. Ошибка держится до следующего источника.
+     */
+    override fun onTracksChanged(tracks: Tracks) {
+        if (undecodable != null || !tracks.containsType(C.TRACK_TYPE_AUDIO)) return
+        if (tracks.isTypeSupported(C.TRACK_TYPE_AUDIO, true)) return
+        val formats =
+            tracks.groups
+                .filter { it.type == C.TRACK_TYPE_AUDIO }
+                .flatMap { group -> (0 until group.length).map { group.getTrackFormat(it).sampleMimeType } }
+                .distinct()
+        val error = PlaybackError.UnsupportedFormat("no decoder for $formats")
+        AppLog.w("Media3", "Playback error: no decoder for $formats")
+        undecodable = error
+        player.stop()
+        onEvent(PlaybackEvent.Failed(error))
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) {

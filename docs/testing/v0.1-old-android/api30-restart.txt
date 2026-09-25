@@ -1,0 +1,21 @@
+# API 30: force-stop во время игры → запуск
+до: state=3 pos=11077 metadata: size=7, description=Covered MP3, Cover Artist, Cover Album 
+после запуска: state=2 pos=12000 metadata: size=7, description=Covered MP3, Cover Artist, Cover Album 
+на экране:
+   77   143 |  | Collapse
+ 1003   143 |  | More options
+  320  1033 |  | Cover
+  430  1033 |  | Lyrics
+  540  1033 |  | Queue
+  650  1033 |  | Similar
+  760  1033 |  | Track info
+  245  1159 | Covered MP3 | 
+  190  1231 | Cover Artist | 
+  113  1462 | 0:12 | 
+  968  1462 | 1:29 | 
+  132  1616 |  | Shuffle: off
+## причина смерти процесса (dumpsys activity exit-info):
+          timestamp=2026-09-24 18:58:12.055
+          reason=10 (USER REQUESTED)
+          description=stop io.github.puflik.plinth.debug due to from pid 8641
+          timestamp=2026-09-24 18:54:08.237

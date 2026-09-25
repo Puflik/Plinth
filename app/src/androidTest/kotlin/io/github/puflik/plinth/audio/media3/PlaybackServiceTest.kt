@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.audio.media3
 
 import android.content.ComponentName
+import android.content.Intent
 import android.net.Uri
 import android.os.Looper
 import androidx.media3.common.Player
@@ -135,6 +136,42 @@ class PlaybackServiceTest {
                 }
             }
         }
+
+    /**
+     * Ревью №12: после паузы система закрывает службу (~11 мин на Android 8 и
+     * 11), сессии нет — медиакнопке нужен приёмник, который её поднимет.
+     */
+    @Test
+    fun media_button_has_a_way_into_the_app_without_the_service() {
+        val receivers =
+            context.packageManager.queryBroadcastReceivers(
+                Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(context.packageName),
+                0,
+            )
+
+        assertThat(receivers.map { it.activityInfo.name })
+            .contains("androidx.media3.session.MediaButtonReceiver")
+    }
+
+    /** Ревью №5: касание уведомления и медиакарточки открывает приложение. */
+    @Test
+    fun touching_the_notification_opens_the_app() {
+        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val controller =
+            MediaController
+                .Builder(context, token)
+                .setApplicationLooper(Looper.getMainLooper())
+                .buildAsync()
+                .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        try {
+            val open = onMain { controller.sessionActivity }
+
+            assertThat(open).isNotNull()
+            assertThat(open!!.creatorPackage).isEqualTo(context.packageName)
+        } finally {
+            onMain { controller.release() }
+        }
+    }
 
     private fun <T> onMain(block: () -> T): T {
         var result: Result<T>? = null

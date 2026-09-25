@@ -1,0 +1,1 @@
+Fixes: the queue keeps its position when edited on pause, no crash on a full storage, the player fits landscape, headset play resumes after a long pause, the notification opens the app, FLAC/ALAC the phone cannot decode are skipped instead of playing silence, backup is off.

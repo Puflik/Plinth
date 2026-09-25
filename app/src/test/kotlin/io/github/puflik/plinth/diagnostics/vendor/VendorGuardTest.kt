@@ -59,6 +59,14 @@ class VendorGuardTest {
         assertThat(KillVerdict.killed(wasPlaying = true, exit = ExitReason.UNKNOWN, crashed = true)).isFalse()
     }
 
+    /** Ревью №9: телефон сел или его перезагрузили посреди игры — прошивка тут ни при чём. */
+    @Test
+    fun `reboot while playing is not a kill`() {
+        for (exit in listOf(ExitReason.UNKNOWN, ExitReason.SYSTEM)) {
+            assertThat(KillVerdict.killed(wasPlaying = true, exit = exit, crashed = false, rebooted = true)).isFalse()
+        }
+    }
+
     @Test
     fun `marker is set while sound plays and cleared when it stops`() =
         runTest(UnconfinedTestDispatcher()) {

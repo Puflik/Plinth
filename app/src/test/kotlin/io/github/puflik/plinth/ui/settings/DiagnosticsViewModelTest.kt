@@ -85,6 +85,21 @@ class DiagnosticsViewModelTest {
             assertThat(crashes.pending()).isNull()
         }
 
+    /** Ревью №14: касание мимо диалога или «Назад» — не отказ, отчёт остаётся для «Сохранить лог». */
+    @Test
+    fun `offer closed by a tap outside keeps the report for the log`() =
+        runTest(UnconfinedTestDispatcher()) {
+            crashes.save("Crash at …")
+
+            viewModel.closeCrashOffer()
+
+            assertThat(viewModel.hasCrash.value).isFalse()
+            assertThat(crashes.pending()).isEqualTo("Crash at …")
+            val out = ByteArrayOutputStream()
+            viewModel.writeReport(out)
+            assertThat(out.toString(Charsets.UTF_8.name())).contains("Crash at …")
+        }
+
     @Test
     fun `nothing crashed means no offer`() =
         runTest(UnconfinedTestDispatcher()) {

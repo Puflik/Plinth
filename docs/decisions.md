@@ -2400,3 +2400,261 @@ B2.4 (семь форматов), промпт для ревью волны в �
   обновлений со сворачиванием.
 - **Прототипы удаляются**, когда журнал на `yrs` заработает в C2. Цифры
   остаются в ADR 0006 и истории git.
+
+## 2026-09-25
+
+### v0.1 на Android 8 и 11: прогон на эмуляторах
+
+Ветка `hotfix/0.1.1` — тег `v0.1.0` плюс `acc4aab` (`FormatSupportTest`),
+копия `C:\claude\Plinth-review`. Эмуляторы `Plinth_API_26` (Android 8.0) и
+`Plinth_API_30` (Android 11), образы google_apis x86_64, без окна и звука:
+`AudioTrack` при `-no-audio` создаётся как обычно, поэтому «со звуком» ниже —
+это `state:started` у игрока приложения в `dumpsys audio`. Отладочная сборка.
+Музыка — пять файлов из ffmpeg в `Music/PlinthOld/`: два MP3 и FLAC одного
+альбома (кириллица, `album_artist`, номера), MP3 с обложкой в `Covers/`, MP3
+без тегов. Улики — `docs/testing/v0.1-old-android/`, имена файлов ниже.
+Ничего не чинилось.
+
+| Версия | Прошло | Сломано (подробно и как воспроизвести — Н1–Н8 ниже) |
+|---|---|---|
+| **8.0 (API 26)** | `connectedGithubDebugAndroidTest` 93/93 (без четырёх классов `MediaStore`, см. ниже); мастер: `READ_EXTERNAL_STORAGE`, отказ → повторный запрос с «Don't ask again» → разрешено; скан 5/5 — `album_artist` есть, папки из `DATA` (Music → PlinthOld → Covers), кириллица, альбом без тега = имя папки; обложки через `MediaMetadataRetriever` — сетка альбомов, плеер, уведомление; MP3 со звуком; уведомление MediaStyle ⏮ ⏸ ⏭ с обложкой; `force-stop` → тот же трек, 17,9 → 18,0 с, пауза; фон 3 мин в Doze — PASS (разбор `dumpsys` поправлен вне репозитория, Н8); звонок: сброс и разговор — пауза и возврат; настройки без пункта «Язык» (так задумано до 13) | Н1 FLAC без звука; Н2 ALAC без звука; Н3 тест форматов зелёный без звука; Н4 выбор папки прячет накопитель; Н5 ложное «Why music stops» после `force-stop`; Н6 медиакнопка молчит после закрытия службы; Н8 `background_check.py` — ложный FAIL |
+| **11 (API 30)** | 104/104 (с тестами `MediaStore`); мастер: отказ → повтор → разрешено; скан 5/5 (`RELATIVE_PATH`), папки, альбомы; FLAC (`c2.android.flac.decoder`) и MP3 со звуком; уведомление — медиаплеер в быстрых настройках с обложкой и ⏮ ⏸ ⏭; `force-stop` → 11,1 → 12,0 с, пауза, без диалога (`exit-info`: USER REQUESTED); фон 3 мин в Doze — PASS как есть; звонок: сброс и разговор — пауза и возврат | Н2 ALAC без звука; Н3 тест форматов; Н5 ложное «Why music stops» после перезагрузки; Н6 медиакнопка молчит после закрытия службы; Н7 «Назад» в диалоге разрешения = «только настройки» |
+
+- **Н1. FLAC на Android 8.0 играет без звука — критерий 1 плана («играет
+  FLAC и MP3») там не выполнен.** В образе API 26 нет декодера FLAC в
+  `MediaCodec` (только кодировщик), программного декодера у нас нет (из Media3
+  подключены только `exoplayer` и `session`). ExoPlayer не выбирает
+  аудиодорожку и идёт по своим часам: сессия `PLAYING`, время в плеере и
+  уведомлении бежит, трек доигрывает и переключается — ни звука, ни ошибки.
+  Воспроизвести: API 26, FLAC в `Music/`, включить →
+  `adb shell dumpsys audio | grep u/pid:<uid>` пусто; у MP3 той же очереди —
+  `type:android.media.AudioTrack … state:started`. Улики:
+  `api26-flac-silent.txt` (две выборки через 3 с: позиция 21,0 → 24,0 с,
+  игроков нет; список декодеров образа), `api26-13-flac-playing.png`. На
+  Android 11 FLAC со звуком. Android 8.1–10 не проверены — образов нет.
+- **Н2. ALAC без звука на 8.0 и на 11.** Декодера ALAC нет ни в одном из двух
+  образов; в logcat `FormatSupportTest[silence-alac.m4a]` ни одной строки
+  `AudioTrack`/`AudioFlinger` (у остальных форматов — 3–4). В приложении ALAC
+  не включали; механизм тот же, что в Н1. Улики: `api26-connected.txt`,
+  `api30-connected.txt`. С какого Android ALAC звучит, не выяснено — эмулятор
+  API 36 занят чатом v0.2.
+- **Н3. `FormatSupportTest` зелёный, когда звука нет.** Тест ждёт `TrackEnded`
+  и сверяет длительность, а её отдаёт контейнер, не декодер: без декодера
+  плеер доигрывает трек молча. API 26 — 7/7 при молчащих FLAC и ALAC, API 30 —
+  7/7 при молчащем ALAC. Тесту не хватает проверки, что аудиодорожка выбрана и
+  звук выводится.
+- **Н4. Выбор папки на Android 8 прячет накопитель.** «Add folder» (мастер и
+  настройки, `OpenDocumentTree`) открывает системный выбор на «Recent — No
+  items», в корнях только «Recent» и «Downloads»; накопитель появляется лишь
+  после «⋮ → Show internal storage». Без этого знания папку не добавить
+  (`Music/` и `Download/` по умолчанию при этом работают). После включения
+  выбор работает: корень → «Whole storage», `Music/PlinthOld` →
+  «Music/PlinthOld/». Улики: `api26-06-roots.png`, `api26-07-menu.png`.
+- **Н5. Ревью №9 подтверждено — ложный диалог «Why music stops».** Android
+  8.0: `adb shell am force-stop` посреди игры (то же, что «Остановить» в
+  настройках) → при запуске «Android stopped Plinth while music was playing»
+  с советом отключить оптимизацию батареи (`api26-15-restored.png`). Android
+  11: `force-stop` распознан честно (USER REQUESTED, диалога нет), но после
+  **перезагрузки** посреди игры `exit-info` пуст → `UNKNOWN` → в журнале
+  `process died while playing: exit=UNKNOWN, killed=true` и тот же диалог
+  (`api30-reboot.txt`, `api30-08-after-reboot.png`).
+- **Н6. Ревью №12 подтверждено — медиакнопка не возобновляет игру после
+  закрытия службы.** Android 8.0: пауза → «Назад» → служба на переднем плане
+  10 мин (на ~606 с foreground снят), на ~666 с система её останавливает,
+  сессия исчезает; `KEYCODE_MEDIA_PLAY` → ни сессии, ни звука, `Last
+  MediaButtonReceiver: null` (`api26-service_lifetime.txt`). Через 4 мин паузы
+  кнопка ещё работает (`api26-headset_after_service.txt`). Android 11 — те же
+  сроки: foreground снят на ~606 с, служба остановлена на ~666 с, после неё
+  `KEYCODE_MEDIA_PLAY` — тишина (`api30-service_lifetime.txt`). Пока
+  приложение открыто, кнопка будит и только что восстановленную сессию.
+- **Н7. Ревью №18 подтверждено (Android 11).** Закрыть первый же системный
+  диалог разрешения жестом «Назад» → мастер пишет «Access to music is turned
+  off. Turn it on in the app settings…» и даёт только «Open settings». Флага
+  `USER_FIXED` у разрешения нет; после перезапуска «Allow access» снова
+  показывает системный диалог. Улики: `api30-02-after-back.png`,
+  `api30-03-dialog-again.png`.
+- **Н8. `tools/background_check.py` на Android 8.0 — ложный FAIL.** Строка
+  игрока в `dumpsys audio` там — `ID:311 -- type:android.media.AudioTrack --
+  u/pid:10079/5903 -- state:started`, без префикса
+  `AudioPlaybackConfiguration`, который ищет `audio_started` → «нет AudioTrack
+  в состоянии started» на первой же проверке (`api26-background_check.txt`).
+  Та же очередь со скриптом, чей разбор понимает оба формата (обёртка вне
+  репозитория), — PASS 3 мин в Doze, `AudioTrack` пересоздаётся на каждом
+  треке (`api26-background_check_patched.txt`). На 11 — PASS как есть.
+- **Пункты ревью «не проверено на 8–12»:** `album_artist` на API 26 есть —
+  `getColumnIndexOrThrow` не падает, скан проходит; папка из `DATA` на 8 —
+  верная; обложки на 8 через `MediaMetadataRetriever` есть (сетка, плеер,
+  уведомление 300×300); MediaStyle на 8 и 11 — в порядке
+  (`api26-12-shade.png`, `api26-14-shade-cover.png`, `api30-06-shade.png`).
+  Звонок на 8 и 11 — в порядке: здесь, в отличие от API 36, `gsm call` доходит
+  до телефонии (`mCallState` 1 → 2 → 0; `api26-call.txt`, `api30-call.txt`).
+  Звонок и наушники на **Android 12** не проверены — образа 12 нет.
+- **Автотесты не покрывают путь 8–9:** `MediaStoreSourceTest`,
+  `MediaStoreScanTest`, `LibraryScanWorkTest`, `EmbeddedArtworkSourceTest`
+  помечены `@SdkSuppress(minSdkVersion = Q)` (фикстуры пишут
+  `RELATIVE_PATH`/`IS_PENDING`) и на API 26 не запускаются; папки из `DATA` и
+  обложки без миниатюр системы проверены только руками (выше).
+- **Не проверено вовсе:** Android 8.1, 9, 10, 12 (образов нет); выдёргивание
+  наушников (`AUDIO_BECOMING_NOISY` — защищённая рассылка, из adb —
+  SecurityException, проводной гарнитуры у эмулятора нет); экран блокировки;
+  Bluetooth и кнопки гарнитуры; батарея; ALAC в самом приложении; выбор папки
+  на 11 (касания в DocumentsUI на эмуляторе без окна не доходили).
+- **Для следующих прогонов:** на Android 11 `adb push` +
+  `MEDIA_SCANNER_SCAN_FILE` файлы не разбирает (строки есть, `is_music=NULL` —
+  приложение их не видит); помогает
+  `adb shell content call --uri content://media --method scan_volume --arg external_primary`.
+  На 8.0 рассылка работает. С `MSYS_NO_PATHCONV=1` локальные пути для
+  `adb.exe` — в виде `C:/…`. Пакет отладки — `io.github.puflik.plinth.debug`.
+
+### Хотфикс 0.1.1: что чиним (ответы автора)
+
+Согласовано с автором 2026-09-25. Источник — 19 находок
+`docs/review/v0.1-review.md` (он лежит в `main`) и Н1–Н8 прогона на старых
+Android (раздел выше; Н5 = №9, Н6 = №12, Н7 = №18). Работа — по TDD в ветке
+`hotfix/0.1.1` от тега `v0.1.0`; `versionName` 0.1.1, `versionCode` 2.
+
+- **Чиним в 0.1.1:**
+  - №1 правка очереди на паузе обнуляет позицию; №2 нехватка места роняет
+    процесс; №3 плеер в альбомной ориентации; №13 скан без разрешения
+    помечает пропавшей всю фонотеку — кандидаты по умолчанию.
+  - №4 и №10 вместе: после внешнего «Стоп» и после ошибки play снова
+    готовит текущий трек; №5 касание уведомления открывает приложение; №6
+    пути с пробелами не проходят в лог; №8 нет браузера или экрана языка —
+    не падаем; №14 отчёт о сбое не стирается касанием мимо; №16 ошибки не
+    копятся, пока приложение свёрнуто; №18 (Н7) после «Назад» в диалоге
+    разрешения можно спросить снова; Н4 выбор папки на Android 8 сразу
+    показывает накопитель; Н8 `background_check.py` понимает формат
+    `dumpsys audio` Android 8.0.
+  - **№7 Auto Backup — не копировать ничего:** резервная копия и перенос на
+    новый телефон выключены; там Plinth начинает с мастера. Причины: ссылки
+    очереди и базы на новом телефоне указывают на чужие файлы, а мастер
+    обещает «Nothing leaves the device».
+  - **№9 (Н5) ложное «прошивка убила музыку» — отсечь перезагрузку** по
+    `Settings.Global.BOOT_COUNT`: перезагрузка и разряд — не убийство (чинит
+    Android 11+ и 8–10). `force-stop` на 8–10 остаётся ложным срабатыванием:
+    причины смерти процесса там не узнать.
+  - **№12 (Н6) медиакнопка после закрытия службы — чиним в 0.1.1:**
+    `MediaButtonReceiver` Media3 в манифесте и возобновление из сохранённой
+    очереди.
+  - **Н1–Н3 FLAC на 8.0 и ALAC на 8–11 — честная ошибка:** движок видит, что
+    дорожку нечем декодировать, → ошибка «формат не поддерживается», трек
+    пропускается как неподдержанный (G3); `FormatSupportTest` проверяет, что
+    звук действительно выводится. Своё декодирование — с ядром v0.2.
+- **Откладываем:** №11 фонотека в главном потоке — не замерено, библиотека
+  меняется в v0.2; №15 отчёт без сбоя при смерти процесса в диалоге — редкий
+  случай; №17 залипание перетаскивания — косметика, очередь не портится; №19
+  доступность — в проход доступности v0.2.
+- **Не баг:** нет.
+
+### Хотфикс 0.1.1: сделано
+
+Каждая находка — тест, который на ней падал (красный виден в прогоне), потом
+исправление. JVM — `test/`, на устройстве — `androidTest/` (эмулятор
+`Plinth_API_30`).
+
+- **№1 позиция при правке очереди на паузе.** `QueueKeeper`: если после смены
+  очереди играет тот же трек на том же месте контекста (ручной трек или
+  индекс в `contextItems` — shuffle меняет порядок, но не место), позиция
+  переписывается текущей секундой сразу после `saveQueue`. Тесты
+  `QueueKeeperTest`: правки на паузе на 2:30 — позиция 2:30 (было 0:00);
+  другой трек — с начала.
+- **№2 нет места.** Запись ловит `IOException` там, где она делается:
+  `FileQueueStore.write` (очередь не записалась — позиция 0 не пишется,
+  прежние файлы целы, предупреждение в лог), `LogFileWriter.write` (запись
+  теряется молча — сказать о сбое лога некуда, в памяти она есть),
+  `KillMarker.set`. Общий обработчик у `ApplicationScope` не ставили: он бы
+  глушил и настоящие ошибки, которые должен поймать отчёт о сбое. «Полный
+  диск» в тестах — папка на месте временного файла.
+- **№3 плеер в альбомной ориентации.** Раскладка вынесена в `PlayerFrame`
+  (слоты: рамка, точки, подробности): в портрете подробности меряются
+  первыми, рамка берёт остаток, но не больше 0,8 ширины; в альбомной —
+  рамка во всю высоту слева. Прокрутка подробностей включается, только если
+  им не хватает места, — иначе она съедала бы свайпы плеера.
+  `PlayerFrameTest` (Compose на устройстве): 800×280, 360×512 — подробности
+  целиком (было 0 и 210 из 250 dp), 411×760 — обложка прежняя.
+  **Новые тестовые зависимости:** `compose-ui-test-junit4` (androidTest) и
+  `ui-test-manifest` (debug) из BOM — в релиз не попадают.
+- **№13 скан без разрешения.** `LibraryScanner` получил `canRead` (в DI —
+  `MediaPermission.isGranted`): без доступа — `SecurityException` до чтения
+  `MediaStore`, хранилище не трогается; `ScanWorker` уже переводит её в
+  неудачу работы. Защищает и «Rescan» в настройках, не только
+  `UnavailableRescan`. `LibraryScanWorkTest` теперь выдаёт разрешение сам
+  (`UiAutomation.grantRuntimePermission`; отзыв убил бы процесс теста).
+- **№4 и №10.** `PlaybackController.togglePlayPause` в `Idle` и `Error` с
+  треком в очереди готовит его снова с последней секунды; `canControl` —
+  «в очереди есть трек». Фейк получил `stopFromOutside()`. Тест «недоступный
+  файл — кнопки гаснут» переписан под решение: кнопка остаётся для повтора.
+- **№5.** Сессия с `setSessionActivity` — `PendingIntent` на намерение
+  запуска из `PackageManager` (служба не знает об экранах).
+- **№6.** Шаблон пути в `LogRedactor` пропускает пробелы и идёт до `:`,
+  кавычки, `<>`, табуляции или конца строки. Тесты с латиницей и кириллицей.
+- **№7.** `allowBackup="false"`, а `data_extraction_rules` (облако и перенос)
+  и `backup_rules` исключают все домены, включая `device_*`.
+  `BackupRulesTest` читает манифест и XML с диска.
+- **№8.** `SafeUriHandler` (+ `rememberSafeUriHandler`) ловит
+  `IllegalArgumentException` от `AndroidUriHandler` и показывает «No app on
+  this phone can open the link»; четыре места переведены на него. Экран языка:
+  нет `ACTION_APP_LOCALE_SETTINGS` — сведения о приложении, нет и их — лог.
+  `LanguageSettingsTest` на API 30 (экрана языка там нет) падал с
+  `ActivityNotFoundException`.
+- **№9.** `KillMarker` пишет в метку `Settings.Global.BOOT_COUNT`; другой номер
+  при старте — перезагрузка или разряд, `KillVerdict(rebooted = true)` —
+  не убийство. Неизвестный номер перезагрузку не придумывает.
+- **№12.** `androidx.media3.session.MediaButtonReceiver` в манифесте и
+  `onPlaybackResumption` в `PlaybackService`: ждёт `QueueKeeper.restored()` и
+  отдаёт текущий трек очереди с его секундой. Проверка на эмуляторе — ниже.
+- **№14.** Касание мимо и «Назад» — `closeCrashOffer` (диалог прячется,
+  отчёт на диске, «Сохранить лог» его выгрузит); удаляет только «Не сейчас».
+- **№16.** Сбор ошибок — `showWhileStarted` на `repeatOnLifecycle(STARTED)`;
+  начатые строки снимаются вместе со сбором.
+- **№18.** В состоянии «отказано навсегда» рядом с «Open settings» —
+  «Ask again» / «Спросить снова»: если отказ правда навсегда, система ответит
+  сразу.
+- **Н1–Н3.** `PlayerListenerAdapter.onTracksChanged`: звук в файле есть, а
+  поддержанной дорожки нет → `player.stop()`, `Failed(UnsupportedFormat("no
+  decoder for [audio/alac]"))`, состояние — ошибка до следующего источника.
+  `FormatSupportTest` спрашивает `MediaCodecList`: есть декодер — трек
+  доигрывает, нет — ждёт `UnsupportedFormat`. На API 30 до исправления падал
+  ровно ALAC.
+- **Н4.** Контракт `OpenFolder` добавляет `android.content.extra.SHOW_ADVANCED`.
+- **Н8.** `audio_started` понимает строки `ID:…` Android 8.0;
+  `tools/test_background_check.py` (`python -m unittest`).
+- **Выпуск:** `versionName` 0.1.1, `versionCode` 2; `CHANGELOG.md` — раздел
+  [0.1.1] и ссылки сравнения; `fastlane/…/changelogs/2.txt` (275 символов).
+- **Зелёный критерий (JBR):** `ktlintCheck`, `detekt`, по 429 JVM-тестов на
+  flavor (было 406), `assembleGithubDebug`, `assembleFdroidDebug`,
+  `assembleGithubDebugAndroidTest`, `assembleFdroidDebugAndroidTest`,
+  `assembleGithubRelease` (R8, 2,9 МБ); `connectedGithubDebugAndroidTest` на
+  `Plinth_API_30` — 112, 0 падений (было 104).
+- **№12 на эмуляторе (API 30, отладка 0.1.1):** игра → пауза → «Назад» →
+  служба на переднем плане до ~606 с, закрыта на ~667 с → `KEYCODE_MEDIA_PLAY`
+  → служба снова foreground, сессия `PLAYING`, позиция 15,7 → 22,2 с;
+  `Media button session` — сессия Plinth, `Last MediaButtonReceiver` — наш
+  `startForegroundService`. До исправления в этой точке — тишина и
+  `Last MediaButtonReceiver: null` (раздел о старых Android выше).
+- **0.1.1 на `Plinth_API_26` (Android 8.0), после выпуска тега:**
+  `connectedGithubDebugAndroidTest` — 101, 0 падений; `FormatSupportTest` 7/7,
+  FLAC и ALAC — по ветке «нет декодера» (в logcat `no decoder for
+  [audio/flac]`, `[audio/alac]`, ни одной строки `AudioTrack`). В приложении
+  FLAC — строка «Skipped “Old FLAC”: the file is damaged or its format isn’t
+  supported», очередь ушла на следующий MP3 и играет
+  (`api26-0.1.1-flac-skipped.png`). Выбор папки после сброса данных
+  DocumentsUI — накопитель в списке корней сразу, без «⋮»; открывается выбор
+  по-прежнему на «Recent» (`api26-0.1.1-folder-roots.png`; открыть сразу в
+  памяти телефона мог бы `EXTRA_INITIAL_URI` — не делали). `python
+  tools/background_check.py --minutes 3` без обёртки — PASS в Doze. Плеер в
+  альбомной ориентации: обложка слева во всю высоту, название, перемотка и
+  пять кнопок справа (`api26-0.1.1-landscape.png`).
+- **Ловушка прогона:** первый `connectedGithubDebugAndroidTest` на API 26
+  упал на установке APK (`INSTALL_FAILED_ALREADY_EXISTS`), тестов не было, а
+  Gradle написал `BUILD SUCCESSFUL`. Итог прогона — только по XML в
+  `build/outputs/androidTest-results`, не по строке BUILD.
+- **Не проверено:** «процесс мёртв, служба мертва → медиакнопка»
+  (`onPlaybackResumption` собран, вживую шёл только путь с живым процессом).
+- **Выпуск:** тег `v0.1.1` (`595d48d`) отправлен автором 2026-09-25;
+  GitHub Release «Plinth v0.1.1» — pre-release, `app-github-release.apk`
+  (2,9 МБ) и `mapping-v0.1.1.txt.gz`, заметки — раздел [0.1.1].
+- **Слияние в `main`:** конфликт ожидаем в конце `docs/decisions.md` — там
+  у `main` свои разделы v0.2; оставить оба блока. Ветка принесла в хотфикс и
+  разделы о v0.2 из `acc4aab` (cherry-pick теста форматов) — в `main` они и
+  так есть.

@@ -22,6 +22,7 @@
     <string name="library_permission_allow">Разрешить доступ</string>
     <string name="library_permission_denied">Доступ к музыке выключен. Включите его в настройках приложения, чтобы увидеть библиотеку.</string>
     <string name="library_permission_open_settings">Открыть настройки</string>
+    <string name="library_permission_ask_again">Спросить снова</string>
     <string name="library_scanning">Ищу музыку…</string>
     <string name="library_scan_progress">Ищу музыку: %1$d из %2$d</string>
     <plurals name="library_found">
@@ -41,6 +42,7 @@
     <string name="library_next_title">Что дальше</string>
     <string name="library_next_text">Онлайн-поиск появится в версии 0.2: музыка не только с этого устройства — прямо в Plinth.</string>
     <string name="library_next_releases">Релизы на GitHub</string>
+    <string name="link_no_app">На телефоне нет приложения, чтобы открыть ссылку</string>
 
     <string name="action_back">Назад</string>
     <string name="library_sort">Сортировка</string>

@@ -163,12 +163,19 @@ class PlaybackController
                 )
             }
 
-        /** Кнопка play/pause; после конца трека играет его заново. */
+        /**
+         * Кнопка play/pause; после конца трека играет его заново. Движок без
+         * трека — после «Стоп» с внешнего пульта (ревью №4) или после ошибки
+         * (№10), — а в очереди трек есть: готовим его снова с той же секунды.
+         */
         fun togglePlayPause() {
             when (engine.state.value) {
                 PlaybackState.Playing, PlaybackState.Buffering -> engine.pause()
                 PlaybackState.Paused, PlaybackState.Ended -> engine.play()
-                PlaybackState.Idle, is PlaybackState.Error -> Unit
+                PlaybackState.Idle, is PlaybackState.Error ->
+                    queue.value.current?.let { item ->
+                        prepare(item, PlaybackParams(startPosition = progress.value.position, autoPlay = true))
+                    }
             }
         }
 

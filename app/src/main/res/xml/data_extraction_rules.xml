@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+. Пустой каркас, см. backup_rules.xml. -->
+<!--
+  Android 12+: ни в облачную копию, ни при переносе на новый телефон не идёт
+  ничего (ревью №7). Правило без <exclude> значит «всё приложение», поэтому
+  исключены все домены. Что переносить, решится в v0.2 вместе с журналом.
+-->
 <data-extraction-rules>
-    <cloud-backup />
-    <device-transfer />
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_file" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+    </device-transfer>
 </data-extraction-rules>

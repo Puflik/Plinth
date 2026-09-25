@@ -8,10 +8,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.core.ErrorNotice
 import io.github.puflik.plinth.core.FailedTrack
 import io.github.puflik.plinth.core.TrackProblem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 /**
@@ -26,14 +31,27 @@ fun ErrorNotices(
     viewModel: ErrorNoticesViewModel = hiltViewModel(),
 ) {
     val resources = LocalContext.current.resources
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val onPlayer by rememberUpdatedState(playerOpen)
-    LaunchedEffect(viewModel) {
-        viewModel.notices.collect { notice ->
-            if (notice is ErrorNotice.Stopped && onPlayer) return@collect
+    LaunchedEffect(viewModel, lifecycle) {
+        showWhileStarted(lifecycle, viewModel.notices) { notice ->
+            if (notice is ErrorNotice.Stopped && onPlayer) return@showWhileStarted
             // Строки показываются по очереди; сбор не ждёт, пока закроется прошлая.
             launch { snackbar.showSnackbar(resources.text(notice)) }
         }
     }
+}
+
+/**
+ * Отдаёт [notices] в [show], только пока экран виден (ревью №16): свёрнутое
+ * приложение сообщения не копит, а начатые строки снимаются вместе со сбором.
+ */
+internal suspend fun showWhileStarted(
+    lifecycle: Lifecycle,
+    notices: Flow<ErrorNotice>,
+    show: CoroutineScope.(ErrorNotice) -> Unit,
+) {
+    lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { notices.collect { show(it) } }
 }
 
 private fun Resources.text(notice: ErrorNotice): String =

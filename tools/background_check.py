@@ -90,9 +90,12 @@ def session_state(dump, package):
 
 
 def audio_started(dump, uid, pid):
-    """Есть ли у процесса AudioTrack в состоянии started (`dumpsys audio`, раздел players)."""
+    """
+    Есть ли у процесса AudioTrack в состоянии started (`dumpsys audio`, раздел players).
+    Строка игрока на Android 9+ начинается с `AudioPlaybackConfiguration`, на 8.0 — с `ID:`.
+    """
     marker = 'u/pid:%s/%s ' % (uid, pid)
-    return any(line.lstrip().startswith('AudioPlaybackConfiguration') and marker in line
+    return any(line.lstrip().startswith(('AudioPlaybackConfiguration', 'ID:')) and marker in line
                and 'state:started' in line for line in dump.splitlines())
 
 

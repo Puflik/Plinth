@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -16,9 +17,11 @@ import io.github.puflik.plinth.R
 /**
  * Зачем приложению музыка и как её дать (C1.2).
  *
- * После первого отказа — объяснение и повторный запрос. Когда система
- * больше не покажет диалог ([permanentlyDenied]), выдать разрешение можно
- * только в настройках приложения — туда и ведёт кнопка.
+ * После первого отказа — объяснение и повторный запрос. Когда система,
+ * похоже, больше не покажет диалог ([permanentlyDenied]), главная кнопка ведёт
+ * в настройки приложения, а рядом — «Спросить снова»: на Android 11+ диалог,
+ * закрытый «Назад», для приложения неотличим от отказа навсегда (ревью №18).
+ * Если отказ правда навсегда, система ответит сразу, без диалога.
  */
 @Composable
 fun PermissionRationaleScreen(
@@ -43,6 +46,7 @@ fun PermissionRationaleScreen(
         )
         if (permanentlyDenied) {
             Button(onClick = onOpenSettings) { Text(stringResource(R.string.library_permission_open_settings)) }
+            TextButton(onClick = onRequest) { Text(stringResource(R.string.library_permission_ask_again)) }
         } else {
             Button(onClick = onRequest) { Text(stringResource(R.string.library_permission_allow)) }
         }

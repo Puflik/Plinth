@@ -3,6 +3,7 @@ package io.github.puflik.plinth.audio
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.audio.engine.TrackInfo
 import io.github.puflik.plinth.queue.PlaybackQueue
@@ -261,6 +262,34 @@ class PlaybackControllerTest {
 
             controller.togglePlayPause()
             assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+        }
+
+    @Test
+    fun `play after an outside stop starts the same track where it stopped`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 1)
+            controller.seekTo(40.seconds)
+            engine.stopFromOutside()
+
+            controller.togglePlayPause()
+
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+            assertThat(engine.preparedSources.last()).isEqualTo(tracks[1].source)
+            assertThat(engine.lastParams?.startPosition).isEqualTo(40.seconds)
+        }
+
+    @Test
+    fun `play after a failed track tries it again`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 1)
+            engine.failWith(PlaybackError.Network("обрыв"))
+
+            controller.togglePlayPause()
+
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+            assertThat(engine.preparedSources).containsExactly(tracks[1].source, tracks[1].source).inOrder()
         }
 
     @Test

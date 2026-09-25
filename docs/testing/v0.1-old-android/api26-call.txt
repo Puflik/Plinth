@@ -1,0 +1,7 @@
+# API 26: звонок (adb emu gsm) — сброс и разговор
+до: state=3 pos=21095
+входящий: mCallState=1 state=2 pos=23535
+разговор 6 с: mCallState=2 state=2 pos=23535
+положили трубку: mCallState=0 state=3 pos=26497
+через 3 с: state=3 pos=29382
+сброс звонка (раньше): до state=3 pos=0; входящий mCallState=1 state=2 pos=3125; после отбоя mCallState=0 state=3 pos=6150; +3 с state=3 pos=9045

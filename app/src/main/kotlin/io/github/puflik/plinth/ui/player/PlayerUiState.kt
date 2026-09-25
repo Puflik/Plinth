@@ -13,7 +13,8 @@ import kotlin.time.Duration
 /**
  * Что показывает экран плеера: трек, звук и очередь.
  *
- * @property canControl есть открытый трек, которым можно управлять.
+ * @property canControl в очереди есть трек, которым можно управлять, — даже
+ *   после «Стоп» снаружи или ошибки: play готовит его снова (ревью №4, №10).
  * @property upcoming что сыграет дальше без повтора.
  * @property artworkUri файл, чья встроенная обложка показывается; `null` —
  *   показывать нечего (ничего не играет или играет поток).
@@ -52,7 +53,7 @@ data class PlayerUiState(
             title = queue.current?.title,
             artist = queue.current?.artist,
             isPlaying = state == PlaybackState.Playing,
-            canControl = state != PlaybackState.Idle && state !is PlaybackState.Error,
+            canControl = queue.current != null,
             position = progress.position,
             duration = progress.duration,
             error = (state as? PlaybackState.Error)?.error,

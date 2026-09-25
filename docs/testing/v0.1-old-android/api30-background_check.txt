@@ -1,0 +1,8 @@
+$ python tools/background_check.py --minutes 3 --serial emulator-5570   (API 30; очередь Covered MP3 → Old FLAC → …)
+io.github.puflik.plinth.debug (uid 10169, pid 8671) играет; в фоне на 3 мин.
+Doze: Now forced in to deep idle mode
+   1.0 мин: играет
+   2.0 мин: играет
+   3.0 мин: играет
+PASS: 3 мин в фоне с выключенным экраном и в Doze
+exit=0

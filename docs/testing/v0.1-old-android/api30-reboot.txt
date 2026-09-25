@@ -1,0 +1,12 @@
+# API 30: перезагрузка во время игры → запуск
+до: state=3 pos=41123
+после запуска: state=2 pos=43000
+на экране:
+  417   790 | Why music stops | 
+  540   933 | Android stopped Plinth while music was playing. | 
+  540  1092 | Some phones close background apps to save battery. Turn off battery optimization for Plinth so the music k
+  441  1263 | More on dontkillmyapp.com | 
+  502  1461 | Close | 
+  760  1461 | Open settings | 
+## exit-info:
+09-24 19:03:28.045  3308  3308 W Plinth/Vendor: process died while playing: exit=UNKNOWN, killed=true

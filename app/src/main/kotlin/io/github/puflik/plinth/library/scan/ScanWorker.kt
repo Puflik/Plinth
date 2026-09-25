@@ -36,8 +36,8 @@ class ScanWorker
                 AppLog.i(TAG, "done: ${result.found} tracks")
                 Result.success(workDataOf(KEY_FOUND to result.found))
             } catch (expected: SecurityException) {
-                // Разрешение отозвали посреди скана: повторять бессмысленно до новой выдачи.
-                AppLog.w(TAG, "permission revoked mid-scan", expected)
+                // Доступа к музыке нет или его отозвали посреди скана: повторять бессмысленно до новой выдачи.
+                AppLog.w(TAG, "no access to music", expected)
                 Result.failure()
             }
 

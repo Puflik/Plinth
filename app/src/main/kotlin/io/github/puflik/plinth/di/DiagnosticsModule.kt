@@ -2,6 +2,7 @@ package io.github.puflik.plinth.di
 
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import dagger.Module
@@ -100,7 +101,11 @@ object DiagnosticsModule {
     @Singleton
     fun provideKillMarker(
         @ApplicationContext context: Context,
-    ): KillMarker = KillMarker(File(context.filesDir, "vendor"))
+    ): KillMarker =
+        KillMarker(File(context.filesDir, "vendor")) {
+            // Номер загрузки системы (ревью №9); прошивка может его не вести — тогда неизвестен.
+            Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1).takeIf { it >= 0 }
+        }
 
     /** Проверка — один раз на процесс, при первом внедрении: в `PlinthApplication`, до [KillWatch]. */
     @Provides

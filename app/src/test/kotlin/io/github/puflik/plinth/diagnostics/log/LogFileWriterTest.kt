@@ -38,6 +38,16 @@ class LogFileWriterTest {
     }
 
     @Test
+    fun `entry that cannot be written is dropped without a throw`() {
+        // Папку лога не создать — как на заполненном диске: запись не удаётся.
+        val writer = LogFileWriter(temp.newFile("full").resolve("logs"), limitBytes = 1_000)
+
+        writer.write(LogEntry(time, LogLevel.INFO, "App", "started"))
+
+        assertThat(writer.files()).isEmpty()
+    }
+
+    @Test
     fun `nothing written means no files`() {
         assertThat(LogFileWriter(temp.root.resolve("logs"), limitBytes = 1_000).files()).isEmpty()
     }

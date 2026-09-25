@@ -19,6 +19,7 @@ import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.RoomLibraryRepository
 import io.github.puflik.plinth.library.db.PlinthDatabase
 import io.github.puflik.plinth.library.db.dao.TrackDao
+import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.library.scan.DataStoreFolderSettings
 import io.github.puflik.plinth.library.scan.LibraryScanner
 import io.github.puflik.plinth.library.scan.MediaStoreSource
@@ -81,9 +82,10 @@ object LibraryModule {
 
     @Provides
     fun provideLibraryScanner(
+        @ApplicationContext context: Context,
         source: ScanSource,
         repository: LibraryRepository,
-    ): LibraryScanner = LibraryScanner(source, repository)
+    ): LibraryScanner = LibraryScanner(source, repository, canRead = { MediaPermission.isGranted(context) })
 
     /** Конфигурацию WorkManager даёт `PlinthApplication`: воркеры строит Hilt. */
     @Provides

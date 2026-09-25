@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.diagnostics.log
 
 import java.io.File
+import java.io.IOException
 
 /**
  * Лог на диске (G1.1): текущий файл и предыдущий, каждый не больше половины
@@ -15,12 +16,21 @@ class LogFileWriter(
     private val current = File(directory, "plinth.log")
     private val previous = File(directory, "plinth.1.log")
 
+    /**
+     * Запись, которую не удалось сделать (нет места, нет доступа), теряется:
+     * в фоновом потоке исключение уронило бы процесс (план 17.6), а сказать о
+     * сбое лога некуда, кроме самого лога. В памяти ([LogBuffer]) она есть.
+     */
     override fun write(entry: LogEntry) {
         val line = LogFormat.format(entry).toByteArray()
         synchronized(this) {
-            directory.mkdirs()
-            if (current.length() + line.size > limitBytes / 2) rotate()
-            current.appendBytes(line)
+            try {
+                directory.mkdirs()
+                if (current.length() + line.size > limitBytes / 2) rotate()
+                current.appendBytes(line)
+            } catch (expected: IOException) {
+                // См. выше: запись пропущена.
+            }
         }
     }
 

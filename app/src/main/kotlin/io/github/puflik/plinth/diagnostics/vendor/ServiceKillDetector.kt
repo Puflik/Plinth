@@ -20,11 +20,13 @@ class ServiceKillDetector(
 ) {
     fun detect(): KillReport {
         val wasPlaying = marker.isSet()
+        val rebooted = wasPlaying && marker.rebootedSinceSet()
         marker.clear()
         if (!wasPlaying) return KillReport(detected = false)
         val exit = lastExit()
-        val killed = KillVerdict.killed(wasPlaying = true, exit = exit, crashed = crashes.pending() != null)
-        AppLog.w(TAG, "process died while playing: exit=$exit, killed=$killed")
+        val crashed = crashes.pending() != null
+        val killed = KillVerdict.killed(wasPlaying = true, exit = exit, crashed = crashed, rebooted = rebooted)
+        AppLog.w(TAG, "process died while playing: exit=$exit, rebooted=$rebooted, killed=$killed")
         return KillReport(detected = killed)
     }
 

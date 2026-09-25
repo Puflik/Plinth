@@ -8,6 +8,7 @@ import dagger.hilt.android.EntryPointAccessors
 import io.github.puflik.plinth.di.LibraryEntryPoint
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.library.permission.MediaPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -35,6 +36,11 @@ class LibraryScanWorkTest {
 
     @Before
     fun putFixtures() {
+        // Без доступа к музыке приложение не сканирует (ревью №13). Выдача процесс не убивает, отзыв — убил бы.
+        InstrumentationRegistry
+            .getInstrumentation()
+            .uiAutomation
+            .grantRuntimePermission(context.packageName, MediaPermission.name())
         fixtures.removeAll()
         TagFixtures.ALL.forEach(fixtures::put)
     }
@@ -55,7 +61,7 @@ class LibraryScanWorkTest {
                 scan.start()
                 library.tracks().first { tracks -> tracks.fixtureTitles().containsAll(fixtureTitles) }
                 val done = scan.progress.first { it is ScanProgress.Done || it is ScanProgress.Failed }
-                // Без разрешения приложение видит только свои файлы; с ним — ещё и чужие.
+                // С доступом к музыке скан видит и чужие файлы — найдено не меньше фикстур.
                 assertThat(done).isInstanceOf(ScanProgress.Done::class.java)
                 assertThat((done as ScanProgress.Done).found).isAtLeast(TagFixtures.ALL.size)
 

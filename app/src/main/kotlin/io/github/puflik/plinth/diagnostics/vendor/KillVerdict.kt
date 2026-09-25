@@ -20,16 +20,20 @@ enum class ExitReason {
 
 /**
  * Убили ли игру (G2.1): процесс умер, пока звук шёл, и не по воле человека,
- * не от нашего сбоя и не из-за обновления. Где причина неизвестна, свой
- * сбой видно по оставленному отчёту о нём ([crashed]).
+ * не от нашего сбоя, не из-за обновления и не из-за перезагрузки или разряда
+ * ([rebooted], ревью №9 — после перезагрузки причины смерти процесса нет ни
+ * на одной версии Android). Где причина неизвестна, свой сбой видно по
+ * оставленному отчёту о нём ([crashed]).
  */
 object KillVerdict {
     fun killed(
         wasPlaying: Boolean,
         exit: ExitReason,
         crashed: Boolean,
+        rebooted: Boolean = false,
     ): Boolean =
         wasPlaying &&
+            !rebooted &&
             when (exit) {
                 ExitReason.SYSTEM -> true
                 ExitReason.UNKNOWN -> !crashed

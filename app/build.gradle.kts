@@ -37,8 +37,8 @@ android {
         applicationId = "io.github.puflik.plinth"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
 
         // A2.4: четыре ABI — под них собирается Rust-ядро (плагин plinth.rust
         // берёт список отсюда). Фильтр отсекает и лишнее из зависимостей: JNA
@@ -166,6 +166,7 @@ dependencies {
     ksp(libs.androidx.hilt.compiler)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
@@ -178,4 +179,6 @@ dependencies {
     androidTestImplementation(libs.truth)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.work.testing)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }

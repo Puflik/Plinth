@@ -1,0 +1,9 @@
+io.github.puflik.plinth.debug (uid 10079, pid 7885) играет; в фоне на 3 мин.
+Doze: Now forced in to deep idle mode
+        игроки: ID:319 -- type:android.media.AudioTrack -- u/pid:10079/7885 -- state:started -- 
+   1.0 мин: играет
+        игроки: ID:327 -- type:android.media.AudioTrack -- u/pid:10079/7885 -- state:started -- 
+   2.0 мин: играет
+        игроки: ID:335 -- type:android.media.AudioTrack -- u/pid:10079/7885 -- state:started -- 
+   3.0 мин: играет
+PASS: 3 мин в фоне с выключенным экраном и в Doze

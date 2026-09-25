@@ -2,6 +2,7 @@ package io.github.puflik.plinth.audio
 
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.di.ApplicationScope
+import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueStore
 import io.github.puflik.plinth.startup.PlayHistory
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -48,13 +50,18 @@ class QueueKeeper
 
         override val lastPlayed: Flow<Instant?> = played.filterNotNull().map { it.at }
 
+        /** Ждёт, пока сохранённое прочитано и очередь, если была, восстановлена. */
+        suspend fun restored() {
+            played.filterNotNull().first()
+        }
+
         fun start() {
             scope.launch {
                 val saved = store.load()
                 saved?.let { playback.restore(it.queue, it.position) }
                 played.value = Played(saved?.playedAt)
                 // Сохранять — только после восстановления: иначе пустая очередь затёрла бы сохранённую.
-                launch { playback.queue.drop(1).collect(store::saveQueue) }
+                launch { saveQueues() }
                 launch {
                     playback.progress
                         .map { it.position.inWholeSeconds }
@@ -64,6 +71,27 @@ class QueueKeeper
                 launch { markPlays() }
             }
         }
+
+        /**
+         * Новая очередь пишется с позицией в начале трека. Если играет тот же
+         * трек (на паузе — «играть следующим», shuffle, повтор, правка
+         * «Очереди»), секунду возвращаем сразу: на паузе она не меняется, и
+         * сборщик прогресса её не перепишет.
+         */
+        private suspend fun saveQueues() {
+            var playing = playback.queue.value.playing()
+            playback.queue.drop(1).collect { queue ->
+                store.saveQueue(queue)
+                if (queue.playing() == playing) {
+                    store.savePosition(playback.progress.value.position.inWholeSeconds.seconds)
+                }
+                playing = queue.playing()
+            }
+        }
+
+        /** Что играет: ручной трек или место в контексте — shuffle меняет порядок обхода, но не место. */
+        private fun PlaybackQueue.playing(): Any? =
+            playingManual ?: order.getOrNull(position)?.let { contextItems to it }
 
         private suspend fun markPlays() {
             playback.state

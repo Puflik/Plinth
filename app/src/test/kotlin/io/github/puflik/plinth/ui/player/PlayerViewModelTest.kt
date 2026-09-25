@@ -153,8 +153,9 @@ class PlayerViewModelTest {
             assertThat(viewModel.uiState.value.artworkUri).isNull()
         }
 
+    /** Ревью №10: после ошибки play не гаснет — трек можно попробовать снова. */
     @Test
-    fun `unavailable file is reported and controls go off`() =
+    fun `unavailable file is reported and play stays on for another try`() =
         runTest(UnconfinedTestDispatcher()) {
             backgroundScope.launch { viewModel.uiState.collect {} }
             val gone = item("gone")
@@ -164,7 +165,27 @@ class PlayerViewModelTest {
 
             val state = viewModel.uiState.value
             assertThat(state.error).isInstanceOf(PlaybackError.SourceUnavailable::class.java)
-            assertThat(state.canControl).isFalse()
+            assertThat(state.canControl).isTrue()
+        }
+
+    /** Ревью №4: «Стоп» с внешнего пульта оставляет трек в очереди — play в приложении работает. */
+    @Test
+    fun `after an outside stop play stays on`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            playback.play(QueueContext.File, listOf(item("song")), start = 0)
+
+            engine.stopFromOutside()
+
+            assertThat(viewModel.uiState.value.canControl).isTrue()
+        }
+
+    @Test
+    fun `nothing to play keeps play off`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            assertThat(viewModel.uiState.value.canControl).isFalse()
         }
 
     private fun item(
