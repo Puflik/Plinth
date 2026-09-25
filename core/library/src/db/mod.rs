@@ -1,12 +1,13 @@
 //! Хранилище библиотеки на SQLite (B2). Об FFI не знает; вызовы
 //! блокирующие, соединение одно на базу.
 
+mod backup;
 mod codes;
 mod connection;
 mod integrity;
+mod migrations;
 pub mod query;
 pub mod repo;
-mod schema;
 mod sql;
 
 use std::path::PathBuf;

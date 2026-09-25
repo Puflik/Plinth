@@ -1,5 +1,5 @@
-//! Схема базы, версия 1 (B2.1). Базу создаёт [`crate::db::Database::open`];
-//! следующие версии — миграциями (B3).
+//! Миграция 1 — начальная схема (B2.1, B3.1). **Заморожена:** после выпуска
+//! её не правят; любое изменение схемы — новая миграция (ADR 0011).
 //!
 //! Две природы таблиц (plan.md 17.4, `model/mod.rs`):
 //! - **каталог** (`artist`, `album`, `track`, `version`, `source` и связки)
@@ -13,9 +13,16 @@
 //! Идентификаторы — BLOB из 16 байт, время — мс от эпохи, перечисления —
 //! текстовые коды (`db/codes.rs`). Таблицы `STRICT`: SQLite не подменит тип.
 
-pub(crate) const VERSION: i32 = 1;
+use super::Migration;
 
-pub(crate) const SCHEMA: &str = "
+pub(crate) const MIGRATION: Migration = Migration { version: 1, name: "initial", apply };
+
+fn apply(tx: &rusqlite::Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(SCHEMA)?;
+    tx.execute_batch(INDEXES)
+}
+
+const SCHEMA: &str = "
 CREATE TABLE meta (
     key   TEXT PRIMARY KEY,
     value INTEGER NOT NULL
@@ -178,7 +185,7 @@ CREATE TABLE setting (
 ";
 
 /// Индексы (B2.1): списки экранов, поиск, будущая склейка по отпечатку.
-pub(crate) const INDEXES: &str = "
+const INDEXES: &str = "
 CREATE INDEX artist_name ON artist(name_normalized);
 CREATE INDEX album_title ON album(title_normalized);
 CREATE INDEX album_artist_by_artist ON album_artist(artist);

@@ -7,7 +7,7 @@ use plinth_types::CoreError;
 use rusqlite::{Connection, OptionalExtension};
 
 use super::integrity::{is_corruption, problems, quarantine};
-use super::schema::{INDEXES, SCHEMA, VERSION};
+use super::migrations::{MIGRATIONS, MigrationError, migrate};
 use super::sql::Storage;
 use super::{Database, IntegrityCheck, Opened, Recovery};
 
@@ -28,12 +28,17 @@ impl Database {
     /// База в памяти — для тестов.
     pub fn open_in_memory() -> Result<Self, CoreError> {
         let conn = Connection::open_in_memory().storage()?;
-        Self::prepare(conn).map_err(Failure::into_error)
+        Self::prepare(conn, None).map_err(Failure::into_error)
     }
 
     /// Что нашёл `integrity_check`; пусто — файл цел.
     pub fn integrity_problems(&self) -> Result<Vec<String>, CoreError> {
         problems(&self.conn).storage()
+    }
+
+    /// Версия схемы базы (`PRAGMA user_version`).
+    pub fn schema_version(&self) -> Result<i32, CoreError> {
+        self.conn.query_row("PRAGMA user_version", [], |row| row.get(0)).storage()
     }
 
     /// Сколько раз база открывалась, включая этот.
@@ -65,35 +70,18 @@ impl Database {
 
     fn open_file(path: &Path) -> Result<Self, Failure> {
         let conn = Connection::open(path).map_err(Failure::from)?;
-        Self::prepare(conn)
+        Self::prepare(conn, Some(path))
     }
 
-    fn prepare(conn: Connection) -> Result<Self, Failure> {
+    fn prepare(conn: Connection, file: Option<&Path>) -> Result<Self, Failure> {
         // WAL: читатели не ждут писателя; NORMAL в WAL не теряет целостность.
         conn.pragma_update(None, "journal_mode", "WAL").map_err(Failure::from)?;
         conn.pragma_update(None, "synchronous", "NORMAL").map_err(Failure::from)?;
         conn.pragma_update(None, "foreign_keys", true).map_err(Failure::from)?;
         conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(Failure::from)?;
         let mut db = Self { conn };
-        db.ensure_schema()?;
+        migrate(&mut db.conn, MIGRATIONS, file).map_err(Failure::from)?;
         Ok(db)
-    }
-
-    fn ensure_schema(&mut self) -> Result<(), Failure> {
-        let version: i32 = self.conn.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(Failure::from)?;
-        match version {
-            0 => {
-                let tx = self.conn.transaction().map_err(Failure::from)?;
-                tx.execute_batch(SCHEMA).map_err(Failure::from)?;
-                tx.execute_batch(INDEXES).map_err(Failure::from)?;
-                tx.pragma_update(None, "user_version", VERSION).map_err(Failure::from)?;
-                tx.commit().map_err(Failure::from)
-            }
-            VERSION => Ok(()),
-            newer => Err(Failure::Other(CoreError::storage(format!(
-                "database schema {newer} is newer than this app ({VERSION}); downgrade is not supported"
-            )))),
-        }
     }
 
     fn count_launch(&self) -> rusqlite::Result<i64> {
@@ -124,6 +112,25 @@ impl From<rusqlite::Error> for Failure {
             Self::Corrupt(error.to_string())
         } else {
             Self::Other(CoreError::storage(error.to_string()))
+        }
+    }
+}
+
+impl From<MigrationError> for Failure {
+    fn from(error: MigrationError) -> Self {
+        match error {
+            MigrationError::Newer { found, known } => Self::Other(CoreError::storage(format!(
+                "database schema {found} is newer than this app ({known}); downgrade is not supported"
+            ))),
+            // Порча, найденная миграцией, — та же порча: файл заменяется.
+            MigrationError::Failed { error, .. } | MigrationError::Sqlite(error) if is_corruption(&error) => {
+                Self::Corrupt(error.to_string())
+            }
+            MigrationError::Failed { version, name, error } => {
+                Self::Other(CoreError::storage(format!("migration {version} ({name}) failed: {error}")))
+            }
+            MigrationError::Sqlite(error) => Self::from(error),
+            MigrationError::Backup(error) => Self::Other(error),
         }
     }
 }

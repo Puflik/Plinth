@@ -38,6 +38,8 @@ gradlew          text eol=lf
 *.opus           binary
 *.m4a            binary
 *.wav            binary
+# Эталонные базы для тестов миграций (core/library/tests/fixtures/db)
+*.db             binary
 
 # gradle-wrapper.jar хранится в репозитории и должен быть побитово неизменным
 gradle/wrapper/gradle-wrapper.jar binary
