@@ -2,45 +2,46 @@ use plinth_types::{AlbumId, CoreError, EntityId};
 use rusqlite::{OptionalExtension, Row, params};
 
 use crate::db::Database;
-use crate::db::sql::{Storage, first_id, id, opt_mbid};
+use crate::db::sql::{Storage, atomically, first_id, id, opt_mbid};
 use crate::model::Album;
 use crate::text::normalize;
 
 impl Database {
     pub fn save_album(&self, album: &Album) -> Result<(), CoreError> {
-        let tx = self.conn().unchecked_transaction().storage()?;
-        tx.execute(
-            // UPSERT, а не REPLACE: REPLACE удаляет строку, и версии потеряли бы альбом.
-            "INSERT INTO album(id, title, title_normalized, artist_credit, year, label, country,
-                               disc_count, mbid_release)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-             ON CONFLICT(id) DO UPDATE SET
-                 title = excluded.title, title_normalized = excluded.title_normalized,
-                 artist_credit = excluded.artist_credit, year = excluded.year, label = excluded.label,
-                 country = excluded.country, disc_count = excluded.disc_count,
-                 mbid_release = excluded.mbid_release",
-            params![
-                album.id.as_bytes(),
-                album.title,
-                normalize(&album.title),
-                album.artist_credit,
-                album.year,
-                album.label,
-                album.country,
-                album.disc_count,
-                album.mbid_release.map(|m| m.to_string())
-            ],
-        )
-        .storage()?;
-        tx.execute("DELETE FROM album_artist WHERE album = ?1", [album.id.as_bytes()]).storage()?;
-        for (ord, artist) in (0_i64..).zip(&album.artists) {
+        atomically(self.conn(), |tx| {
             tx.execute(
-                "INSERT OR IGNORE INTO album_artist(album, artist, ord) VALUES (?1, ?2, ?3)",
-                params![album.id.as_bytes(), artist.as_bytes(), ord],
+                // UPSERT, а не REPLACE: REPLACE удаляет строку, и версии потеряли бы альбом.
+                "INSERT INTO album(id, title, title_normalized, artist_credit, year, label, country,
+                                   disc_count, mbid_release)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(id) DO UPDATE SET
+                     title = excluded.title, title_normalized = excluded.title_normalized,
+                     artist_credit = excluded.artist_credit, year = excluded.year, label = excluded.label,
+                     country = excluded.country, disc_count = excluded.disc_count,
+                     mbid_release = excluded.mbid_release",
+                params![
+                    album.id.as_bytes(),
+                    album.title,
+                    normalize(&album.title),
+                    album.artist_credit,
+                    album.year,
+                    album.label,
+                    album.country,
+                    album.disc_count,
+                    album.mbid_release.map(|m| m.to_string())
+                ],
             )
             .storage()?;
-        }
-        tx.commit().storage()
+            tx.execute("DELETE FROM album_artist WHERE album = ?1", [album.id.as_bytes()]).storage()?;
+            for (ord, artist) in (0_i64..).zip(&album.artists) {
+                tx.execute(
+                    "INSERT OR IGNORE INTO album_artist(album, artist, ord) VALUES (?1, ?2, ?3)",
+                    params![album.id.as_bytes(), artist.as_bytes(), ord],
+                )
+                .storage()?;
+            }
+            Ok(())
+        })
     }
 
     pub fn album(&self, id: AlbumId) -> Result<Option<Album>, CoreError> {

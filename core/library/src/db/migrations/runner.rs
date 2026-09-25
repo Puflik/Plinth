@@ -26,8 +26,8 @@ pub(crate) enum MigrationError {
 }
 
 /// Доводит базу до последней миграции из `migrations`; возвращает
-/// применённые версии. `file` — путь к базе: перед каждой миграцией
-/// непустой базы с неё снимается копия (`db/backup.rs`).
+/// применённые версии. `file` — путь к базе: перед каждой миграцией базы,
+/// которая уже была до этого открытия, с неё снимается копия (`db/backup.rs`).
 pub(crate) fn migrate(
     conn: &mut Connection,
     migrations: &[Migration],
@@ -40,9 +40,12 @@ pub(crate) fn migrate(
         return Err(MigrationError::Newer { found: current, known });
     }
     let pending: Vec<&Migration> = migrations.iter().filter(|m| m.version > current).collect();
+    // Копия нужна базе, которая была до этого открытия: новой терять нечего,
+    // и между её первыми миграциями копии не снимаются.
+    let existed = current > 0;
     let mut applied = Vec::new();
     for migration in pending {
-        if let Some(path) = file.filter(|_| current > 0) {
+        if let Some(path) = file.filter(|_| existed) {
             backup(conn, path, current).map_err(MigrationError::Backup)?;
         }
         let failed = |error| MigrationError::Failed { version: migration.version, name: migration.name, error };
@@ -135,6 +138,23 @@ mod tests {
     }
 
     /// Перед миграцией существующей базы — копия; пустой базе копия не нужна.
+    /// Новая база проходит все миграции подряд: копии между ними не нужны —
+    /// в ней ещё нечего терять, а файлы копий остались бы рядом навсегда.
+    #[test]
+    fn a_new_database_is_not_backed_up_between_its_migrations() {
+        let dir = std::env::temp_dir().join(format!("plinth-migrate-new-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path: PathBuf = dir.join("plinth.db");
+        let mut conn = Connection::open(&path).unwrap();
+
+        migrate(&mut conn, &[ONE, TWO], Some(&path)).unwrap();
+
+        assert!(crate::db::backup::backups(&path).unwrap().is_empty());
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn backup_is_taken_before_migrating_an_existing_database() {
         let dir = std::env::temp_dir().join(format!("plinth-migrate-{}", std::process::id()));

@@ -81,8 +81,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fingerprint: None,
         };
         db.save_version(&recording)?;
+        let file = SourceId::new();
         db.save_source(&Source {
-            id: SourceId::new(),
+            id: file,
             version: recording.id,
             location: SourceLocation::Local { uri: format!("content://media/external/audio/media/{number}") },
             audio: AudioSpec {
@@ -94,6 +95,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             availability: Availability::Available,
             last_checked_at: None,
         })?;
+        // Учёт сканера (схема v2): каким файл был при последнем скане.
+        db.save_file_stamp(file, Timestamp::from_millis(1_758_000_000_000), 4_096 * u64::from(number))?;
         db.save_user_data(&TrackUserData {
             track: track.id,
             liked: number == 2,

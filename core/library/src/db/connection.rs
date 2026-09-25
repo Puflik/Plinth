@@ -200,7 +200,8 @@ mod tests {
         let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
         let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         let fk: i32 = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0)).unwrap();
-        assert_eq!((version, mode.as_str(), fk), (1, "wal", 1));
+        let latest = i32::try_from(crate::db::migrations::MIGRATIONS.len()).unwrap();
+        assert_eq!((version, mode.as_str(), fk), (latest, "wal", 1));
         assert!(opened.recovery.is_none());
     }
 

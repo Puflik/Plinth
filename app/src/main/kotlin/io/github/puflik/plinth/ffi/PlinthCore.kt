@@ -35,6 +35,7 @@ class PlinthCore(
 
     val library = CoreLibrary(this)
     val journal = CoreJournal(this)
+    val scan = CoreScan(this)
 
     /** Запускает ядро — логгер и хук паники, — если оно ещё не запущено. */
     @Throws(CoreFailure::class)

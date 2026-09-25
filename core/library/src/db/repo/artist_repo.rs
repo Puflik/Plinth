@@ -2,40 +2,41 @@ use plinth_types::{ArtistId, CoreError, EntityId};
 use rusqlite::{OptionalExtension, Row, params};
 
 use crate::db::Database;
-use crate::db::sql::{Storage, id, opt_mbid};
+use crate::db::sql::{Storage, atomically, id, opt_mbid};
 use crate::model::Artist;
 use crate::text::normalize;
 
 impl Database {
     pub fn save_artist(&self, artist: &Artist) -> Result<(), CoreError> {
-        let tx = self.conn().unchecked_transaction().storage()?;
-        tx.execute(
-            // UPSERT, а не REPLACE: REPLACE удаляет строку, и каскад стёр бы
-            // связи артиста с треками и альбомами.
-            "INSERT INTO artist(id, name, name_normalized, sort_name, mbid, bio)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(id) DO UPDATE SET
-                 name = excluded.name, name_normalized = excluded.name_normalized,
-                 sort_name = excluded.sort_name, mbid = excluded.mbid, bio = excluded.bio",
-            params![
-                artist.id.as_bytes(),
-                artist.name,
-                normalize(&artist.name),
-                artist.sort_name,
-                artist.mbid.map(|m| m.to_string()),
-                artist.bio
-            ],
-        )
-        .storage()?;
-        tx.execute("DELETE FROM artist_alias WHERE artist = ?1", [artist.id.as_bytes()]).storage()?;
-        for alias in &artist.aliases {
+        atomically(self.conn(), |tx| {
             tx.execute(
-                "INSERT OR IGNORE INTO artist_alias(artist, alias) VALUES (?1, ?2)",
-                params![artist.id.as_bytes(), alias],
+                // UPSERT, а не REPLACE: REPLACE удаляет строку, и каскад стёр бы
+                // связи артиста с треками и альбомами.
+                "INSERT INTO artist(id, name, name_normalized, sort_name, mbid, bio)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(id) DO UPDATE SET
+                     name = excluded.name, name_normalized = excluded.name_normalized,
+                     sort_name = excluded.sort_name, mbid = excluded.mbid, bio = excluded.bio",
+                params![
+                    artist.id.as_bytes(),
+                    artist.name,
+                    normalize(&artist.name),
+                    artist.sort_name,
+                    artist.mbid.map(|m| m.to_string()),
+                    artist.bio
+                ],
             )
             .storage()?;
-        }
-        tx.commit().storage()
+            tx.execute("DELETE FROM artist_alias WHERE artist = ?1", [artist.id.as_bytes()]).storage()?;
+            for alias in &artist.aliases {
+                tx.execute(
+                    "INSERT OR IGNORE INTO artist_alias(artist, alias) VALUES (?1, ?2)",
+                    params![artist.id.as_bytes(), alias],
+                )
+                .storage()?;
+            }
+            Ok(())
+        })
     }
 
     pub fn artist(&self, id: ArtistId) -> Result<Option<Artist>, CoreError> {

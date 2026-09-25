@@ -3,6 +3,7 @@
 //! заморожена, изменение схемы — новая миграция в конце реестра.
 
 mod m0001_initial;
+mod m0002_scan_file;
 mod runner;
 
 pub(crate) use runner::{MigrationError, migrate};
@@ -17,7 +18,7 @@ pub(crate) struct Migration {
 }
 
 /// Реестр по порядку; версии подряд с единицы.
-pub(crate) const MIGRATIONS: &[Migration] = &[m0001_initial::MIGRATION];
+pub(crate) const MIGRATIONS: &[Migration] = &[m0001_initial::MIGRATION, m0002_scan_file::MIGRATION];
 
 #[cfg(test)]
 mod tests {

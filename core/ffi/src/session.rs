@@ -9,10 +9,10 @@
 //!   установку старой;
 //! - `lock` — замок: два ядра на одних файлах — два писателя одного журнала.
 
-use std::fs::{self, File, OpenOptions, TryLockError};
+use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 
 use plinth_library::db::{Database, IntegrityCheck};
 use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, rebuild, record_and_project};
@@ -29,6 +29,8 @@ const LOCK: &str = "lock";
 #[derive(uniffi::Object)]
 pub struct Core {
     state: Mutex<State>,
+    /// Скан идёт один: два разом добавили бы одни файлы дважды.
+    scan: Mutex<()>,
     report: StartupReport,
     /// Замок держится, пока жив объект; закрытие файла его снимает.
     _lock: File,
@@ -75,7 +77,7 @@ impl Core {
             restored_from_journal: rebuilt && journal.mark().seq > 0,
         };
         log::info!("core opened: {report:?}, schema v{}", opened.db.schema_version()?);
-        Ok(Self { state: Mutex::new(State { db: opened.db, journal }), report, _lock: lock })
+        Ok(Self { state: Mutex::new(State { db: opened.db, journal }), scan: Mutex::new(()), report, _lock: lock })
     }
 
     /// Работа с базой и журналом под замком. Паника в прошлом вызове могла
@@ -94,6 +96,16 @@ impl Core {
             }
         };
         work(&mut state)
+    }
+
+    /// Право на скан; пока оно у кого-то, второй скан — `Unavailable`.
+    pub(crate) fn scanning(&self) -> Result<MutexGuard<'_, ()>, CoreError> {
+        match self.scan.try_lock() {
+            Ok(guard) => Ok(guard),
+            Err(TryLockError::WouldBlock) => Err(CoreError::unavailable("core: a scan is already running")),
+            // Прошлый скан упал паникой: его записанные пачки целы, новый может идти.
+            Err(TryLockError::Poisoned(poisoned)) => Ok(poisoned.into_inner()),
+        }
     }
 
     /// Операция пользователя: в журнал, затем в базу.
@@ -120,8 +132,8 @@ fn lock(dir: &Path) -> Result<File, CoreError> {
         .map_err(|e| io_error("open lock", &e))?;
     match file.try_lock() {
         Ok(()) => Ok(file),
-        Err(TryLockError::WouldBlock) => Err(CoreError::unavailable("core: the data dir is already open")),
-        Err(TryLockError::Error(error)) => Err(io_error("lock", &error)),
+        Err(fs::TryLockError::WouldBlock) => Err(CoreError::unavailable("core: the data dir is already open")),
+        Err(fs::TryLockError::Error(error)) => Err(io_error("lock", &error)),
     }
 }
 

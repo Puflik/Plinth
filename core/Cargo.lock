@@ -578,6 +578,7 @@ dependencies = [
 name = "plinth-library"
 version = "0.2.0"
 dependencies = [
+ "log",
  "plinth-types",
  "rusqlite",
  "unicode-normalization",

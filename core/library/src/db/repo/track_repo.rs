@@ -3,41 +3,42 @@ use rusqlite::{OptionalExtension, Row, params};
 
 use crate::db::Database;
 use crate::db::codes::{Code, column};
-use crate::db::sql::{Storage, first_id, id, millis, opt_duration, opt_id, opt_mbid, timestamp};
+use crate::db::sql::{Storage, atomically, first_id, id, millis, opt_duration, opt_id, opt_mbid, timestamp};
 use crate::model::{AlbumPlacement, Fingerprint, Track, Version};
 use crate::text::normalize;
 
 impl Database {
     pub fn save_track(&self, track: &Track) -> Result<(), CoreError> {
-        let tx = self.conn().unchecked_transaction().storage()?;
-        // UPSERT, а не REPLACE: REPLACE удалил бы строку и каскадом — версии трека.
-        tx.execute(
-            "INSERT INTO track(id, title, title_normalized, artist_credit, artist_normalized, mbid_work, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(id) DO UPDATE SET
-                 title = excluded.title, title_normalized = excluded.title_normalized,
-                 artist_credit = excluded.artist_credit, artist_normalized = excluded.artist_normalized,
-                 mbid_work = excluded.mbid_work, added_at = excluded.added_at",
-            params![
-                track.id.as_bytes(),
-                track.title,
-                normalize(&track.title),
-                track.artist_credit,
-                normalize(&track.artist_credit),
-                track.mbid_work.map(|m| m.to_string()),
-                track.added_at.as_millis()
-            ],
-        )
-        .storage()?;
-        tx.execute("DELETE FROM track_artist WHERE track = ?1", [track.id.as_bytes()]).storage()?;
-        for (ord, artist) in (0_i64..).zip(&track.artists) {
+        atomically(self.conn(), |tx| {
+            // UPSERT, а не REPLACE: REPLACE удалил бы строку и каскадом — версии трека.
             tx.execute(
-                "INSERT OR IGNORE INTO track_artist(track, artist, ord) VALUES (?1, ?2, ?3)",
-                params![track.id.as_bytes(), artist.as_bytes(), ord],
+                "INSERT INTO track(id, title, title_normalized, artist_credit, artist_normalized, mbid_work, added_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(id) DO UPDATE SET
+                     title = excluded.title, title_normalized = excluded.title_normalized,
+                     artist_credit = excluded.artist_credit, artist_normalized = excluded.artist_normalized,
+                     mbid_work = excluded.mbid_work, added_at = excluded.added_at",
+                params![
+                    track.id.as_bytes(),
+                    track.title,
+                    normalize(&track.title),
+                    track.artist_credit,
+                    normalize(&track.artist_credit),
+                    track.mbid_work.map(|m| m.to_string()),
+                    track.added_at.as_millis()
+                ],
             )
             .storage()?;
-        }
-        tx.commit().storage()
+            tx.execute("DELETE FROM track_artist WHERE track = ?1", [track.id.as_bytes()]).storage()?;
+            for (ord, artist) in (0_i64..).zip(&track.artists) {
+                tx.execute(
+                    "INSERT OR IGNORE INTO track_artist(track, artist, ord) VALUES (?1, ?2, ?3)",
+                    params![track.id.as_bytes(), artist.as_bytes(), ord],
+                )
+                .storage()?;
+            }
+            Ok(())
+        })
     }
 
     pub fn track(&self, id: TrackId) -> Result<Option<Track>, CoreError> {
@@ -132,8 +133,32 @@ fn read_version(row: &Row<'_>) -> rusqlite::Result<Version> {
 mod tests {
     use plinth_types::Timestamp;
 
-    use crate::db::repo::fixtures::{artist, creep, db, version};
+    use crate::db::repo::fixtures::{artist, creep, db, track, version};
     use crate::model::{Explicitness, TrackUserData, VersionKind};
+
+    /// Скан пишет каталог пачками в одной транзакции: сохранение трека в неё
+    /// входит, а не открывает вложенную (её SQLite не умеет).
+    #[test]
+    fn saving_joins_an_open_transaction_and_rolls_back_with_it() {
+        let db = db();
+        let radiohead = artist("Radiohead");
+        let creep = track("Creep", &radiohead, 1);
+
+        let kept = db.in_transaction(|db| {
+            db.save_artist(&radiohead)?;
+            db.save_track(&creep)
+        });
+        let other = artist("Muse");
+        let rolled_back: Result<(), plinth_types::CoreError> = db.in_transaction(|db| {
+            db.save_artist(&other)?;
+            Err(plinth_types::CoreError::internal("roll back"))
+        });
+
+        assert_eq!(kept, Ok(()));
+        assert_eq!(db.track(creep.id).unwrap().map(|t| t.artists), Some(vec![radiohead.id]));
+        assert!(rolled_back.is_err());
+        assert!(db.artist(other.id).unwrap().is_none());
+    }
 
     #[test]
     fn track_and_versions_round_trip() {

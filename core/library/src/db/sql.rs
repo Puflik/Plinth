@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use plinth_types::{CoreError, EntityId, Mbid, Timestamp};
 use rusqlite::types::FromSqlError;
-use rusqlite::{Row, types::Type};
+use rusqlite::{Connection, Row, types::Type};
 
 pub(crate) trait Storage<T> {
     /// Ошибка SQLite — это ошибка хранилища.
@@ -58,4 +58,20 @@ fn conversion(error: impl std::error::Error + Send + Sync + 'static) -> rusqlite
 
 pub(crate) fn invalid(column: &str, value: &str) -> rusqlite::Error {
     conversion(FromSqlError::Other(format!("{column}: unexpected value {value:?}").into()))
+}
+
+/// Выполняет `work` атомарно: в своей транзакции, а если транзакция уже
+/// открыта (`Database::in_transaction`, пачка скана), — в ней. Вложенных
+/// транзакций SQLite не умеет.
+pub(crate) fn atomically<T>(
+    conn: &Connection,
+    work: impl FnOnce(&Connection) -> Result<T, CoreError>,
+) -> Result<T, CoreError> {
+    if !conn.is_autocommit() {
+        return work(conn);
+    }
+    let tx = conn.unchecked_transaction().storage()?;
+    let result = work(&tx)?;
+    tx.commit().storage()?;
+    Ok(result)
 }

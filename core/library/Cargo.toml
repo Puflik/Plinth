@@ -1,4 +1,4 @@
-# Модель библиотеки (B1); дальше — SQLite, миграции, сканер (B2, B3, D).
+# Модель библиотеки (B1), SQLite и миграции (B2, B3), сканер (D1).
 [package]
 name = "plinth-library"
 description = "Модель и хранилище библиотеки Plinth"
@@ -11,6 +11,7 @@ publish.workspace = true
 plinth-types.workspace = true
 rusqlite.workspace = true
 unicode-normalization.workspace = true
+log.workspace = true
 
 [lints]
 workspace = true
