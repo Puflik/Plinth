@@ -124,6 +124,25 @@ mod tests {
         assert_eq!(titles, ["Abbey Road", "Pablo Honey", "Now 99"]);
     }
 
+    /// Исполнитель альбома для сортировки из тегов: «Bowie, David» под «B».
+    #[test]
+    fn albums_by_artist_follow_the_sort_credit() {
+        let mut lib = Library::new();
+        for (title, credit) in [("Heroes", "David Bowie"), ("Parachutes", "Coldplay"), ("Arrival", "ABBA")] {
+            let album = lib.album(title, credit, &[]);
+            lib.track(title, credit, &[], Some((album, None, None)), true);
+        }
+        let heroes = lib.db.albums_titled("Heroes").unwrap().remove(0).id;
+        let mut album = lib.db.album(heroes).unwrap().unwrap();
+
+        album.sort_artist_credit = Some("Bowie, David".to_owned());
+        lib.db.save_album(&album).unwrap();
+
+        let titles: Vec<String> = lib.db.album_list(AlbumSort::Artist).unwrap().into_iter().map(|a| a.title).collect();
+        assert_eq!(titles, ["Arrival", "Heroes", "Parachutes"]);
+        assert_eq!(lib.db.album(heroes).unwrap(), Some(album));
+    }
+
     /// Одноимённые альбомы — по исполнителю; без исполнителя — в конце, как в
     /// списке по исполнителю.
     #[test]

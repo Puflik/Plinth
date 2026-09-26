@@ -188,6 +188,7 @@ pub(crate) mod testing {
                 id: AlbumId::new(),
                 title: title.to_owned(),
                 artist_credit: credit.to_owned(),
+                sort_artist_credit: None,
                 artists: artists.to_vec(),
                 year: None,
                 label: None,
@@ -213,6 +214,7 @@ pub(crate) mod testing {
                 id: TrackId::new(),
                 title: title.to_owned(),
                 artist_credit: credit.to_owned(),
+                sort_artist_credit: None,
                 artists: artists.to_vec(),
                 mbid_work: None,
                 added_at: Timestamp::from_millis(self.added),
@@ -330,6 +332,23 @@ mod tests {
                 "Track 10"
             ]
         );
+    }
+
+    /// Строка сортировки из тегов сильнее строки исполнителя: «David Bowie» с
+    /// «Bowie, David» стоит под «B».
+    #[test]
+    fn by_artist_follows_the_sort_credit() {
+        let mut lib = Library::new();
+        let heroes = lib.track("Heroes", "David Bowie", &[], None, true);
+        lib.track("Yellow", "Coldplay", &[], None, true);
+        lib.track("SOS", "ABBA", &[], None, true);
+        let mut track = lib.db.track(heroes).unwrap().unwrap();
+
+        track.sort_artist_credit = Some("Bowie, David".to_owned());
+        lib.db.save_track(&track).unwrap();
+
+        assert_eq!(titles(&lib.db, TrackSort::Artist, None), ["SOS", "Heroes", "Yellow"]);
+        assert_eq!(lib.db.track(heroes).unwrap(), Some(track));
     }
 
     #[test]

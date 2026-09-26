@@ -185,7 +185,8 @@ fn add(db: &Database, scanned: &ScannedFile, now: Timestamp) -> Result<SourceId,
         id: TrackId::new(),
         title: title(scanned),
         artist_credit: tags.artist.clone().unwrap_or_default(),
-        artists: catalog::artist_ids(db, &tags.artists)?,
+        sort_artist_credit: tags.sort_artist.clone(),
+        artists: catalog::artist_ids(db, &tags.artists, tags)?,
         mbid_work: None,
         added_at: now,
     };
@@ -212,7 +213,8 @@ fn update(db: &Database, scanned: &ScannedFile, known: &KnownFile, now: Timestam
     if let Some(mut track) = db.track(known.track)? {
         track.title = title(scanned);
         track.artist_credit = tags.artist.clone().unwrap_or_default();
-        track.artists = catalog::artist_ids(db, &tags.artists)?;
+        track.sort_artist_credit = tags.sort_artist.clone();
+        track.artists = catalog::artist_ids(db, &tags.artists, tags)?;
         db.save_track(&track)?;
     }
     if let Some(mut version) = db.versions_of(known.track)?.into_iter().find(|v| v.id == known.version) {

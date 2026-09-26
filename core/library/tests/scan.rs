@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use plinth_library::db::Database;
-use plinth_library::db::query::TrackSort;
+use plinth_library::db::query::{AlbumSort, TrackSort};
 use plinth_library::model::{Album, AudioSpec, Track, Version};
 use plinth_library::scan::{
     ArtistSplit, FileNameOnly, FileTags, FolderConfig, RawTags, ScanPhase, ScanProgress, ScanReport, TagReader, Tags,
@@ -371,6 +371,101 @@ fn no_album_tag_no_album() {
 
     assert_eq!(album(&db, "Single"), None);
     assert!(db.albums_titled("Singles").unwrap().is_empty());
+}
+
+/// Теги с именами для сортировки; пустая строка — такого тега нет.
+fn sorted(
+    title: &str,
+    artist: &str,
+    sort_artist: &str,
+    album: &str,
+    album_artist: Option<&str>,
+    sort_album_artist: &str,
+) -> Tags {
+    let given = |value: &str| Some(value).filter(|v| !v.is_empty()).map(str::to_owned).into_iter().collect();
+    let raw = RawTags {
+        title: Some(title.to_owned()),
+        artist: vec![artist.to_owned()],
+        sort_artist: given(sort_artist),
+        album: Some(album.to_owned()),
+        album_artist: album_artist.map(str::to_owned).into_iter().collect(),
+        sort_album_artist: given(sort_album_artist),
+        ..RawTags::default()
+    };
+    normalized(raw, &ArtistSplit::default())
+}
+
+fn sort_name(db: &Database, name: &str) -> Option<String> {
+    db.artists_named(name).unwrap().remove(0).sort_name
+}
+
+/// «David Bowie» с «Bowie, David» стоит под «B» в списках треков, альбомов и
+/// исполнителей. Альбом без album artist сортируется по имени основного артиста.
+#[test]
+fn sort_names_reach_the_catalog() {
+    let tree = Tree::new(&["Music/a.mp3", "Music/b.mp3", "Music/c.mp3"]);
+    let db = Database::open_in_memory().unwrap();
+    let reader = ByName(vec![
+        ("a.mp3", sorted("Heroes", "David Bowie", "Bowie, David", "Heroes", None, "")),
+        ("b.mp3", sorted("Yellow", "Coldplay", "", "Parachutes", Some("Coldplay"), "")),
+        ("c.mp3", sorted("SOS", "ABBA", "", "Arrival", Some("ABBA"), "")),
+    ]);
+
+    run(&db, &tree, &FolderConfig::default(), &reader);
+
+    assert_eq!(sort_name(&db, "David Bowie").as_deref(), Some("Bowie, David"));
+    assert_eq!(track(&db, "Heroes").sort_artist_credit.as_deref(), Some("Bowie, David"));
+    let heroes = album(&db, "Heroes").unwrap();
+    assert_eq!(
+        (heroes.artist_credit.as_str(), heroes.sort_artist_credit.as_deref()),
+        ("David Bowie", Some("Bowie, David"))
+    );
+    let tracks: Vec<String> =
+        db.track_list(TrackSort::Artist, None).unwrap().into_iter().map(|row| row.title).collect();
+    let albums: Vec<String> = db.album_list(AlbumSort::Artist).unwrap().into_iter().map(|row| row.title).collect();
+    let artists: Vec<String> = db.artist_list().unwrap().into_iter().map(|row| row.name).collect();
+    assert_eq!(tracks, ["SOS", "Heroes", "Yellow"]);
+    assert_eq!(albums, ["Arrival", "Heroes", "Parachutes"]);
+    assert_eq!(artists, ["ABBA", "David Bowie", "Coldplay"]);
+    assert_eq!(sort_name(&db, "Coldplay"), None);
+}
+
+/// Имя для сортировки, найденное во втором файле альбома, достаётся уже
+/// заведённым альбому и его артисту; третий файл без него имени не стирает.
+/// Файлы скан берёт по порядку путей.
+#[test]
+fn a_sort_name_from_one_file_serves_the_artist_and_the_album() {
+    let tree = Tree::new(&["Music/1.mp3", "Music/2.mp3", "Music/3.mp3"]);
+    let db = Database::open_in_memory().unwrap();
+    let reader = ByName(vec![
+        ("1.mp3", sorted("Warszawa", "Brian Eno", "", "Low", Some("David Bowie"), "")),
+        ("2.mp3", sorted("Breaking Glass", "Brian Eno", "", "Low", Some("David Bowie"), "Bowie, David")),
+        ("3.mp3", sorted("Sound and Vision", "Brian Eno", "", "Low", Some("David Bowie"), "")),
+    ]);
+
+    run(&db, &tree, &FolderConfig::default(), &reader);
+
+    assert_eq!(sort_name(&db, "David Bowie").as_deref(), Some("Bowie, David"));
+    assert_eq!(db.albums_titled("Low").unwrap().len(), 1);
+    assert_eq!(album(&db, "Warszawa").unwrap().sort_artist_credit.as_deref(), Some("Bowie, David"));
+    assert_eq!(track(&db, "Breaking Glass").sort_artist_credit, None, "у трека — только его теги");
+}
+
+/// Правка тегов меняет имя для сортировки у трека и у артиста.
+#[test]
+fn retagging_changes_the_sort_name() {
+    let tree = Tree::new(&["Music/a.mp3"]);
+    let db = Database::open_in_memory().unwrap();
+    let old = ByName(vec![("a.mp3", sorted("Heroes", "David Bowie", "Bowie, D.", "Heroes", None, ""))]);
+    run(&db, &tree, &FolderConfig::default(), &old);
+
+    tree.write("Music/a.mp3", b"re-tagged audio");
+    let new = ByName(vec![("a.mp3", sorted("Heroes", "David Bowie", "Bowie, David", "Heroes", None, ""))]);
+    run(&db, &tree, &FolderConfig::default(), &new);
+
+    assert_eq!(sort_name(&db, "David Bowie").as_deref(), Some("Bowie, David"));
+    assert_eq!(track(&db, "Heroes").sort_artist_credit.as_deref(), Some("Bowie, David"));
+    assert_eq!(album(&db, "Heroes").unwrap().sort_artist_credit.as_deref(), Some("Bowie, David"));
 }
 
 /// Сменились теги — трек тот же, артисты и альбом новые; старые, которым

@@ -59,7 +59,7 @@ fn read_artist_row(row: &Row<'_>) -> rusqlite::Result<ArtistRow> {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::query::testing::library;
+    use crate::db::query::testing::{Library, library};
 
     /// Без артикля и без исполнителей, у которых не осталось видимых треков.
     #[test]
@@ -76,6 +76,23 @@ mod tests {
             summary,
             [("The Beatles", 1, 2), ("Daft Punk", 1, 1), ("Pharrell", 1, 1), ("Radiohead", 1, 3), ("Ёлка", 0, 1)]
         );
+    }
+
+    /// Имя для сортировки из тегов сильнее имени: «David Bowie» под «B».
+    #[test]
+    fn artists_follow_the_sort_name() {
+        let mut lib = Library::new();
+        for name in ["David Bowie", "Coldplay", "ABBA"] {
+            let artist = lib.artist(name);
+            lib.track(name, name, &[artist], None, true);
+        }
+        let mut bowie = lib.db.artists_named("David Bowie").unwrap().remove(0);
+
+        bowie.sort_name = Some("Bowie, David".to_owned());
+        lib.db.save_artist(&bowie).unwrap();
+
+        let names: Vec<String> = lib.db.artist_list().unwrap().into_iter().map(|a| a.name).collect();
+        assert_eq!(names, ["ABBA", "David Bowie", "Coldplay"]);
     }
 
     /// Гость из «feat.» — тоже исполнитель трека.

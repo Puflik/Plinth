@@ -34,6 +34,13 @@ pub struct Tags {
     pub album_artist: Option<String>,
     /// Артисты альбома; у сборника без своего исполнителя — пусто.
     pub album_artists: Vec<String>,
+    /// Исполнитель строкой для сортировки: «Bowie, David». `None` — по `artist`.
+    pub sort_artist: Option<String>,
+    /// Исполнитель альбома для сортировки; `None` — по `album_artist`.
+    pub sort_album_artist: Option<String>,
+    /// Имена для сортировки артистов трека и альбома: «David Bowie» →
+    /// «Bowie, David». Только те, что удалось сопоставить с артистом.
+    pub sort_names: Vec<(String, String)>,
     pub compilation: bool,
     pub track: Option<u16>,
     pub disc: Option<u16>,
@@ -42,6 +49,13 @@ pub struct Tags {
     pub duration: Option<Duration>,
     /// Звук по содержимому файла; `None` — формат известен только по расширению.
     pub audio: Option<AudioSpec>,
+}
+
+impl Tags {
+    /// Имя для сортировки артиста `name` — из тегов этого файла.
+    pub fn sort_name(&self, name: &str) -> Option<&str> {
+        self.sort_names.iter().find(|(known, _)| known == name).map(|(_, sort)| sort.as_str())
+    }
 }
 
 /// Читает теги файла. Ошибка — файл повреждён или формат не тот: сканер всё

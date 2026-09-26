@@ -93,6 +93,8 @@ fn fill(raw: &mut RawTags, tag: &Tag) {
     set_all(&mut raw.artists, strings(ItemKey::TrackArtists));
     set(&mut raw.album, tag.album().map(|v| v.into_owned()));
     set_all(&mut raw.album_artist, strings(ItemKey::AlbumArtist));
+    set_all(&mut raw.sort_artist, strings(ItemKey::TrackArtistSortOrder));
+    set_all(&mut raw.sort_album_artist, strings(ItemKey::AlbumArtistSortOrder));
     set(&mut raw.track, tag.track());
     set(&mut raw.disc, tag.disk());
     set(&mut raw.disc_total, tag.disk_total());
@@ -320,6 +322,56 @@ pub(crate) mod tests {
             assert_eq!(read_raw(&off.0).unwrap().compilation, Some(false), "{file}");
         }
         assert_eq!(read_raw(&asset("formats/silence.flac")).unwrap().compilation, None);
+    }
+
+    /// Имена для сортировки: `TSOP` и `TSO2` в ID3v2, `ARTISTSORT` и
+    /// `ALBUMARTISTSORT` в Vorbis, `soar` и `soaa` в MP4.
+    #[test]
+    fn sort_names_in_each_container() {
+        for file in ["formats/silence.mp3", "formats/silence.flac", "formats/silence-aac.m4a"] {
+            let copy = Copy::of(file).tag(&[
+                (ItemKey::TrackArtistSortOrder, "Bowie, David"),
+                (ItemKey::AlbumArtistSortOrder, "Queen & Bowie, David"),
+            ]);
+
+            let raw = read_raw(&copy.0).unwrap();
+
+            assert_eq!(raw.sort_artist, strings(&["Bowie, David"]), "{file}");
+            assert_eq!(raw.sort_album_artist, strings(&["Queen & Bowie, David"]), "{file}");
+        }
+        assert!(read_raw(&asset("formats/silence.flac")).unwrap().sort_artist.is_empty());
+    }
+
+    /// В ID3v2.3 кадра `TSOP` официально нет, но Picard и Mp3tag его пишут.
+    /// lofty в v2.3 его не сохраняет, поэтому тег собран вручную.
+    #[test]
+    fn a_sort_name_in_id3v23() {
+        let copy = Copy::of("tags/plinth-untagged.mp3");
+        let untagged = std::fs::read(&copy.0).unwrap();
+        let old_tag = 10 + untagged[6..10].iter().fold(0_usize, |size, byte| size << 7 | usize::from(*byte));
+        let mut file = id3v23(&[("TPE1", "David Bowie"), ("TSOP", "Bowie, David")]);
+        file.extend_from_slice(&untagged[old_tag..]);
+        std::fs::write(&copy.0, file).unwrap();
+
+        let raw = read_raw(&copy.0).unwrap();
+
+        assert_eq!((raw.artist, raw.sort_artist), (strings(&["David Bowie"]), strings(&["Bowie, David"])));
+    }
+
+    /// Тег ID3v2.3 из текстовых кадров в Latin-1.
+    fn id3v23(frames: &[(&str, &str)]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for (id, text) in frames {
+            body.extend_from_slice(id.as_bytes());
+            body.extend_from_slice(&u32::try_from(text.len() + 1).unwrap().to_be_bytes());
+            body.extend_from_slice(&[0, 0, 0]); // флаги кадра и кодировка
+            body.extend_from_slice(text.as_bytes());
+        }
+        let size = u32::try_from(body.len()).unwrap();
+        let mut tag = b"ID3\x03\x00\x00".to_vec();
+        tag.extend([21, 14, 7, 0].map(|shift| u8::try_from(size >> shift & 0x7f).unwrap()));
+        tag.extend(body);
+        tag
     }
 
     #[test]

@@ -81,6 +81,7 @@ fn rebuilding_keeps_the_catalog() {
         id: TrackId::new(),
         title: "Creep".to_owned(),
         artist_credit: "Radiohead".to_owned(),
+        sort_artist_credit: None,
         artists: Vec::new(),
         mbid_work: None,
         added_at: Timestamp::from_millis(1),

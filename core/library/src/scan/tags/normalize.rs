@@ -22,6 +22,10 @@ pub struct RawTags {
     pub artists: Vec<String>,
     pub album: Option<String>,
     pub album_artist: Vec<String>,
+    /// Исполнитель для сортировки (`TSOP`, `ARTISTSORT`): «Bowie, David».
+    pub sort_artist: Vec<String>,
+    /// Исполнитель альбома для сортировки (`TSO2`, `ALBUMARTISTSORT`).
+    pub sort_album_artist: Vec<String>,
     pub track: Option<u32>,
     pub disc: Option<u32>,
     pub disc_total: Option<u32>,
@@ -160,6 +164,18 @@ pub fn normalized(raw: RawTags, rules: &ArtistSplit) -> Tags {
     let album_artist = credit(&raw.album_artist);
     let various = album_artist.as_deref().is_some_and(|name| VARIOUS.contains(&normalize(name).as_str()));
     let album_artists = if various { Vec::new() } else { rules.split_all(&raw.album_artist) };
+    let mut sort_names = Vec::new();
+    pair_sort_names(&mut sort_names, &artists, &raw.sort_artist, rules);
+    pair_sort_names(&mut sort_names, &album_artists, &raw.sort_album_artist, rules);
+    let sort_artist = sort_credit(&raw.sort_artist, artist.as_deref());
+    let sort_album_artist = album_artist.as_deref().and_then(|shown| {
+        sort_credit(&raw.sort_album_artist, Some(shown))
+            .or_else(|| artist.as_deref().filter(|a| normalize(a) == normalize(shown)).and(sort_artist.clone()))
+            .or_else(|| match album_artists.as_slice() {
+                [only] => sort_names.iter().find(|(name, _)| name == only).map(|(_, sort)| sort.clone()),
+                _ => None,
+            })
+    });
     Tags {
         title: raw.title.as_deref().and_then(text),
         artist,
@@ -167,6 +183,9 @@ pub fn normalized(raw: RawTags, rules: &ArtistSplit) -> Tags {
         album: raw.album.as_deref().and_then(text),
         album_artist,
         album_artists,
+        sort_artist,
+        sort_album_artist,
+        sort_names,
         compilation: various || raw.compilation == Some(true),
         track: number(raw.track),
         disc: number(raw.disc),
@@ -182,6 +201,30 @@ pub fn normalized(raw: RawTags, rules: &ArtistSplit) -> Tags {
 fn credit(values: &[String]) -> Option<String> {
     let values: Vec<&str> = values.iter().map(|v| v.trim()).filter(|v| !v.is_empty()).collect();
     (!values.is_empty()).then(|| values.join("; "))
+}
+
+/// Строка сортировки; равная строке для показа ничего не добавляет.
+fn sort_credit(values: &[String], shown: Option<&str>) -> Option<String> {
+    credit(values).filter(|sort| Some(sort.as_str()) != shown)
+}
+
+/// Имена для сортировки артистов `names` из тега сортировки `sorts`. Одному
+/// артисту — вся строка: «Bowie, David». Нескольким — части по тем же
+/// разделителям по порядку, если частей столько же; иначе не угадать, чьё
+/// какое. Имя, найденное раньше, не меняется.
+fn pair_sort_names(pairs: &mut Vec<(String, String)>, names: &[String], sorts: &[String], rules: &ArtistSplit) {
+    let parts: Vec<String> = match (names, sorts) {
+        ([_], [whole]) => text(whole).into_iter().collect(),
+        _ => rules.split_all(sorts),
+    };
+    if parts.len() != names.len() {
+        return;
+    }
+    for (name, sort) in names.iter().zip(parts) {
+        if sort != *name && !pairs.iter().any(|(known, _)| known == name) {
+            pairs.push((name.clone(), sort));
+        }
+    }
 }
 
 fn text(value: &str) -> Option<String> {
@@ -450,5 +493,132 @@ mod tests {
 
         assert!(tags.compilation);
         assert_eq!(tags.album_artists, ["Tiësto"]);
+    }
+
+    fn sorted(artist: &[&str], sort_artist: &[&str]) -> crate::scan::Tags {
+        normalized(
+            RawTags { artist: values(artist), sort_artist: values(sort_artist), ..RawTags::default() },
+            &ArtistSplit::default(),
+        )
+    }
+
+    fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(name, sort)| ((*name).to_owned(), (*sort).to_owned())).collect()
+    }
+
+    /// Один артист — вся строка сортировки его: запятая в «Bowie, David» не
+    /// делит, даже если правила делят по запятой.
+    #[test]
+    fn one_artist_takes_the_whole_sort_name() {
+        let tags = sorted(&["David Bowie"], &[" Bowie, David "]);
+        let by_comma = normalized(
+            RawTags { artist: values(&["David Bowie"]), sort_artist: values(&["Bowie, David"]), ..RawTags::default() },
+            &ArtistSplit { separators: values(&[", "]), keep: Vec::new() },
+        );
+
+        assert_eq!(tags.sort_artist.as_deref(), Some("Bowie, David"));
+        assert_eq!(tags.sort_names, pairs(&[("David Bowie", "Bowie, David")]));
+        assert_eq!(tags.sort_name("David Bowie"), Some("Bowie, David"));
+        assert_eq!(tags.sort_name("Queen"), None);
+        assert_eq!(by_comma.sort_name("David Bowie"), Some("Bowie, David"));
+    }
+
+    /// Несколько артистов — части по тем же разделителям, по порядку, если
+    /// частей столько же. Часть, равная имени, ничего не добавляет.
+    #[test]
+    fn parts_pair_up_when_their_count_matches() {
+        let guest = sorted(&["David Bowie feat. Queen"], &["Bowie, David feat. Queen"]);
+        let values = sorted(&["Alpha", "The Beta"], &["Alpha", "Beta, The"]);
+
+        assert_eq!(guest.sort_names, pairs(&[("David Bowie", "Bowie, David")]));
+        assert_eq!(values.sort_names, pairs(&[("The Beta", "Beta, The")]));
+    }
+
+    /// Частей другое число — не угадать, чьё какое: имён артистам нет. Строка
+    /// сортировки трека при этом остаётся.
+    #[test]
+    fn a_count_mismatch_gives_no_sort_names() {
+        let fewer = sorted(&["David Bowie & Queen"], &["Bowie, David"]);
+        let more = sorted(&["David Bowie"], &["Bowie, David", "Queen"]);
+
+        assert!(fewer.sort_names.is_empty() && more.sort_names.is_empty());
+        assert_eq!(fewer.sort_artist.as_deref(), Some("Bowie, David"));
+    }
+
+    /// Строка сортировки, равная исполнителю, ничего не говорит.
+    #[test]
+    fn a_sort_name_equal_to_the_name_is_dropped() {
+        let tags = sorted(&["Queen"], &[" Queen "]);
+
+        assert_eq!(tags.sort_artist, None);
+        assert!(tags.sort_names.is_empty());
+    }
+
+    /// Список `ARTISTS` сопоставляется с частями строки сортировки так же:
+    /// «Simon & Garfunkel» — одна часть на двоих, имён нет.
+    #[test]
+    fn an_artists_list_pairs_with_sort_parts() {
+        let tags = |sort: &str| {
+            normalized(
+                RawTags {
+                    artist: values(&["Simon & Garfunkel"]),
+                    artists: values(&["Paul Simon", "Art Garfunkel"]),
+                    sort_artist: values(&[sort]),
+                    ..RawTags::default()
+                },
+                &ArtistSplit::default(),
+            )
+        };
+
+        assert_eq!(
+            tags("Simon, Paul & Garfunkel, Art").sort_names,
+            pairs(&[("Paul Simon", "Simon, Paul"), ("Art Garfunkel", "Garfunkel, Art")])
+        );
+        assert!(tags("Simon & Garfunkel").sort_names.is_empty());
+    }
+
+    /// Исполнитель альбома сортируется по `TSO2`; его артисты получают имена
+    /// по тем же правилам.
+    #[test]
+    fn the_album_artist_sort_name() {
+        let raw = RawTags {
+            artist: values(&["Freddie Mercury"]),
+            album_artist: values(&["Queen & David Bowie"]),
+            sort_album_artist: values(&["Queen & Bowie, David"]),
+            ..RawTags::default()
+        };
+
+        let tags = normalized(raw, &ArtistSplit::default());
+
+        assert_eq!(tags.sort_album_artist.as_deref(), Some("Queen & Bowie, David"));
+        assert_eq!(tags.sort_names, pairs(&[("David Bowie", "Bowie, David")]));
+    }
+
+    /// Без `TSO2`: исполнитель альбома тот же, что у трека, — по `TSOP`; один
+    /// артист альбома — по его имени для сортировки из `TSOP`.
+    #[test]
+    fn without_tso2_the_album_artist_sorts_by_the_track() {
+        let album = |artist: &str, album_artist: &str, sort_artist: &str| {
+            normalized(
+                RawTags {
+                    artist: values(&[artist]),
+                    album_artist: values(&[album_artist]),
+                    sort_artist: values(&[sort_artist]),
+                    ..RawTags::default()
+                },
+                &ArtistSplit::default(),
+            )
+            .sort_album_artist
+        };
+
+        assert_eq!(
+            album("Crosby & Nash", "crosby & nash", "Crosby, David & Nash, Graham").as_deref(),
+            Some("Crosby, David & Nash, Graham")
+        );
+        assert_eq!(
+            album("David Bowie feat. Queen", "David Bowie", "Bowie, David feat. Queen").as_deref(),
+            Some("Bowie, David")
+        );
+        assert_eq!(album("David Bowie", "Queen", "Bowie, David"), None);
     }
 }

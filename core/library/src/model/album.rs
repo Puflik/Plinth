@@ -8,6 +8,9 @@ pub struct Album {
     pub title: String,
     /// Исполнитель альбома строкой, как в тегах: «Various Artists».
     pub artist_credit: String,
+    /// Исполнитель альбома для сортировки из тегов: «Bowie, David». Нет —
+    /// сортируется по `artist_credit`.
+    pub sort_artist_credit: Option<String>,
     pub artists: Vec<ArtistId>,
     pub year: Option<u16>,
     pub label: Option<String>,

@@ -5,6 +5,7 @@
 mod m0001_initial;
 mod m0002_scan_file;
 mod m0003_sort_keys;
+mod m0004_sort_credit;
 mod runner;
 
 pub(crate) use runner::{MigrationError, migrate};
@@ -20,7 +21,7 @@ pub(crate) struct Migration {
 
 /// Реестр по порядку; версии подряд с единицы.
 pub(crate) const MIGRATIONS: &[Migration] =
-    &[m0001_initial::MIGRATION, m0002_scan_file::MIGRATION, m0003_sort_keys::MIGRATION];
+    &[m0001_initial::MIGRATION, m0002_scan_file::MIGRATION, m0003_sort_keys::MIGRATION, m0004_sort_credit::MIGRATION];
 
 #[cfg(test)]
 mod tests {

@@ -9,6 +9,9 @@ pub struct Track {
     pub title: String,
     /// Исполнитель строкой, как его показать: «Radiohead», «Daft Punk feat. Pharrell».
     pub artist_credit: String,
+    /// Исполнитель для сортировки из тегов: «Bowie, David». Нет — сортируется
+    /// по `artist_credit`.
+    pub sort_artist_credit: Option<String>,
     /// Артисты по порядку указания, основной — первый.
     pub artists: Vec<ArtistId>,
     /// Произведение MusicBrainz — «золотой» уровень склейки (plan.md 4.2).

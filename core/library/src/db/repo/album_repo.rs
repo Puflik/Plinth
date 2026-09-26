@@ -13,14 +13,14 @@ impl Database {
             tx.execute(
                 // UPSERT, а не REPLACE: REPLACE удаляет строку, и версии потеряли бы альбом.
                 "INSERT INTO album(id, title, title_normalized, artist_credit, year, label, country,
-                                   disc_count, mbid_release, title_sort, artist_sort)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                                   disc_count, mbid_release, title_sort, artist_sort, sort_artist_credit)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                  ON CONFLICT(id) DO UPDATE SET
                      title = excluded.title, title_normalized = excluded.title_normalized,
                      artist_credit = excluded.artist_credit, year = excluded.year, label = excluded.label,
                      country = excluded.country, disc_count = excluded.disc_count,
                      mbid_release = excluded.mbid_release, title_sort = excluded.title_sort,
-                     artist_sort = excluded.artist_sort",
+                     artist_sort = excluded.artist_sort, sort_artist_credit = excluded.sort_artist_credit",
                 params![
                     album.id.as_bytes(),
                     album.title,
@@ -32,7 +32,8 @@ impl Database {
                     album.disc_count,
                     album.mbid_release.map(|m| m.to_string()),
                     sort_key(&album.title),
-                    sort_key(&album.artist_credit)
+                    sort_key(album.sort_artist_credit.as_deref().unwrap_or(&album.artist_credit)),
+                    album.sort_artist_credit
                 ],
             )
             .storage()?;
@@ -79,6 +80,7 @@ fn read_album(row: &Row<'_>) -> rusqlite::Result<Album> {
         id: id(row, "id")?,
         title: row.get("title")?,
         artist_credit: row.get("artist_credit")?,
+        sort_artist_credit: row.get("sort_artist_credit")?,
         artists: Vec::new(),
         year: row.get("year")?,
         label: row.get("label")?,
