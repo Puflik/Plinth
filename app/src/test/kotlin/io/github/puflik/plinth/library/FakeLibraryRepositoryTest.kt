@@ -22,4 +22,19 @@ class FakeLibraryRepositoryTest : LibraryRepositoryContractTest() {
     ) {
         (repository as FakeLibraryRepository).hide(paths)
     }
+
+    override suspend fun like(
+        repository: LibraryRepository,
+        paths: List<String>,
+    ) {
+        (repository as FakeLibraryRepository).like(paths)
+    }
+
+    override suspend fun play(
+        repository: LibraryRepository,
+        path: String,
+        times: Int,
+    ) {
+        (repository as FakeLibraryRepository).play(path, times)
+    }
 }

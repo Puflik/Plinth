@@ -40,6 +40,11 @@ class CoreLibraryRepository(
 ) : LibraryRepository {
     override fun tracks(sort: TrackSort): Flow<List<LibraryTrack>> = read { tracks(sort.toCore()).toLibraryTracks() }
 
+    override fun likedTracks(): Flow<List<LibraryTrack>> = read { likedTracks().toLibraryTracks() }
+
+    override fun recentTracks(): Flow<List<LibraryTrack>> =
+        read { recentTracks(LibraryRepository.RECENT_LIMIT).toLibraryTracks() }
+
     override fun albums(sort: AlbumSort): Flow<List<Album>> = read { albums(sort.toCore()).map(CoreAlbum::toAlbum) }
 
     override fun artists(): Flow<List<Artist>> =
@@ -95,6 +100,7 @@ private fun TrackSort.toCore() =
         TrackSort.TITLE -> CoreTrackSort.TITLE
         TrackSort.ARTIST -> CoreTrackSort.ARTIST
         TrackSort.ALBUM -> CoreTrackSort.ALBUM
+        TrackSort.MOST_PLAYED -> CoreTrackSort.MOST_PLAYED
     }
 
 private fun AlbumSort.toCore() =

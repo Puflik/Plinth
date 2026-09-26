@@ -5,7 +5,6 @@ import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
-import io.github.puflik.plinth.library.sort.CodePointOrder
 import io.github.puflik.plinth.library.sort.NaturalOrder
 import io.github.puflik.plinth.library.sort.SortKeys
 import io.github.puflik.plinth.library.sort.TrackSort
@@ -20,7 +19,7 @@ import kotlinx.coroutines.flow.update
  *
  * Ведёт себя как ядро: сортирует и группирует в Kotlin то, что ядро делает
  * запросами; совпадение гарантирует общий контракт `LibraryRepositoryContractTest`.
- * Строки сравниваются по кодовым точкам ([CodePointOrder]), как в SQLite.
+ * Строки сравниваются по кодовым точкам, как в SQLite (`FakeLibraryOrder`).
  * Равные по ключам треки и альбомы стоят в порядке добавления — в ядре так
  * растут их идентификаторы.
  *
@@ -33,16 +32,22 @@ import kotlinx.coroutines.flow.update
 class FakeLibraryRepository(
     private val keys: SortKeys = SortKeys(),
 ) : LibraryRepository {
+    /** [plays] — засчитанные прослушивания, [lastPlayed] — номер последнего по порядку всех. */
     private data class Entry(
         val track: LibraryTrack,
         val missing: Boolean,
+        val plays: Int = 0,
+        val lastPlayed: Int? = null,
     )
 
     private val entries = MutableStateFlow<Map<TrackId, Entry>>(emptyMap())
+    private val order = FakeLibraryOrder(keys) { ownerOf(it) }
     private var added = 0
+    private var played = 0
 
-    private val present: Flow<List<LibraryTrack>> =
-        entries.map { all -> all.values.filterNot(Entry::missing).map(Entry::track) }
+    private val presentEntries: Flow<List<Entry>> = entries.map { all -> all.values.filterNot(Entry::missing) }
+
+    private val present: Flow<List<LibraryTrack>> = presentEntries.map { all -> all.map(Entry::track) }
 
     /** Добавляет треки как есть или заменяет их по `id`; пропавший трек снова виден. */
     fun upsert(tracks: Collection<LibraryTrack>) {
@@ -73,8 +78,42 @@ class FakeLibraryRepository(
         )
     }
 
+    /** Ставит лайк трекам файлов [paths]. */
+    fun like(paths: Collection<String>) = updateAt(paths) { it.copy(track = it.track.copy(liked = true)) }
+
+    /** Файл [path] дослушали [times] раз — позже всех прежних прослушиваний. */
+    fun play(
+        path: String,
+        times: Int,
+    ) = updateAt(listOf(path)) { it.copy(plays = it.plays + times, lastPlayed = ++played) }
+
+    private fun updateAt(
+        paths: Collection<String>,
+        change: (Entry) -> Entry,
+    ) = entries.update { all -> all.mapValues { (_, entry) -> if (entry.track.uri in paths) change(entry) else entry } }
+
     override fun tracks(sort: TrackSort): Flow<List<LibraryTrack>> =
-        present.map { tracks -> tracks.sortedWith(trackOrder(sort)) }
+        if (sort == TrackSort.MOST_PLAYED) {
+            presentEntries.map { all ->
+                all
+                    .sortedWith(compareByDescending(Entry::plays).then(compareBy(order.tracks(sort), Entry::track)))
+                    .map(Entry::track)
+            }
+        } else {
+            present.map { tracks -> tracks.sortedWith(order.tracks(sort)) }
+        }
+
+    override fun likedTracks(): Flow<List<LibraryTrack>> =
+        present.map { tracks -> tracks.filter(LibraryTrack::liked).sortedWith(order.tracks(TrackSort.TITLE)) }
+
+    override fun recentTracks(): Flow<List<LibraryTrack>> =
+        presentEntries.map { all ->
+            all
+                .filter { it.lastPlayed != null }
+                .sortedByDescending(Entry::lastPlayed)
+                .take(LibraryRepository.RECENT_LIMIT)
+                .map(Entry::track)
+        }
 
     override fun albums(sort: AlbumSort): Flow<List<Album>> = present.map { albumsOf(it, sort) }
 
@@ -87,7 +126,7 @@ class FakeLibraryRepository(
                     val tracksOfArtist = credits.map { it.second }
                     val albums = tracksOfArtist.mapNotNull(::albumIdentity).distinct()
                     Artist(credits.first().first, albums.size, tracksOfArtist.size)
-                }.sortedWith(keyOrder(Artist::name))
+                }.sortedWith(order.key(Artist::name))
         }
 
     override fun search(query: String): Flow<List<LibraryTrack>> {
@@ -106,11 +145,11 @@ class FakeLibraryRepository(
 
     override fun albumTracks(album: Album): Flow<List<LibraryTrack>> {
         val wanted = normalize(album.title) to normalize(album.artist.orEmpty())
-        return present.map { tracks -> tracks.filter { albumIdentity(it) == wanted }.sortedWith(inAlbumOrder()) }
+        return present.map { tracks -> tracks.filter { albumIdentity(it) == wanted }.sortedWith(order.inAlbum()) }
     }
 
     override fun artistTracks(artist: String): Flow<List<LibraryTrack>> =
-        present.map { tracks -> tracks.filter { it.isBy(artist) }.sortedWith(albumOrder().then(inAlbumOrder())) }
+        present.map { tracks -> tracks.filter { it.isBy(artist) }.sortedWith(order.byAlbum().then(order.inAlbum())) }
 
     override fun artistAlbums(artist: String): Flow<List<Album>> =
         present.map { tracks ->
@@ -129,39 +168,9 @@ class FakeLibraryRepository(
             .groupBy(::albumIdentity)
             .map { (_, tracksOfAlbum) ->
                 val first = tracksOfAlbum.first()
-                val cover = tracksOfAlbum.minWith(inAlbumOrder()).uri
+                val cover = tracksOfAlbum.minWith(order.inAlbum()).uri
                 Album(checkNotNull(first.album), ownerOf(first), tracksOfAlbum.size, coverTrackUri = cover)
-            }.sortedWith(
-                when (sort) {
-                    AlbumSort.TITLE -> keyOrder(Album::title).thenByKey(Album::artist)
-                    AlbumSort.ARTIST -> keyOrder(Album::artist).thenByKey(Album::title)
-                },
-            )
-
-    private fun trackOrder(sort: TrackSort): Comparator<LibraryTrack> =
-        when (sort) {
-            TrackSort.TITLE -> keyOrder(LibraryTrack::title).thenByKey(LibraryTrack::artist)
-            TrackSort.ARTIST -> keyOrder(LibraryTrack::artist).then(albumOrder()).then(inAlbumOrder())
-            TrackSort.ALBUM -> albumOrder().then(inAlbumOrder())
-        }
-
-    /** Альбомы по названию и владельцу; треки без альбома — в конце. */
-    private fun albumOrder(): Comparator<LibraryTrack> =
-        keyOrder(LibraryTrack::album).then(keyOrder { track: LibraryTrack -> track.album?.let { ownerOf(track) } })
-
-    /** Порядок треков альбома: по диску и номеру, равные — по названию. */
-    private fun inAlbumOrder(): Comparator<LibraryTrack> = discOrder().thenByKey(LibraryTrack::title)
-
-    /** Диск без номера — первым, трек без номера — последним на своём диске. */
-    private fun discOrder(): Comparator<LibraryTrack> =
-        compareBy<LibraryTrack, Int?>(nullsFirst(naturalOrder())) { it.discNumber }
-            .thenBy(nullsLast(naturalOrder())) { it.trackNumber }
-
-    /** Порядок по ключу названия; без названия — в конце. */
-    private fun <T> keyOrder(text: (T) -> String?): Comparator<T> =
-        compareBy(nullsLast(CodePointOrder)) { item: T -> text(item)?.let(keys::of) }
-
-    private fun <T> Comparator<T>.thenByKey(text: (T) -> String?): Comparator<T> = then(keyOrder(text))
+            }.sortedWith(order.albums(sort))
 
     private companion object {
         /** Разделители исполнителей из плана (13.2): `;` `/` `feat.` `ft.` `&` `x`. */

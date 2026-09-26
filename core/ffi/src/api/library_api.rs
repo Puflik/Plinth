@@ -52,6 +52,17 @@ impl Core {
         panic::guard(|| self.with(|state| state.db.artist_albums(&name)))
     }
 
+    /// «Любимое»: видимые треки с лайком, по названию.
+    pub fn liked_tracks(&self) -> Result<Vec<TrackRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.liked_tracks()))
+    }
+
+    /// «Недавнее»: видимые треки по последнему засчитанному прослушиванию,
+    /// новые первыми, не больше `limit`.
+    pub fn recent_tracks(&self, limit: u32) -> Result<Vec<TrackRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.recent_tracks(limit)))
+    }
+
     /// Трек библиотеки, который играет из файла `path`; файла в библиотеке нет — `None`.
     pub fn track_at(&self, path: String) -> Result<Option<TrackId>, CoreError> {
         panic::guard(|| self.with(|state| state.db.track_at(&path)))
@@ -148,6 +159,39 @@ mod tests {
 
         assert_eq!(core.track_at(tishina.uri.clone().unwrap()).unwrap(), Some(tishina.id));
         assert_eq!(core.track_at("/nowhere/song.mp3".to_owned()).unwrap(), None);
+    }
+
+    /// Лайк ведёт трек в «Любимое», засчитанное прослушивание — в «Недавнее»;
+    /// брошенный на десятой секунде трек в «Недавнее» не попадает.
+    #[test]
+    fn liked_and_recent_tracks_follow_the_journal() {
+        let (_data, _volume, core) = scanned();
+        let find = |title: &str| core.tracks(TrackSort::Title, Some(title.to_owned())).unwrap().remove(0).id;
+        let (tishina, flac) = (find("тишина"), find("FLAC Silence"));
+
+        core.like(tishina).unwrap();
+        core.record_play(play(flac, 200)).unwrap();
+        core.record_play(play(tishina, 10)).unwrap();
+
+        let titles =
+            |rows: Vec<plinth_library::db::query::TrackRow>| rows.into_iter().map(|row| row.title).collect::<Vec<_>>();
+        assert_eq!(titles(core.liked_tracks().unwrap()), ["Тишина"]);
+        assert_eq!(titles(core.recent_tracks(10).unwrap()), ["FLAC Silence"]);
+    }
+
+    fn play(track: plinth_types::TrackId, listened_s: u64) -> crate::types::NewPlay {
+        crate::types::NewPlay {
+            track,
+            version: None,
+            source: None,
+            started_at: plinth_types::Timestamp::from_millis(1_790_307_000_000),
+            utc_offset_minutes: 300,
+            listened: std::time::Duration::from_secs(listened_s),
+            track_length: Some(std::time::Duration::from_secs(240)),
+            skipped_at: None,
+            output: plinth_library::model::OutputDevice::Unknown,
+            previous_track: None,
+        }
     }
 
     #[test]

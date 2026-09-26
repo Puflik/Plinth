@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.diagnostics.log.LogLevel
 import io.github.puflik.plinth.ffi.CoreErrors
 import io.github.puflik.plinth.ffi.CoreTestFile
+import io.github.puflik.plinth.ffi.NewPlay
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.library.model.LibraryTrack
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,8 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Test
 import java.io.File
 import java.util.UUID
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /**
  * `CoreLibraryRepository` проходит общий контракт фонотеки (D3b) — тот же
@@ -33,6 +36,7 @@ class CoreLibraryRepositoryContractTest : LibraryRepositoryContractTest() {
     // хранилище на тест: одного ядра на экземпляр достаточно.
     private val dataDir = File(context.cacheDir, "core-contract-" + UUID.randomUUID())
     private lateinit var core: PlinthCore
+    private var playedAt = Instant.fromEpochMilliseconds(1_790_000_000_000)
 
     override fun createRepository(): LibraryRepository {
         core = PlinthCore(LogLevel.INFO, dataDir, CoreErrors())
@@ -53,6 +57,28 @@ class CoreLibraryRepositoryContractTest : LibraryRepositoryContractTest() {
         repository: LibraryRepository,
         paths: List<String>,
     ) = withContext(Dispatchers.IO) { core.hideForTest(paths) }
+
+    override suspend fun like(
+        repository: LibraryRepository,
+        paths: List<String>,
+    ) = withContext(Dispatchers.IO) { paths.forEach { core.journal.like(trackAt(it)) } }
+
+    // Дослушан до конца — засчитан по правилу Last.fm; каждое следующее — на десять минут позже.
+    override suspend fun play(
+        repository: LibraryRepository,
+        path: String,
+        times: Int,
+    ) = withContext(Dispatchers.IO) {
+        val track = trackAt(path)
+        repeat(times) {
+            playedAt += PLAY_GAP
+            core.journal.recordPlay(
+                NewPlay(track, playedAt, utcOffsetMinutes = 0, listened = PLAY_LENGTH, trackLength = PLAY_LENGTH),
+            )
+        }
+    }
+
+    private fun trackAt(path: String) = checkNotNull(core.library.trackAt(path)) { "нет трека у $path" }
 
     /** Лайк из журнала приходит в открытый список (D4a): он перечитывается и по сигналу пользовательского. */
     @Test
@@ -88,4 +114,9 @@ class CoreLibraryRepositoryContractTest : LibraryRepositoryContractTest() {
             number = trackNumber,
             duration = duration,
         )
+
+    private companion object {
+        val PLAY_GAP = 10.minutes
+        val PLAY_LENGTH = 4.minutes
+    }
 }

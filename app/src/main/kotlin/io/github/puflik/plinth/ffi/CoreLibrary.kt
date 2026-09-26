@@ -41,6 +41,15 @@ class CoreLibrary internal constructor(
     /** Альбомы, где есть треки исполнителя [name]. */
     fun artistAlbums(name: String): List<CoreAlbum> = core.call { rust -> rust.artistAlbums(name).map { it.toApp() } }
 
+    /** «Любимое»: видимые треки с лайком, по названию. */
+    fun likedTracks(): List<CoreTrack> = core.call { rust -> rust.likedTracks().map { it.toApp() } }
+
+    /** «Недавнее»: по последнему засчитанному прослушиванию, новые первыми, не больше [limit]. */
+    fun recentTracks(limit: Int): List<CoreTrack> {
+        require(limit >= 0) { "limit: $limit" }
+        return core.call { rust -> rust.recentTracks(limit.toUInt()).map { it.toApp() } }
+    }
+
     /** Трек библиотеки, который играет из файла [path]; файла в библиотеке нет — `null`. */
     fun trackAt(path: String): TrackId? = core.call { it.trackAt(path)?.let(::TrackId) }
 

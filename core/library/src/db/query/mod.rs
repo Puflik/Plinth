@@ -81,6 +81,9 @@ const TRACK_JOINS: &str = "
 /// исполнителя — в конце одноимённых, треки без альбома — в конце списка.
 const BY_ALBUM: &str = "a.id IS NULL, a.title_sort, a.artist_credit = '', a.artist_sort, a.id";
 
+/// Порядок по названию, затем по исполнителю; без исполнителя — в конце одноимённых.
+const BY_TITLE: &str = "t.title_sort, t.artist_credit = '', t.artist_sort, t.id";
+
 /// Порядок внутри альбома: диск, номер, без номера — в конце диска. Диск без
 /// номера — первым: у однодисковых альбомов тега диска обычно нет.
 const ON_ALBUM: &str = "v.disc IS NOT NULL, v.disc, v.number IS NULL, v.number, t.title_sort, t.id";
@@ -91,7 +94,7 @@ impl Database {
     /// регистра, диакритики и знаков; запрос без слов ничего не находит.
     pub fn track_list(&self, sort: TrackSort, search: Option<&str>) -> Result<Vec<TrackRow>, CoreError> {
         let order = match sort {
-            TrackSort::Title => "t.title_sort, t.artist_credit = '', t.artist_sort, t.id".to_owned(),
+            TrackSort::Title => BY_TITLE.to_owned(),
             TrackSort::Artist => {
                 format!("t.artist_credit = '', t.artist_sort, a.id IS NULL, a.title_sort, a.id, {ON_ALBUM}")
             }
@@ -107,6 +110,20 @@ impl Database {
         }
         let rows = self.track_rows("", [], &order)?;
         Ok(rows.into_iter().filter(|row| matches(row, &words)).collect())
+    }
+
+    /// Видимые треки с лайком, по названию, — «Любимое» (D4b).
+    pub fn liked_tracks(&self) -> Result<Vec<TrackRow>, CoreError> {
+        self.track_rows("WHERE u.liked = 1", [], BY_TITLE)
+    }
+
+    /// Видимые треки по последнему засчитанному прослушиванию, новые первыми,
+    /// не больше `limit`, — «Недавнее» (D4b). Засчитывает правило Last.fm
+    /// (`PlayEvent::counts`): брошенный на первых секундах трек сюда не попадает.
+    pub fn recent_tracks(&self, limit: u32) -> Result<Vec<TrackRow>, CoreError> {
+        let mut rows = self.track_rows("WHERE u.last_played_at IS NOT NULL", [], "u.last_played_at DESC, t.id")?;
+        rows.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+        Ok(rows)
     }
 
     /// Треки альбома по дискам и номерам (экран альбома).
@@ -296,9 +313,12 @@ pub(crate) mod testing {
 
 #[cfg(test)]
 mod tests {
+    use plinth_types::{Timestamp, TrackId};
+
     use super::TrackSort;
     use super::testing::{Library, library};
     use crate::db::Database;
+    use crate::model::TrackUserData;
 
     fn titles(db: &Database, sort: TrackSort, search: Option<&str>) -> Vec<String> {
         db.track_list(sort, search).unwrap().into_iter().map(|row| row.title).collect()
@@ -402,6 +422,56 @@ mod tests {
 
         assert_eq!(titles(&lib.db, TrackSort::RecentlyAdded, None)[0], "Track 2");
         assert_eq!(titles(&lib.db, TrackSort::MostPlayed, None)[0], "Creep");
+    }
+
+    /// Лайк, счётчик и последнее засчитанное прослушивание трека.
+    fn listened(lib: &Library, track: TrackId, liked: bool, last_played: Option<i64>) {
+        let data = TrackUserData {
+            track,
+            liked,
+            rating: None,
+            play_count: u32::from(last_played.is_some()),
+            last_played_at: last_played.map(Timestamp::from_millis),
+        };
+        lib.db.save_user_data(&data).unwrap();
+    }
+
+    /// «Любимое» (D4b): видимые треки с лайком, по названию.
+    #[test]
+    fn liked_tracks_by_title() {
+        let mut lib = Library::new();
+        let second = lib.track("Second", "X", &[], None, true);
+        let first = lib.track("First", "X", &[], None, true);
+        let lost = lib.track("Lost", "X", &[], None, false);
+        lib.track("Plain", "X", &[], None, true);
+        for track in [second, first, lost] {
+            listened(&lib, track, true, None);
+        }
+
+        let titles: Vec<String> = lib.db.liked_tracks().unwrap().into_iter().map(|row| row.title).collect();
+
+        assert_eq!(titles, ["First", "Second"]);
+    }
+
+    /// «Недавнее» (D4b): по последнему засчитанному прослушиванию, новые
+    /// первыми; не больше `limit`.
+    #[test]
+    fn recent_tracks_by_the_last_counted_play() {
+        let mut lib = Library::new();
+        let old = lib.track("Old", "X", &[], None, true);
+        let new = lib.track("New", "X", &[], None, true);
+        let lost = lib.track("Lost", "X", &[], None, false);
+        let never = lib.track("Never", "X", &[], None, true);
+        listened(&lib, old, false, Some(1_000));
+        listened(&lib, new, false, Some(2_000));
+        listened(&lib, lost, false, Some(3_000));
+        listened(&lib, never, true, None);
+
+        let recent =
+            |limit| -> Vec<String> { lib.db.recent_tracks(limit).unwrap().into_iter().map(|row| row.title).collect() };
+
+        assert_eq!(recent(10), ["New", "Old"]);
+        assert_eq!(recent(1), ["New"]);
     }
 
     /// Пропавший файл скрыт из всех списков.

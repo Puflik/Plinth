@@ -54,6 +54,7 @@
     <string name="library_sort_title">Название</string>
     <string name="library_sort_artist">Исполнитель</string>
     <string name="library_sort_album">Альбом</string>
+    <string name="library_sort_most_played">Часто слушаю</string>
     <string name="library_unknown_artist">Неизвестный исполнитель</string>
     <string name="library_folder_up">Наверх, в %1$s</string>
     <string name="library_folder_root">Все папки</string>

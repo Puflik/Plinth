@@ -52,6 +52,7 @@
     <string name="library_sort_title">Title</string>
     <string name="library_sort_artist">Artist</string>
     <string name="library_sort_album">Album</string>
+    <string name="library_sort_most_played">Most played</string>
     <string name="library_unknown_artist">Unknown artist</string>
     <string name="library_folder_up">Up to %1$s</string>
     <string name="library_folder_root">All folders</string>

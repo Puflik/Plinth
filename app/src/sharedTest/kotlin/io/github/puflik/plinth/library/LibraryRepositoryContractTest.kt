@@ -54,6 +54,19 @@ abstract class LibraryRepositoryContractTest {
         paths: List<String>,
     )
 
+    /** Ставит лайк трекам файлов [paths] — как его поставил бы человек (D4). */
+    protected abstract suspend fun like(
+        repository: LibraryRepository,
+        paths: List<String>,
+    )
+
+    /** Файл [path] дослушали до конца [times] раз — позже всех прежних прослушиваний (D4). */
+    protected abstract suspend fun play(
+        repository: LibraryRepository,
+        path: String,
+        times: Int,
+    )
+
     /** Предел ожидания списка. */
     protected open val timeout: Duration = 5.seconds
 
@@ -636,6 +649,46 @@ abstract class LibraryRepositoryContractTest {
             assertThat(update.await().map(LibraryTrack::title)).containsExactly("Track 2")
         }
 
+    /** «Любимое» (D4b): треки с лайком, по названию, как [tracks]. */
+    @Test
+    fun liked_tracks_are_listed_by_title() =
+        contract { repository ->
+            repository.seed(file(n = 1, "Zebra"), file(n = 2, "Apple"), file(n = 3, "Mango"))
+
+            like(repository, listOf(pathOf(1), pathOf(2)))
+
+            val liked = repository.likedTracks().first { it.size == 2 }
+            assertThat(liked.map(LibraryTrack::title)).containsExactly("Apple", "Zebra").inOrder()
+            assertThat(liked.all(LibraryTrack::liked)).isTrue()
+        }
+
+    /** «Недавнее» (D4b): дослушанные треки, последний — первым; не слушанных нет. */
+    @Test
+    fun recent_tracks_go_newest_first() =
+        contract { repository ->
+            repository.seed(file(n = 1, "One"), file(n = 2, "Two"), file(n = 3, "Three"))
+
+            play(repository, pathOf(2), times = 1)
+            play(repository, pathOf(1), times = 1)
+
+            assertThat(repository.recentTracks().first { it.size == 2 }.map(LibraryTrack::title))
+                .containsExactly("One", "Two")
+                .inOrder()
+        }
+
+    /** «Часто слушаю» (D4b): по числу прослушиваний, равные — по названию. */
+    @Test
+    fun most_played_go_first_then_by_title() =
+        contract { repository ->
+            repository.seed(file(n = 1, "Beta"), file(n = 2, "Alpha"), file(n = 3, "Gamma"))
+
+            play(repository, pathOf(n = 3), times = 1)
+            play(repository, pathOf(1), times = MOST)
+
+            val order = repository.tracks(TrackSort.MOST_PLAYED).first { it.firstOrNull()?.title == "Beta" }
+            assertThat(order.map(LibraryTrack::title)).containsExactly("Beta", "Gamma", "Alpha").inOrder()
+        }
+
     /** Файл [n] с тегами, как его нашёл бы скан: путь и папка — от номера. */
     protected fun file(
         n: Int,
@@ -695,6 +748,7 @@ abstract class LibraryRepositoryContractTest {
 
     private companion object {
         val TRACK_LENGTH = 3.minutes
+        const val MOST = 3
         const val FOLDER = "Music/"
     }
 }

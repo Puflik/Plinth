@@ -113,6 +113,7 @@ private val TRACK_SORTS =
         TrackSort.TITLE to R.string.library_sort_title,
         TrackSort.ARTIST to R.string.library_sort_artist,
         TrackSort.ALBUM to R.string.library_sort_album,
+        TrackSort.MOST_PLAYED to R.string.library_sort_most_played,
     )
 
 private val ALBUM_SORTS =

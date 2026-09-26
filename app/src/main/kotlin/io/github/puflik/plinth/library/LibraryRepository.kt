@@ -21,6 +21,16 @@ import kotlinx.coroutines.flow.Flow
 interface LibraryRepository {
     fun tracks(sort: TrackSort = TrackSort.TITLE): Flow<List<LibraryTrack>>
 
+    /** «Любимое» (D4b): треки с лайком, по названию, как [tracks]. */
+    fun likedTracks(): Flow<List<LibraryTrack>>
+
+    /**
+     * «Недавнее» (D4b): треки по последнему засчитанному прослушиванию, новые
+     * первыми, не больше [RECENT_LIMIT]. Брошенный на первых секундах трек сюда
+     * не попадает — засчитывает ядро по правилу Last.fm.
+     */
+    fun recentTracks(): Flow<List<LibraryTrack>>
+
     fun albums(sort: AlbumSort = AlbumSort.TITLE): Flow<List<Album>>
 
     /**
@@ -58,4 +68,9 @@ interface LibraryRepository {
      * так же, как в списках хранилища.
      */
     suspend fun sortKeys(names: List<String>): List<String>
+
+    companion object {
+        /** Сколько треков в «Недавнем». */
+        const val RECENT_LIMIT = 100
+    }
 }
