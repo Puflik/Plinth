@@ -37,7 +37,15 @@ class LibraryBoundaryTest {
 
     private companion object {
         /** Хранилище и управление сканом — всё, что экраны знают о библиотеке. */
-        val FACADE = listOf("library/LibraryRepository.kt", "library/LibraryScan.kt", "library/FolderSettings.kt")
+        val FACADE =
+            listOf(
+                "library/LibraryRepository.kt",
+                "library/LibraryScan.kt",
+                "library/FolderSettings.kt",
+                "library/UserDataRepository.kt",
+                "library/PlaylistRepository.kt",
+                "library/PlaylistOrder.kt",
+            )
         val ANDROID_PACKAGES = listOf("android.", "androidx.", "com.google.android")
         val LIBRARY_INTERNALS = listOf("io.github.puflik.plinth.library.scan")
     }

@@ -5,7 +5,6 @@ import io.github.puflik.plinth.ffi.CoreAlbum
 import io.github.puflik.plinth.ffi.CoreAlbumSort
 import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.ffi.CoreLibrary
-import io.github.puflik.plinth.ffi.CoreTrack
 import io.github.puflik.plinth.ffi.CoreTrackSort
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.library.model.Album
@@ -110,22 +109,3 @@ private fun AlbumSort.toCore() =
     }
 
 private fun CoreAlbum.toAlbum() = Album(title, artistCredit, trackCount, coverTrackUri = coverUri)
-
-/** Играть можно только файл: строки без пути (сетевые источники — эпик E) не показываются. */
-private fun List<CoreTrack>.toLibraryTracks(): List<LibraryTrack> =
-    mapNotNull { track ->
-        val path = track.uri?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-        LibraryTrack(
-            id = track.id,
-            uri = path,
-            title = track.title.ifBlank { path.substringAfterLast('/') },
-            artist = track.artistCredit.ifEmpty { null },
-            album = track.albumTitle,
-            albumArtist = track.albumArtist,
-            discNumber = track.disc?.takeIf { it > 0 },
-            trackNumber = track.number?.takeIf { it > 0 },
-            duration = track.duration,
-            folder = track.folder.orEmpty(),
-            liked = track.liked,
-        )
-    }

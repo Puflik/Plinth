@@ -7,7 +7,7 @@ import io.github.puflik.plinth.queue.QueueAction
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 
-/** Что сделать с треком списка (D1.2, D4a): касание — [PLAY], остальное — из меню долгого нажатия. */
+/** Что сделать с треком списка (D1.2, D4): касание — [PLAY], остальное — из меню долгого нажатия. */
 enum class TrackAction {
     /** Играть список, в котором трек стоит, начиная с него; вручную добавленное остаётся. */
     PLAY,
@@ -20,6 +20,9 @@ enum class TrackAction {
     /** Поставить лайк; снять — [UNLIKE]. Очередь не трогают. */
     LIKE,
     UNLIKE,
+
+    /** В плейлист (D4b): какой — выбирают в меню трека, пишет [TrackActions]. Очередь не трогают. */
+    ADD_TO_PLAYLIST,
     ;
 
     /** Трек заиграет сразу — после действия открывается плеер. */
@@ -42,28 +45,26 @@ fun LibraryTrack.toQueueItem() =
 
 /**
  * [action] над [track] из списка [tracks], который играет контекстом
- * [context]. Трека в списке нет (список успел обновиться) — играет он один.
- * Лайк — не дело очереди: его ставит [TrackActions].
+ * [context]; [at] — место трека в списке: в плейлисте один трек бывает
+ * дважды. Трека на этом месте нет (список успел обновиться) — играет он один.
+ * Лайк и плейлисты — не дело очереди: их пишет [TrackActions].
  */
 fun PlaybackController.act(
     action: TrackAction,
     context: QueueContext,
     tracks: List<LibraryTrack>,
     track: LibraryTrack,
+    at: Int = tracks.indexOf(track),
 ) {
     when (action) {
         TrackAction.PLAY, TrackAction.REPLACE_QUEUE -> {
-            val start = tracks.indexOf(track)
-            val list = if (start >= 0) tracks else listOf(track)
-            val items = list.map(LibraryTrack::toQueueItem)
-            if (action == TrackAction.PLAY) {
-                play(context, items, start.coerceAtLeast(0))
-            } else {
-                replace(context, items, start.coerceAtLeast(0))
-            }
+            val found = tracks.getOrNull(at) == track
+            val items = (if (found) tracks else listOf(track)).map(LibraryTrack::toQueueItem)
+            val start = if (found) at else 0
+            if (action == TrackAction.PLAY) play(context, items, start) else replace(context, items, start)
         }
         TrackAction.PLAY_NEXT -> perform(QueueAction.PLAY_NEXT, track.toQueueItem())
         TrackAction.ADD_TO_QUEUE -> perform(QueueAction.ADD_TO_QUEUE, track.toQueueItem())
-        TrackAction.LIKE, TrackAction.UNLIKE -> Unit
+        TrackAction.LIKE, TrackAction.UNLIKE, TrackAction.ADD_TO_PLAYLIST -> Unit
     }
 }

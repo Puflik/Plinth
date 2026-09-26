@@ -22,7 +22,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
-import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.library.components.TrackRow
 import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
 
@@ -47,7 +46,7 @@ fun SearchScreen(
         when {
             state.results.isNotEmpty() ->
                 LazyColumn {
-                    items(state.results, key = LibraryTrack::id) { track ->
+                    items(state.results, key = { it.id.value }) { track ->
                         TrackRow(
                             track = track,
                             onAction = { action ->

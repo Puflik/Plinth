@@ -10,7 +10,7 @@
 
 use std::time::Duration;
 
-use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, TrackRow, TrackSort};
+use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, PlaylistRow, TrackRow, TrackSort};
 use plinth_library::model::{
     OutputDevice, PlayEvent, Playlist, PlaylistKind, Rating, SyncedSettings, TrackUserData, VersionPreference,
 };
@@ -67,6 +67,13 @@ pub struct TrackRow {
     pub folder: Option<String>,
     pub liked: bool,
     pub play_count: u32,
+}
+
+/// Строка плейлиста: запись и её трек — один трек может стоять дважды.
+#[uniffi::remote(Record)]
+pub struct PlaylistRow {
+    pub entry: PlaylistEntryId,
+    pub track: TrackRow,
 }
 
 #[uniffi::remote(Enum)]

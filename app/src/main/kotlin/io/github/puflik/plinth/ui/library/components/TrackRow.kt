@@ -20,12 +20,14 @@ import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.common.formatTime
 import io.github.puflik.plinth.ui.library.TrackAction
+import io.github.puflik.plinth.ui.library.playlists.PlaylistPicker
 
 /**
  * Строка трека (C4.2): название, исполнитель и альбом, длительность — если
  * она известна.
- * Одна на все списки — треки, папки, альбом, поиск. Касание — играть список
- * с этого трека, долгое нажатие — меню очереди (D1.2) и лайк (D4a).
+ * Одна на все списки — треки, папки, альбом, поиск, плейлисты. Касание —
+ * играть список с этого трека, долгое нажатие — меню очереди (D1.2), лайк
+ * (D4a) и «В плейлист» (D4b). Плейлист выбирается здесь же, в диалоге.
  */
 @Composable
 fun TrackRow(
@@ -35,6 +37,7 @@ fun TrackRow(
 ) {
     val artist = track.artist ?: stringResource(R.string.library_unknown_artist)
     var menu by remember { mutableStateOf(false) }
+    var picker by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
         ListItem(
             headlineContent = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -53,17 +56,18 @@ fun TrackRow(
                 ),
         )
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            (MENU + likeItem(track.liked)).forEach { (action, label) ->
+            (MENU + PLAYLIST_ITEM + likeItem(track.liked)).forEach { (action, label) ->
                 DropdownMenuItem(
                     text = { Text(stringResource(label)) },
                     onClick = {
                         menu = false
-                        onAction(action)
+                        if (action == TrackAction.ADD_TO_PLAYLIST) picker = true else onAction(action)
                     },
                 )
             }
         }
     }
+    if (picker) PlaylistPicker(track, onDismiss = { picker = false })
 }
 
 /**
@@ -89,6 +93,8 @@ private val MENU =
         TrackAction.ADD_TO_QUEUE to R.string.track_add_to_queue,
         TrackAction.REPLACE_QUEUE to R.string.track_replace_queue,
     )
+
+private val PLAYLIST_ITEM = TrackAction.ADD_TO_PLAYLIST to R.string.track_add_to_playlist
 
 /** Лайк стоит — пункт снимает его, нет — ставит. */
 private fun likeItem(liked: Boolean) =

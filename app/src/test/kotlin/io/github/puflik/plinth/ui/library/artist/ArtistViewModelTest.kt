@@ -7,6 +7,7 @@ import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
+import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
@@ -33,7 +34,8 @@ class ArtistViewModelTest {
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val userData = FakeUserDataRepository()
-    private val actions = TrackActions(playback, userData, CoroutineScope(Dispatchers.Unconfined))
+    private val actions =
+        TrackActions(playback, userData, FakePlaylistRepository(), CoroutineScope(Dispatchers.Unconfined))
     private val anthem = track(1, "Innuendo", "Queen", "Innuendo")
     private val bohemian = track(2, "Bohemian Rhapsody", "Queen", "A Night at the Opera")
     private val waterloo = track(3, "Waterloo", "ABBA", "Waterloo")

@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.ffi.Playlist
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
@@ -34,6 +35,8 @@ import io.github.puflik.plinth.ui.common.PermissionRationaleScreen
 import io.github.puflik.plinth.ui.common.openAppSettings
 import io.github.puflik.plinth.ui.common.rememberMediaPermission
 import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
+import io.github.puflik.plinth.ui.library.playlists.AutoPlaylist
+import io.github.puflik.plinth.ui.library.playlists.PlaylistsTab
 import io.github.puflik.plinth.ui.library.tabs.AlbumsTab
 import io.github.puflik.plinth.ui.library.tabs.ArtistsTab
 import io.github.puflik.plinth.ui.library.tabs.FoldersTab
@@ -43,7 +46,7 @@ import io.github.puflik.plinth.ui.settings.rememberFolderPicker
 
 /**
  * Библиотека — стартовый экран (C4.1): вкладки треков, альбомов,
- * исполнителей и папок. Касание трека включает его и открывает плеер; файл
+ * исполнителей, плейлистов (D4b) и папок. Касание трека включает его и открывает плеер; файл
  * мимо библиотеки открывается через SAF из меню.
  *
  * Разрешение проверяется при каждом возврате на экран: его могли выдать или
@@ -55,6 +58,8 @@ fun LibraryScreen(
     onOpenPlayer: () -> Unit,
     onOpenAlbum: (Album) -> Unit,
     onOpenArtist: (String) -> Unit,
+    onOpenPlaylist: (Playlist) -> Unit,
+    onOpenAutoPlaylist: (AutoPlaylist) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
@@ -98,6 +103,8 @@ fun LibraryScreen(
                     onFolderTrack = onFolderTrack,
                     onOpenAlbum = onOpenAlbum,
                     onOpenArtist = onOpenArtist,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onOpenAutoPlaylist = onOpenAutoPlaylist,
                     onOpenFolder = viewModel::openFolder,
                     onFolderUp = viewModel::folderUp,
                     onPickFolder = pickFolder,
@@ -127,6 +134,8 @@ private fun LibraryContent(
     onFolderTrack: (LibraryTrack, TrackAction) -> Unit,
     onOpenAlbum: (Album) -> Unit,
     onOpenArtist: (String) -> Unit,
+    onOpenPlaylist: (Playlist) -> Unit,
+    onOpenAutoPlaylist: (AutoPlaylist) -> Unit,
     onOpenFolder: (String) -> Unit,
     onFolderUp: () -> Unit,
     onPickFolder: () -> Unit,
@@ -142,12 +151,13 @@ private fun LibraryContent(
         if (state.loaded) Scanning()
         return
     }
-    PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+    // Пять вкладок в ширину телефона не влезают — ряд прокручивается, подпись в одну строку.
+    PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 0.dp) {
         LibraryTab.entries.forEach { entry ->
             Tab(
                 selected = entry == tab,
                 onClick = { onTab(entry) },
-                text = { Text(stringResource(entry.labelRes)) },
+                text = { Text(stringResource(entry.labelRes), maxLines = 1) },
             )
         }
     }
@@ -155,6 +165,7 @@ private fun LibraryContent(
         LibraryTab.TRACKS -> TracksTab(state.tracks, onAction = onTrack)
         LibraryTab.ALBUMS -> AlbumsTab(state.albums, onOpen = onOpenAlbum)
         LibraryTab.ARTISTS -> ArtistsTab(state.artists, onOpen = onOpenArtist)
+        LibraryTab.PLAYLISTS -> PlaylistsTab(onOpenAuto = onOpenAutoPlaylist, onOpenPlaylist = onOpenPlaylist)
         LibraryTab.FOLDERS -> FoldersTab(state.folder, onOpenFolder, onUp = onFolderUp, onAction = onFolderTrack)
     }
 }

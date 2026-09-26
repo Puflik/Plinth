@@ -43,7 +43,7 @@ fun FoldersTab(
                 modifier = Modifier.clickable { onOpenFolder(child.path) },
             )
         }
-        items(folder.tracks, key = LibraryTrack::id) { track -> TrackRow(track, onAction = { onAction(track, it) }) }
+        items(folder.tracks, key = { it.id.value }) { track -> TrackRow(track, onAction = { onAction(track, it) }) }
     }
 }
 

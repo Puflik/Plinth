@@ -12,6 +12,7 @@ import io.github.puflik.plinth.ffi.generated.OutputDevice as RustOutputDevice
 import io.github.puflik.plinth.ffi.generated.PlayEvent as RustPlayEvent
 import io.github.puflik.plinth.ffi.generated.Playlist as RustPlaylist
 import io.github.puflik.plinth.ffi.generated.PlaylistItem as RustPlaylistItem
+import io.github.puflik.plinth.ffi.generated.PlaylistRow as RustPlaylistRow
 import io.github.puflik.plinth.ffi.generated.StartupReport as RustStartupReport
 import io.github.puflik.plinth.ffi.generated.TrackRow as RustTrackRow
 import io.github.puflik.plinth.ffi.generated.TrackSort as RustTrackSort
@@ -58,6 +59,8 @@ internal fun RustPlaylist.toApp() = Playlist(PlaylistId(id), name, Instant.fromE
 
 internal fun RustPlaylistItem.toApp() =
     PlaylistItem(PlaylistEntryId(id), TrackId(track), Instant.fromEpochMilliseconds(addedAt))
+
+internal fun RustPlaylistRow.toApp() = CorePlaylistTrack(PlaylistEntryId(entry), track.toApp())
 
 internal fun RustPlayEvent.toApp() =
     PlayEvent(

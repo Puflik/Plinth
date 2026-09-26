@@ -5,6 +5,7 @@ use crate::db::Database;
 use crate::db::codes::{Code, column};
 use crate::db::sql::{Storage, id, invalid, timestamp};
 use crate::model::{Playlist, PlaylistEntry};
+use crate::sort::sort_key;
 
 impl Database {
     /// Создаёт плейлист или переименовывает; записи не трогает.
@@ -26,10 +27,14 @@ impl Database {
             .storage()
     }
 
-    /// Все плейлисты по имени.
+    /// Все плейлисты по имени — как списки экранов (`crate::sort`): без
+    /// регистра, числа по значению; одноимённые — по идентификатору.
     pub fn playlists(&self) -> Result<Vec<Playlist>, CoreError> {
-        let mut statement = self.conn().prepare("SELECT * FROM playlist ORDER BY name, id").storage()?;
-        statement.query_map([], read_playlist).storage()?.collect::<Result<_, _>>().storage()
+        let mut statement = self.conn().prepare("SELECT * FROM playlist").storage()?;
+        let mut playlists: Vec<Playlist> =
+            statement.query_map([], read_playlist).storage()?.collect::<Result<_, _>>().storage()?;
+        playlists.sort_by_cached_key(|playlist| (sort_key(&playlist.name), playlist.id));
+        Ok(playlists)
     }
 
     pub fn rename_playlist(&self, id: PlaylistId, name: &str) -> Result<(), CoreError> {
@@ -214,6 +219,19 @@ mod tests {
         assert_eq!(after.last().map(|e| e.id), Some(entries[0].id));
         assert_eq!(after.last().map(|e| e.position.clone()), Some(position));
         assert_eq!(after.last().map(|e| e.track), Some(entries[0].track));
+    }
+
+    /// По имени, как списки экранов: регистр не важен, числа — по значению.
+    #[test]
+    fn playlists_go_by_name_in_natural_order() {
+        let db = db();
+        for name in ["mix 10", "Road", "Mix 2", "ambient"] {
+            db.save_playlist(&Playlist { id: PlaylistId::new(), name: name.to_owned(), ..mix() }).unwrap();
+        }
+
+        let names: Vec<String> = db.playlists().unwrap().into_iter().map(|p| p.name).collect();
+
+        assert_eq!(names, ["ambient", "Mix 2", "mix 10", "Road"]);
     }
 
     #[test]

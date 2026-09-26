@@ -10,6 +10,7 @@
 
 mod albums;
 mod artists;
+mod playlists;
 
 use std::time::Duration;
 
@@ -18,6 +19,7 @@ use rusqlite::{OptionalExtension, Params, Row};
 
 pub use albums::{AlbumRow, AlbumSort};
 pub use artists::ArtistRow;
+pub use playlists::PlaylistRow;
 
 use super::Database;
 use super::sql::{Storage, first_id, id, opt_duration, opt_id};

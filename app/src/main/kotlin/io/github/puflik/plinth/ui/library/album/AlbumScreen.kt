@@ -16,7 +16,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
-import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.common.BackTopBar
 import io.github.puflik.plinth.ui.library.components.TrackRow
 import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
@@ -47,7 +46,7 @@ fun AlbumScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-            items(tracks, key = LibraryTrack::id) { track ->
+            items(tracks, key = { it.id.value }) { track ->
                 TrackRow(
                     track = track,
                     onAction = { action ->

@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.model.Album
-import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.common.BackTopBar
 import io.github.puflik.plinth.ui.library.components.AlbumCard
 import io.github.puflik.plinth.ui.library.components.TrackRow
@@ -57,7 +56,7 @@ fun ArtistScreen(
                 }
             }
             item(key = TRACKS_KEY) { SectionTitle(R.string.library_tab_tracks) }
-            items(state.tracks, key = LibraryTrack::id) { track ->
+            items(state.tracks, key = { it.id.value }) { track ->
                 TrackRow(
                     track = track,
                     onAction = { action ->

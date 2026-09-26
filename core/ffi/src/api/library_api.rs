@@ -4,11 +4,11 @@
 
 use std::path::Path;
 
-use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, TrackRow, TrackSort};
+use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, PlaylistRow, TrackRow, TrackSort};
 use plinth_library::model::TrackUserData;
 use plinth_library::scan::{Artwork, artwork};
 use plinth_library::sort::sort_key;
-use plinth_types::{AlbumId, CoreError, TrackId};
+use plinth_types::{AlbumId, CoreError, PlaylistId, TrackId};
 
 use crate::panic;
 use crate::session::Core;
@@ -61,6 +61,14 @@ impl Core {
     /// новые первыми, не больше `limit`.
     pub fn recent_tracks(&self, limit: u32) -> Result<Vec<TrackRow>, CoreError> {
         panic::guard(|| self.with(|state| state.db.recent_tracks(limit)))
+    }
+
+    /// Видимые треки плейлиста в его порядке, каждый — со своей записью.
+    /// Пропавший файл скрыт, а его запись — нет: индекс строки здесь не индекс
+    /// записи среди всех (`playlist_items`), по которому переставляет
+    /// `move_in_playlist`.
+    pub fn playlist_tracks(&self, playlist: PlaylistId) -> Result<Vec<PlaylistRow>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.playlist_tracks(playlist)))
     }
 
     /// Трек библиотеки, который играет из файла `path`; файла в библиотеке нет — `None`.
@@ -177,6 +185,27 @@ mod tests {
             |rows: Vec<plinth_library::db::query::TrackRow>| rows.into_iter().map(|row| row.title).collect::<Vec<_>>();
         assert_eq!(titles(core.liked_tracks().unwrap()), ["Тишина"]);
         assert_eq!(titles(core.recent_tracks(10).unwrap()), ["FLAC Silence"]);
+    }
+
+    /// Строки плейлиста — видимые треки в его порядке со своими записями:
+    /// пропавший файл скрыт, а среди всех записей (`playlist_items`) остаётся.
+    #[test]
+    fn playlist_tracks_carry_entries_and_hide_missing_files() {
+        let (_data, _volume, core) = scanned();
+        let find = |title: &str| core.tracks(TrackSort::Title, Some(title.to_owned())).unwrap().remove(0);
+        let (tishina, flac) = (find("тишина"), find("FLAC Silence"));
+        let mix = core.create_playlist("Mix".to_owned()).unwrap();
+        for track in [tishina.id, flac.id, tishina.id] {
+            core.add_to_playlist(mix.id, track, None).unwrap();
+        }
+
+        core.hide_for_test(vec![flac.uri.unwrap()]).unwrap();
+
+        let items = core.playlist_items(mix.id).unwrap();
+        let rows = core.playlist_tracks(mix.id).unwrap();
+        assert_eq!(rows.iter().map(|row| row.track.title.as_str()).collect::<Vec<_>>(), ["Тишина", "Тишина"]);
+        assert_eq!(rows.iter().map(|row| row.entry).collect::<Vec<_>>(), [items[0].id, items[2].id]);
+        assert_eq!(items.len(), 3);
     }
 
     fn play(track: plinth_types::TrackId, listened_s: u64) -> crate::types::NewPlay {

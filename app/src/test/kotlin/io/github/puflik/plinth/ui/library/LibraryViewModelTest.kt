@@ -7,6 +7,7 @@ import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeFolderSettings
 import io.github.puflik.plinth.library.FakeLibraryRepository
+import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.ScanProgress
@@ -44,7 +45,8 @@ class LibraryViewModelTest {
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val userData = FakeUserDataRepository()
-    private val actions = TrackActions(playback, userData, CoroutineScope(Dispatchers.Unconfined))
+    private val actions =
+        TrackActions(playback, userData, FakePlaylistRepository(), CoroutineScope(Dispatchers.Unconfined))
     private val sorts = FakeSortSettings()
     private val folders = FakeFolderSettings()
     private val onboarding = FakeOnboardingSettings(OnboardingRecord(finished = true))

@@ -2,6 +2,7 @@ package io.github.puflik.plinth.queue
 
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.diagnostics.log.AppLog
+import io.github.puflik.plinth.ffi.PlaylistId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -146,6 +147,8 @@ class FileQueueStore(
             null -> writeUTF(NO_CONTEXT)
             QueueContext.Tracks -> writeUTF("tracks")
             QueueContext.File -> writeUTF("file")
+            QueueContext.Liked -> writeUTF("liked")
+            QueueContext.Recent -> writeUTF("recent")
             is QueueContext.Album -> {
                 writeUTF("album")
                 writeUTF(context.title)
@@ -163,6 +166,11 @@ class FileQueueStore(
                 writeUTF("artist")
                 writeUTF(context.name)
             }
+            is QueueContext.Playlist -> {
+                writeUTF("playlist")
+                writeUTF(context.id.value)
+                writeUTF(context.name)
+            }
         }
     }
 
@@ -175,6 +183,9 @@ class FileQueueStore(
             "folder" -> QueueContext.Folder(readUTF())
             "search" -> QueueContext.Search(readUTF())
             "artist" -> QueueContext.Artist(readUTF())
+            "playlist" -> QueueContext.Playlist(PlaylistId(readUTF()), readUTF())
+            "liked" -> QueueContext.Liked
+            "recent" -> QueueContext.Recent
             else -> throw IOException("неизвестный контекст $kind")
         }
 

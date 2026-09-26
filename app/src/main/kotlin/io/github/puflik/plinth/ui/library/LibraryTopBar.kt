@@ -47,7 +47,7 @@ fun LibraryTopBar(
                 when (tab) {
                     LibraryTab.TRACKS, LibraryTab.FOLDERS -> SortMenu(TRACK_SORTS, state.trackSort, onTrackSort)
                     LibraryTab.ALBUMS -> SortMenu(ALBUM_SORTS, state.albumSort, onAlbumSort)
-                    LibraryTab.ARTISTS -> Unit
+                    LibraryTab.ARTISTS, LibraryTab.PLAYLISTS -> Unit
                 }
             }
             MoreMenu(onOpenFile)

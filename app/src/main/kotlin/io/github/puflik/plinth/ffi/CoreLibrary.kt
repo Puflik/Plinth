@@ -50,6 +50,14 @@ class CoreLibrary internal constructor(
         return core.call { rust -> rust.recentTracks(limit.toUInt()).map { it.toApp() } }
     }
 
+    /**
+     * Видимые треки плейлиста в его порядке, каждый — со своей записью.
+     * Пропавший файл скрыт, а запись его — нет: индекс строки здесь не индекс
+     * для [CoreJournal.moveInPlaylist], тот считает среди всех записей.
+     */
+    fun playlistTracks(playlist: PlaylistId): List<CorePlaylistTrack> =
+        core.call { rust -> rust.playlistTracks(playlist.value).map { it.toApp() } }
+
     /** Трек библиотеки, который играет из файла [path]; файла в библиотеке нет — `null`. */
     fun trackAt(path: String): TrackId? = core.call { it.trackAt(path)?.let(::TrackId) }
 

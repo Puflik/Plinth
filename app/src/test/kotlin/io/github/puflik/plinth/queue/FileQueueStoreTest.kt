@@ -2,6 +2,7 @@ package io.github.puflik.plinth.queue
 
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.ffi.PlaylistId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -57,6 +58,9 @@ class FileQueueStoreTest {
                     QueueContext.Folder("Music/Queen/"),
                     QueueContext.Search("queen opera"),
                     QueueContext.Artist("Queen"),
+                    QueueContext.Playlist(PlaylistId("playlist-1"), "Road"),
+                    QueueContext.Liked,
+                    QueueContext.Recent,
                     QueueContext.File,
                 )
             for (context in contexts) {

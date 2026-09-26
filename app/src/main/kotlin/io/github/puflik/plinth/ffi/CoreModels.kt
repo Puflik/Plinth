@@ -177,6 +177,16 @@ data class PlaylistItem(
     val addedAt: Instant,
 )
 
+/**
+ * Видимый трек плейлиста со своей записью: один трек может стоять дважды.
+ * Пропавшие файлы скрыты, поэтому индекс здесь — не индекс среди всех
+ * записей ([PlaylistItem]), по которому переставляет ядро.
+ */
+data class CorePlaylistTrack(
+    val entry: PlaylistEntryId,
+    val track: CoreTrack,
+)
+
 enum class OutputDevice {
     SPEAKER,
     HEADPHONES,

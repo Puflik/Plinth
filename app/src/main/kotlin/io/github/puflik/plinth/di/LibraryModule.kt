@@ -14,11 +14,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.library.CoreLibraryRepository
+import io.github.puflik.plinth.library.CorePlaylistRepository
 import io.github.puflik.plinth.library.CoreUserDataRepository
 import io.github.puflik.plinth.library.FolderSettings
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.OldLibraryCleanup
+import io.github.puflik.plinth.library.PlaylistRepository
 import io.github.puflik.plinth.library.UserDataRepository
 import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.library.scan.AndroidStorageVolumes
@@ -66,6 +68,14 @@ object LibraryModule {
         core: PlinthCore,
         @IoDispatcher io: CoroutineDispatcher,
     ): UserDataRepository = CoreUserDataRepository(core, io)
+
+    /** Плейлисты — журнал того же ядра (D4b). */
+    @Provides
+    @Singleton
+    fun providePlaylistRepository(
+        core: PlinthCore,
+        @IoDispatcher io: CoroutineDispatcher,
+    ): PlaylistRepository = CorePlaylistRepository(core, io)
 
     @Provides
     fun provideLibraryScanner(

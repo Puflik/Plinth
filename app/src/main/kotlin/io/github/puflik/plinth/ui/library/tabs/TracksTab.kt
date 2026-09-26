@@ -16,6 +16,6 @@ fun TracksTab(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
-        items(tracks, key = LibraryTrack::id) { track -> TrackRow(track, onAction = { onAction(track, it) }) }
+        items(tracks, key = { it.id.value }) { track -> TrackRow(track, onAction = { onAction(track, it) }) }
     }
 }

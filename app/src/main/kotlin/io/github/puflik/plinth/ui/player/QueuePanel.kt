@@ -1,46 +1,35 @@
 package io.github.puflik.plinth.ui.player
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.ui.common.DragHandle
+import io.github.puflik.plinth.ui.common.RemoveBackground
+import io.github.puflik.plinth.ui.common.ReorderState
+import io.github.puflik.plinth.ui.common.RowDrag
+import io.github.puflik.plinth.ui.common.reorderActions
 import kotlinx.coroutines.launch
 
 /**
@@ -63,14 +52,10 @@ fun QueuePanel(
         return
     }
     val rowHeight = with(LocalDensity.current) { QUEUE_ROW.toPx() }
-    var dragged by remember { mutableStateOf<Int?>(null) }
-    var offset by remember { mutableFloatStateOf(0f) }
-    val target = dragged?.let { QueueReorder.target(it, offset, rowHeight, upcoming.size) }
+    val reorder = remember { ReorderState() }
     LazyColumn(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
         // Один трек может стоять в очереди дважды — ключ по месту и треку.
         itemsIndexed(upcoming, key = { index, item -> "$index:${item.source.key}" }) { index, item ->
-            val held = dragged == index
-            val shift = dragged?.let { from -> QueueReorder.shift(index, from, checkNotNull(target)) } ?: 0
             QueueRow(
                 item = item,
                 actions =
@@ -78,26 +63,22 @@ fun QueuePanel(
                         onRemove = { edits.onRemove(index, item) },
                         onMoveUp = { if (index > 0) edits.onMove(index, index - 1, item) },
                         onMoveDown = { if (index < upcoming.lastIndex) edits.onMove(index, index + 1, item) },
-                        onDragStart = {
-                            dragged = index
-                            offset = 0f
-                        },
-                        onDrag = { offset += it },
-                        onDragEnd = {
-                            val to = QueueReorder.target(index, offset, rowHeight, upcoming.size)
-                            dragged = null
-                            offset = 0f
-                            if (to != index) edits.onMove(index, to, item)
-                        },
-                        onDragCancel = {
-                            dragged = null
-                            offset = 0f
-                        },
+                        drag =
+                            RowDrag(
+                                onStart = { reorder.start(index) },
+                                onDrag = reorder::drag,
+                                onEnd = {
+                                    reorder.end(rowHeight, upcoming.size)?.let { (from, to) ->
+                                        edits.onMove(from, to, item)
+                                    }
+                                },
+                                onCancel = reorder::cancel,
+                            ),
                     ),
                 modifier =
                     Modifier
-                        .zIndex(if (held) 1f else 0f)
-                        .graphicsLayer { translationY = if (held) offset else shift * rowHeight },
+                        .zIndex(if (reorder.dragged == index) 1f else 0f)
+                        .graphicsLayer { translationY = reorder.translation(index, rowHeight, upcoming.size) },
             )
         }
     }
@@ -108,10 +89,7 @@ private class RowActions(
     val onRemove: () -> Unit,
     val onMoveUp: () -> Unit,
     val onMoveDown: () -> Unit,
-    val onDragStart: () -> Unit,
-    val onDrag: (Float) -> Unit,
-    val onDragEnd: () -> Unit,
-    val onDragCancel: () -> Unit,
+    val drag: RowDrag,
 )
 
 @Composable
@@ -139,7 +117,14 @@ private fun QueueRow(
                     .height(QUEUE_ROW)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(start = 16.dp)
-                    .accessibilityActions(actions),
+                    .reorderActions(
+                        up = stringResource(R.string.player_queue_move_up),
+                        down = stringResource(R.string.player_queue_move_down),
+                        removeLabel = stringResource(R.string.player_queue_remove),
+                        onMoveUp = actions.onMoveUp,
+                        onMoveDown = actions.onMoveDown,
+                        onRemove = actions.onRemove,
+                    ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -159,86 +144,10 @@ private fun QueueRow(
                     )
                 }
             }
-            DragHandle(actions)
-        }
-    }
-}
-
-/** Для TalkBack: «выше», «ниже», «убрать» вместо перетаскивания и свайпа. */
-@Composable
-private fun Modifier.accessibilityActions(actions: RowActions): Modifier {
-    val up = stringResource(R.string.player_queue_move_up)
-    val down = stringResource(R.string.player_queue_move_down)
-    val remove = stringResource(R.string.player_queue_remove)
-    return semantics {
-        customActions =
-            listOf(
-                CustomAccessibilityAction(up) {
-                    actions.onMoveUp()
-                    true
-                },
-                CustomAccessibilityAction(down) {
-                    actions.onMoveDown()
-                    true
-                },
-                CustomAccessibilityAction(remove) {
-                    actions.onRemove()
-                    true
-                },
-            )
-    }
-}
-
-/**
- * Ручка перетаскивания; вбок её свайп не ловит — остаётся строке. Жест живёт
- * дольше одной перерисовки (каждый сдвиг пальца перерисовывает список), поэтому
- * ключ у него постоянный, а команды берутся свежие.
- */
-@Composable
-private fun DragHandle(actions: RowActions) {
-    val current by rememberUpdatedState(actions)
-    Icon(
-        painter = painterResource(R.drawable.ic_drag_handle),
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier =
-            Modifier
-                .size(HANDLE_SIZE)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = { current.onDragStart() },
-                        onDragEnd = { current.onDragEnd() },
-                        onDragCancel = { current.onDragCancel() },
-                    ) { change, dy ->
-                        change.consume()
-                        current.onDrag(dy)
-                    }
-                }.padding(12.dp),
-    )
-}
-
-@Composable
-private fun RemoveBackground() {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.errorContainer)
-                .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.CenterEnd,
-    ) {
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            repeat(2) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_delete),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                )
-            }
+            DragHandle(actions.drag)
         }
     }
 }
 
 /** Высота строки: все строки одинаковые, по ней считается перетаскивание. */
 private val QUEUE_ROW = 56.dp
-private val HANDLE_SIZE = 48.dp

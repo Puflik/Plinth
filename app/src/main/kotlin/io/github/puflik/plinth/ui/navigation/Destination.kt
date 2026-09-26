@@ -7,12 +7,15 @@ import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_ART
 import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TITLE
 import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TRACK_COUNT
 import io.github.puflik.plinth.ui.library.artist.ArtistViewModel.Companion.ARG_NAME
+import io.github.puflik.plinth.ui.library.playlists.AutoPlaylistViewModel.Companion.ARG_KIND
+import io.github.puflik.plinth.ui.library.playlists.PlaylistViewModel.Companion.ARG_ID
+import io.github.puflik.plinth.ui.library.playlists.PlaylistViewModel.Companion.ARG_NAME as ARG_PLAYLIST_NAME
 
 /**
  * Перечень экранов приложения (A2.1).
  *
  * Вкладки нижней навигации — подмножество [tabs]; у них есть подпись и
- * значок. Экраны без вкладки (плеер, альбом, исполнитель) открываются поверх вкладок, их
+ * значок. Экраны без вкладки (плеер, альбом, исполнитель, плейлисты) открываются поверх вкладок, их
  * [labelRes] и [iconRes] — `0`.
  */
 enum class Destination(
@@ -42,6 +45,12 @@ enum class Destination(
 
     /** Шаблон маршрута экрана исполнителя (E5); имя кодирует навигация. */
     Artist(route = "artist?$ARG_NAME={$ARG_NAME}"),
+
+    /** Шаблон маршрута своего плейлиста (D4b); имя кодирует навигация. */
+    Playlist(route = "playlist?$ARG_ID={$ARG_ID}&$ARG_PLAYLIST_NAME={$ARG_PLAYLIST_NAME}"),
+
+    /** Шаблон маршрута «Любимого» и «Недавнего» (D4b). */
+    AutoPlaylist(route = "auto-playlist?$ARG_KIND={$ARG_KIND}"),
     ;
 
     companion object {
