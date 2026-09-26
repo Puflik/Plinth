@@ -14,6 +14,7 @@ import io.github.puflik.plinth.diagnostics.log.Logger
 import io.github.puflik.plinth.diagnostics.vendor.KillReport
 import io.github.puflik.plinth.diagnostics.vendor.KillWatch
 import io.github.puflik.plinth.ffi.CoreInitializer
+import io.github.puflik.plinth.history.ListeningRecorder
 import io.github.puflik.plinth.library.OldLibraryCleanup
 import io.github.puflik.plinth.library.UnavailableRescan
 import javax.inject.Inject
@@ -65,6 +66,9 @@ class PlinthApplication :
     lateinit var coreInitializer: CoreInitializer
 
     @Inject
+    lateinit var listeningRecorder: ListeningRecorder
+
+    @Inject
     lateinit var oldLibraryCleanup: OldLibraryCleanup
 
     override fun onCreate() {
@@ -81,6 +85,8 @@ class PlinthApplication :
         unavailableRescan.start()
         // Очередь возвращается при старте процесса, а не экрана: её ждёт и служба воспроизведения.
         queueKeeper.start()
+        // История — с первого звука: прослушивания уходят в журнал ядра (D4a).
+        listeningRecorder.start()
         // Rust-ядро — в фоне, после логгера: его первая запись идёт в тот же лог (A3).
         coreInitializer.start()
         // База фонотеки v0.1 на Room больше не нужна: фонотеку ведёт ядро (D3c).

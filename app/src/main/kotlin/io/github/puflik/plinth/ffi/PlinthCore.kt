@@ -24,7 +24,8 @@ import io.github.puflik.plinth.ffi.generated.start as coreStart
  * Отказ ядра приходит исключением [CoreFailure]. Отказ вызова API к тому же
  * уходит в [errors] — дальше `ErrorPresenter` решает, говорить ли человеку.
  *
- * Изменения каталога видны в [catalogChanges]: по нему списки перечитывают ядро.
+ * Изменения каталога видны в [catalogChanges], изменения пользовательского —
+ * в [userDataChanges]: по ним списки перечитывают ядро.
  */
 class PlinthCore(
     private val logLevel: LogLevel,
@@ -40,6 +41,7 @@ class PlinthCore(
         }
 
     private val changes = MutableStateFlow(0L)
+    private val userChanges = MutableStateFlow(0L)
 
     val library = CoreLibrary(this)
     val journal = CoreJournal(this)
@@ -50,6 +52,12 @@ class PlinthCore(
      * пачки скана и конец скана: экраны видят музыку, не дожидаясь конца.
      */
     val catalogChanges: StateFlow<Long> = changes.asStateFlow()
+
+    /**
+     * Сигнал «пользовательское изменилось» (D4) — счётчик. Его двигает каждая
+     * запись в журнал: лайк, прослушивание, плейлист.
+     */
+    val userDataChanges: StateFlow<Long> = userChanges.asStateFlow()
 
     /** Запускает ядро — логгер и хук паники, — если оно ещё не запущено. */
     @Throws(CoreFailure::class)
@@ -96,6 +104,9 @@ class PlinthCore(
 
     /** Каталог изменился — списки перечитают ядро. */
     internal fun catalogChanged() = changes.update { it + 1 }
+
+    /** Журнал принял запись — списки с пользовательским перечитают ядро. */
+    internal fun userDataChanged() = userChanges.update { it + 1 }
 
     /**
      * Вызов API, отказ которого — не сбой ядра, а свойство данных (файл

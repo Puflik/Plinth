@@ -2,7 +2,6 @@ package io.github.puflik.plinth.audio
 
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.di.ApplicationScope
-import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueStore
 import io.github.puflik.plinth.startup.PlayHistory
 import kotlinx.coroutines.CoroutineScope
@@ -79,19 +78,15 @@ class QueueKeeper
          * сборщик прогресса её не перепишет.
          */
         private suspend fun saveQueues() {
-            var playing = playback.queue.value.playing()
+            var playing = playback.queue.value.playing
             playback.queue.drop(1).collect { queue ->
                 store.saveQueue(queue)
-                if (queue.playing() == playing) {
+                if (queue.playing == playing) {
                     store.savePosition(playback.progress.value.position.inWholeSeconds.seconds)
                 }
-                playing = queue.playing()
+                playing = queue.playing
             }
         }
-
-        /** Что играет: ручной трек или место в контексте — shuffle меняет порядок обхода, но не место. */
-        private fun PlaybackQueue.playing(): Any? =
-            playingManual ?: order.getOrNull(position)?.let { contextItems to it }
 
         private suspend fun markPlays() {
             playback.state

@@ -38,6 +38,13 @@ data class PlaybackQueue(
     /** Что играет; `null` — очередь ещё не начата. */
     val current: QueueItem? get() = playingManual ?: order.getOrNull(position)?.let(contextItems::get)
 
+    /**
+     * Место того, что играет: ручной трек или место в контексте. Равные
+     * значения — играет то же самое: shuffle меняет порядок обхода, но не
+     * место, а тот же трек дальше по контексту — уже другое место.
+     */
+    val playing: Any? get() = playingManual ?: order.getOrNull(position)?.let { contextItems to it }
+
     /** Что сыграет дальше без повтора: ручной блок, затем остаток контекста. */
     val upcoming: List<QueueItem> get() = upNext + order.drop(position + 1).map(contextItems::get)
 

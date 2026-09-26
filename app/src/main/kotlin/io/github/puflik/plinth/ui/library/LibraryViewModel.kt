@@ -91,6 +91,7 @@ class LibraryViewModel
         private val scan: LibraryScan,
         repository: LibraryRepository,
         private val playback: PlaybackController,
+        private val actions: TrackActions,
         private val sorts: SortSettings,
         private val folderSettings: FolderSettings,
         private val onboarding: OnboardingSettings,
@@ -161,7 +162,7 @@ class LibraryViewModel
         fun onTrack(
             track: LibraryTrack,
             action: TrackAction,
-        ) = playback.act(action, QueueContext.Tracks, uiState.value.tracks, track)
+        ) = actions.act(action, QueueContext.Tracks, uiState.value.tracks, track)
 
         /** Трек со вкладки «Папки»: контекст — треки открытой папки. */
         fun onFolderTrack(
@@ -169,7 +170,7 @@ class LibraryViewModel
             action: TrackAction,
         ) {
             val folder = uiState.value.folder
-            playback.act(action, QueueContext.Folder(folder.path), folder.tracks, track)
+            actions.act(action, QueueContext.Folder(folder.path), folder.tracks, track)
         }
 
         /** Файл, выбранный через SAF: играет и без разрешения на музыку — контекстом из себя одного. */

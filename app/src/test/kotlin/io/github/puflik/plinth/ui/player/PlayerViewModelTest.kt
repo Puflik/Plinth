@@ -5,6 +5,7 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackError
+import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueContext
@@ -13,6 +14,7 @@ import io.github.puflik.plinth.queue.RepeatMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -29,7 +31,8 @@ import kotlin.time.Duration.Companion.seconds
 class PlayerViewModelTest {
     private val engine = FakeAudioEngine().apply { trackDuration = 4.minutes }
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
-    private val viewModel by lazy { PlayerViewModel(playback) }
+    private val userData = FakeUserDataRepository()
+    private val viewModel by lazy { PlayerViewModel(playback, userData) }
     private val album = QueueContext.Album("Jazz", "Queen")
     private val song = item("song", artist = "Queen")
     private val second = item("second")
@@ -50,6 +53,37 @@ class PlayerViewModelTest {
             backgroundScope.launch { viewModel.uiState.collect {} }
 
             assertThat(viewModel.uiState.value).isEqualTo(PlayerUiState.EMPTY)
+        }
+
+    /** Сердце (D4a): у трека фонотеки — его лайк, касание ставит и снимает. */
+    @Test
+    fun `the heart shows and toggles the like of a library track`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val track = userData.add((song.source as AudioSource.LocalFile).uri).single()
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            playback.play(album, listOf(song, second), start = 0)
+            val before = viewModel.uiState.value.liked
+
+            viewModel.onLike()
+            val after = viewModel.uiState.value.liked
+            viewModel.onLike()
+
+            assertThat(
+                listOf(before, after, viewModel.uiState.value.liked),
+            ).containsExactly(false, true, false).inOrder()
+            assertThat(userData.liked(track).first()).isFalse()
+        }
+
+    /** Файл не из фонотеки (SAF) лайка не имеет — сердца нет, касание ничего не делает. */
+    @Test
+    fun `a file outside the library has no heart`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            playback.play(album, listOf(second), start = 0)
+
+            viewModel.onLike()
+
+            assertThat(viewModel.uiState.value.liked).isNull()
         }
 
     @Test

@@ -1,5 +1,7 @@
 package io.github.puflik.plinth.ffi
 
+import io.github.puflik.plinth.ffi.generated.Core
+
 /**
  * Действия пользователя (A3.1) — `api/journal_api.rs`. Каждое ложится в
  * журнал ядра и оттуда — в базу (docs/adr/0007-journal-as-source-of-truth.md):
@@ -8,9 +10,9 @@ package io.github.puflik.plinth.ffi
 class CoreJournal internal constructor(
     private val core: PlinthCore,
 ) {
-    fun like(track: TrackId) = core.call { it.like(track.value) }
+    fun like(track: TrackId) = write { it.like(track.value) }
 
-    fun unlike(track: TrackId) = core.call { it.unlike(track.value) }
+    fun unlike(track: TrackId) = write { it.unlike(track.value) }
 
     /** Оценка звёздами от 1 до 5; `null` — снять. */
     fun rate(
@@ -18,18 +20,18 @@ class CoreJournal internal constructor(
         stars: Int?,
     ) {
         require(stars == null || stars in STARS) { "rating is 1..5 stars: $stars" }
-        core.call { it.rate(track.value, stars?.toUByte()) }
+        write { it.rate(track.value, stars?.toUByte()) }
     }
 
-    fun createPlaylist(name: String): Playlist = core.call { it.createPlaylist(name).toApp() }
+    fun createPlaylist(name: String): Playlist = write { it.createPlaylist(name).toApp() }
 
     fun renamePlaylist(
         playlist: PlaylistId,
         name: String,
-    ) = core.call { it.renamePlaylist(playlist.value, name) }
+    ) = write { it.renamePlaylist(playlist.value, name) }
 
     /** Удаляет плейлист вместе с записями. */
-    fun deletePlaylist(playlist: PlaylistId) = core.call { it.deletePlaylist(playlist.value) }
+    fun deletePlaylist(playlist: PlaylistId) = write { it.deletePlaylist(playlist.value) }
 
     /** Плейлисты по имени. */
     fun playlists(): List<Playlist> = core.call { rust -> rust.playlists().map { it.toApp() } }
@@ -45,7 +47,7 @@ class CoreJournal internal constructor(
         index: Int? = null,
     ): PlaylistEntryId {
         require(index == null || index >= 0) { "index: $index" }
-        return core.call { PlaylistEntryId(it.addToPlaylist(playlist.value, track.value, index?.toUInt())) }
+        return write { PlaylistEntryId(it.addToPlaylist(playlist.value, track.value, index?.toUInt())) }
     }
 
     /** Переставляет запись [entry] так, что она оказывается на месте [index]. */
@@ -55,13 +57,13 @@ class CoreJournal internal constructor(
         index: Int,
     ) {
         require(index >= 0) { "index: $index" }
-        core.call { it.moveInPlaylist(playlist.value, entry.value, index.toUInt()) }
+        write { it.moveInPlaylist(playlist.value, entry.value, index.toUInt()) }
     }
 
-    fun removeFromPlaylist(entry: PlaylistEntryId) = core.call { it.removeFromPlaylist(entry.value) }
+    fun removeFromPlaylist(entry: PlaylistEntryId) = write { it.removeFromPlaylist(entry.value) }
 
     /** Записывает прослушивание; засчитать ли его в счётчик, решает ядро. */
-    fun recordPlay(play: NewPlay): PlayEventId = core.call { PlayEventId(it.recordPlay(play.toRust())) }
+    fun recordPlay(play: NewPlay): PlayEventId = write { PlayEventId(it.recordPlay(play.toRust())) }
 
     /** Последние [limit] прослушиваний всей библиотеки, новые первыми. */
     fun recentPlays(limit: Int): List<PlayEvent> {
@@ -71,7 +73,11 @@ class CoreJournal internal constructor(
 
     fun versionPreference(): VersionPreference = core.call { it.syncedSettings().versionPreference.toApp() }
 
-    fun setVersionPreference(preference: VersionPreference) = core.call { it.setVersionPreference(preference.toRust()) }
+    fun setVersionPreference(preference: VersionPreference) = write { it.setVersionPreference(preference.toRust()) }
+
+    /** Запись в журнал: после неё списки с пользовательским перечитают ядро. */
+    private inline fun <T> write(crossinline block: (Core) -> T): T =
+        core.call { block(it) }.also { core.userDataChanged() }
 
     private companion object {
         val STARS = 1..5

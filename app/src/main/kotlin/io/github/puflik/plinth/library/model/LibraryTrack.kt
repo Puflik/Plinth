@@ -18,6 +18,7 @@ import kotlin.time.Duration
  * @property trackNumber номер трека на диске с единицы; `null` — тега нет.
  * @property duration длительность; `null` — неизвестна.
  * @property folder папка от корня хранилища: `Music/Queen/`.
+ * @property liked стоит ли лайк (D4a): меню трека предлагает его поставить или снять.
  */
 data class LibraryTrack(
     val id: TrackId,
@@ -30,6 +31,7 @@ data class LibraryTrack(
     val trackNumber: Int? = null,
     val duration: Duration?,
     val folder: String,
+    val liked: Boolean = false,
 ) {
     init {
         require(uri.isNotBlank()) { "uri трека не может быть пустым" }

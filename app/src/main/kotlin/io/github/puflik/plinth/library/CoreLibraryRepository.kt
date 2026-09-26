@@ -15,6 +15,7 @@ import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -28,7 +29,8 @@ import kotlinx.coroutines.withContext
  * `FakeLibraryRepository`.
  *
  * Потоки перечитывают ядро по сигналу [PlinthCore.catalogChanges] — после
- * каждой пачки скана и в его конце. Вызовы ядра блокирующие и идут в [io].
+ * каждой пачки скана и в его конце — и по [PlinthCore.userDataChanges]: лайк
+ * меняет строку трека. Вызовы ядра блокирующие и идут в [io].
  * Отказ ядра фасад сам отдаёт в `CoreErrors`; список при этом остаётся
  * прежним, а следующее изменение каталога прочитает его снова.
  */
@@ -72,7 +74,7 @@ class CoreLibraryRepository(
         }
 
     private fun <T : Any> read(query: CoreLibrary.() -> T): Flow<T> =
-        core.catalogChanges
+        combine(core.catalogChanges, core.userDataChanges) { catalog, user -> catalog to user }
             .mapNotNull {
                 try {
                     core.library.query()
@@ -118,5 +120,6 @@ private fun List<CoreTrack>.toLibraryTracks(): List<LibraryTrack> =
             trackNumber = track.number?.takeIf { it > 0 },
             duration = track.duration,
             folder = track.folder.orEmpty(),
+            liked = track.liked,
         )
     }

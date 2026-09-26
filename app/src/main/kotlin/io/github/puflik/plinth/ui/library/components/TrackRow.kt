@@ -25,7 +25,7 @@ import io.github.puflik.plinth.ui.library.TrackAction
  * Строка трека (C4.2): название, исполнитель и альбом, длительность — если
  * она известна.
  * Одна на все списки — треки, папки, альбом, поиск. Касание — играть список
- * с этого трека, долгое нажатие — меню очереди (D1.2).
+ * с этого трека, долгое нажатие — меню очереди (D1.2) и лайк (D4a).
  */
 @Composable
 fun TrackRow(
@@ -53,7 +53,7 @@ fun TrackRow(
                 ),
         )
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            MENU.forEach { (action, label) ->
+            (MENU + likeItem(track.liked)).forEach { (action, label) ->
                 DropdownMenuItem(
                     text = { Text(stringResource(label)) },
                     onClick = {
@@ -68,17 +68,16 @@ fun TrackRow(
 
 /**
  * Что показать после действия над треком: плеер — если трек заиграл,
- * короткое «добавлено» — если он встал в очередь.
+ * короткое «добавлено» — если он встал в очередь. Лайк виден в самом меню.
  */
 @Composable
 fun rememberTrackActionFeedback(onOpenPlayer: () -> Unit): (TrackAction) -> Unit {
     val context = LocalContext.current
     return remember(context, onOpenPlayer) {
         { action ->
-            if (action.startsPlayback) {
-                onOpenPlayer()
-            } else {
-                Toast.makeText(context, R.string.queue_added, Toast.LENGTH_SHORT).show()
+            when {
+                action.startsPlayback -> onOpenPlayer()
+                action.queues -> Toast.makeText(context, R.string.queue_added, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -90,3 +89,7 @@ private val MENU =
         TrackAction.ADD_TO_QUEUE to R.string.track_add_to_queue,
         TrackAction.REPLACE_QUEUE to R.string.track_replace_queue,
     )
+
+/** Лайк стоит — пункт снимает его, нет — ставит. */
+private fun likeItem(liked: Boolean) =
+    if (liked) TrackAction.UNLIKE to R.string.track_unlike else TrackAction.LIKE to R.string.track_like

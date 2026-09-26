@@ -4,13 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.ui.library.TrackAction
-import io.github.puflik.plinth.ui.library.act
+import io.github.puflik.plinth.ui.library.TrackActions
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -34,7 +33,7 @@ class ArtistViewModel
     constructor(
         savedState: SavedStateHandle,
         repository: LibraryRepository,
-        private val playback: PlaybackController,
+        private val actions: TrackActions,
     ) : ViewModel() {
         val artist: String = checkNotNull(savedState.get<String>(ARG_NAME)) { "экран исполнителя открыт без имени" }
 
@@ -46,7 +45,7 @@ class ArtistViewModel
         fun onTrack(
             track: LibraryTrack,
             action: TrackAction,
-        ) = playback.act(action, QueueContext.Artist(artist), uiState.value.tracks, track)
+        ) = actions.act(action, QueueContext.Artist(artist), uiState.value.tracks, track)
 
         companion object {
             const val ARG_NAME = "name"

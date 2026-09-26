@@ -7,13 +7,16 @@ import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
+import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.ui.library.TrackAction
+import io.github.puflik.plinth.ui.library.TrackActions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -30,6 +33,8 @@ class AlbumViewModelTest {
     private val repository = FakeLibraryRepository()
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
+    private val userData = FakeUserDataRepository()
+    private val actions = TrackActions(playback, userData, CoroutineScope(Dispatchers.Unconfined))
 
     @Before
     fun setUp() {
@@ -92,9 +97,28 @@ class AlbumViewModelTest {
             ).containsExactly("Bohemian Rhapsody")
         }
 
+    /** Лайк из меню уходит в журнал и очередь не трогает. */
+    @Test
+    fun `a like from the menu goes to the journal`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val song = track(1, "Mustapha", "Jazz", "Queen", number = 1)
+            repository.upsert(listOf(song))
+            val id = userData.add(song.uri).single()
+            val viewModel = viewModelFor(Album("Jazz", "Queen", 1))
+
+            viewModel.onTrack(song, TrackAction.LIKE)
+            val liked = userData.liked(id).first()
+            viewModel.onTrack(song.copy(liked = true), TrackAction.UNLIKE)
+
+            assertThat(liked).isTrue()
+            assertThat(userData.liked(id).first()).isFalse()
+            assertThat(engine.preparedSources).isEmpty()
+            assertThat(playback.queue.value.current).isNull()
+        }
+
     private fun viewModelFor(album: Album): AlbumViewModel {
         val arguments = AlbumViewModel.arguments(album)
-        return AlbumViewModel(SavedStateHandle(arguments), repository, playback)
+        return AlbumViewModel(SavedStateHandle(arguments), repository, actions)
     }
 
     private fun track(

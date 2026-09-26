@@ -185,6 +185,8 @@
     <string name="track_play_next">Играть следующим</string>
     <string name="track_add_to_queue">Добавить в очередь</string>
     <string name="track_replace_queue">Заменить очередь</string>
+    <string name="track_like">Нравится</string>
+    <string name="track_unlike">Больше не нравится</string>
     <string name="queue_added">Добавлено в очередь</string>
     <string name="error_problem_unavailable">файл недоступен</string>
     <string name="error_problem_unplayable">файл повреждён или его формат не поддерживается</string>

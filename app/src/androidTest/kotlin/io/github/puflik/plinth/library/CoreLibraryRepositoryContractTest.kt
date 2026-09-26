@@ -1,12 +1,20 @@
 package io.github.puflik.plinth.library
 
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.diagnostics.log.LogLevel
 import io.github.puflik.plinth.ffi.CoreErrors
 import io.github.puflik.plinth.ffi.CoreTestFile
 import io.github.puflik.plinth.ffi.PlinthCore
+import io.github.puflik.plinth.library.model.LibraryTrack
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import org.junit.Test
 import java.io.File
 import java.util.UUID
 
@@ -45,6 +53,28 @@ class CoreLibraryRepositoryContractTest : LibraryRepositoryContractTest() {
         repository: LibraryRepository,
         paths: List<String>,
     ) = withContext(Dispatchers.IO) { core.hideForTest(paths) }
+
+    /** Лайк из журнала приходит в открытый список (D4a): он перечитывается и по сигналу пользовательского. */
+    @Test
+    fun a_like_reaches_the_track_row() =
+        runBlocking {
+            val repository = createRepository()
+            try {
+                withTimeout(timeout) {
+                    seed(repository, listOf(TaggedFile(path = "/storage/emulated/0/Music/liked.mp3", title = "Liked")))
+                    val rows = MutableStateFlow(emptyList<LibraryTrack>())
+                    val subscription = launch { repository.tracks().collect { rows.value = it } }
+                    val track = rows.first { it.isNotEmpty() }.single()
+
+                    withContext(Dispatchers.IO) { core.journal.like(track.id) }
+
+                    assertThat(rows.first { it.singleOrNull()?.liked == true }.single().id).isEqualTo(track.id)
+                    subscription.cancel()
+                }
+            } finally {
+                closeRepository(repository)
+            }
+        }
 
     private fun TaggedFile.toCore() =
         CoreTestFile(

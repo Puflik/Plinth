@@ -52,6 +52,11 @@ impl Core {
         panic::guard(|| self.with(|state| state.db.artist_albums(&name)))
     }
 
+    /// Трек библиотеки, который играет из файла `path`; файла в библиотеке нет — `None`.
+    pub fn track_at(&self, path: String) -> Result<Option<TrackId>, CoreError> {
+        panic::guard(|| self.with(|state| state.db.track_at(&path)))
+    }
+
     /// Лайк, оценка и счётчики трека; не слушали и не оценивали — пустые.
     pub fn user_data(&self, track: TrackId) -> Result<TrackUserData, CoreError> {
         panic::guard(|| self.with(|state| state.db.user_data(track)))
@@ -133,6 +138,16 @@ mod tests {
         assert_eq!(rows[2].folder.as_deref(), Some("Music/Fixtures/"));
         assert!(rows[2].uri.as_deref().is_some_and(|uri| uri.ends_with("plinth-mp3.mp3")));
         assert_eq!((rows[2].disc, rows[2].number), (Some(2), Some(3)));
+    }
+
+    /// Плеер знает только путь к файлу — по нему ядро находит трек.
+    #[test]
+    fn a_track_is_found_by_its_path() {
+        let (_data, _volume, core) = scanned();
+        let tishina = core.tracks(TrackSort::Title, Some("тишина".to_owned())).unwrap().remove(0);
+
+        assert_eq!(core.track_at(tishina.uri.clone().unwrap()).unwrap(), Some(tishina.id));
+        assert_eq!(core.track_at("/nowhere/song.mp3".to_owned()).unwrap(), None);
     }
 
     #[test]

@@ -6,10 +6,12 @@ import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
+import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.ui.library.TrackAction
+import io.github.puflik.plinth.ui.library.TrackActions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,7 +36,9 @@ class SearchViewModelTest {
     private val library = CountingRepository(fake)
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
-    private val viewModel by lazy { SearchViewModel(library, playback) }
+    private val userData = FakeUserDataRepository()
+    private val actions = TrackActions(playback, userData, CoroutineScope(Dispatchers.Unconfined))
+    private val viewModel by lazy { SearchViewModel(library, actions) }
 
     private val yesterday = track(1, "Yesterday", "The Beatles")
     private val bohemian = track(2, "Bohemian Rhapsody", "Queen")

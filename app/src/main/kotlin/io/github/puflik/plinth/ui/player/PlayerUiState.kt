@@ -22,6 +22,8 @@ import kotlin.time.Duration
  *   экран альбома считает сам, здесь оно `0`.
  * @property hasTrack в очереди есть текущий трек — играет он или стоит на
  *   паузе; по нему показывается мини-плеер.
+ * @property liked лайк текущего трека (D4a); `null` — трек не из фонотеки
+ *   (или его ещё ищут), сердца нет.
  */
 data class PlayerUiState(
     val title: String?,
@@ -37,6 +39,7 @@ data class PlayerUiState(
     val artworkUri: String?,
     val hasTrack: Boolean,
     val album: Album?,
+    val liked: Boolean? = null,
 ) {
     /** Какая доля трека сыграна, `0..1`; без длительности — `0`. */
     val progressFraction: Float

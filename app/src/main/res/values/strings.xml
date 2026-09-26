@@ -172,6 +172,8 @@
     <string name="track_play_next">Play next</string>
     <string name="track_add_to_queue">Add to queue</string>
     <string name="track_replace_queue">Replace queue</string>
+    <string name="track_like">Like</string>
+    <string name="track_unlike">Unlike</string>
     <string name="queue_added">Added to queue</string>
     <string name="error_problem_unavailable">the file is unavailable</string>
     <string name="error_problem_unplayable">the file is damaged or its format isn’t supported</string>

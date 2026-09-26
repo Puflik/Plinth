@@ -14,13 +14,13 @@ mod artists;
 use std::time::Duration;
 
 use plinth_types::{AlbumId, CoreError, EntityId, TrackId};
-use rusqlite::{Params, Row};
+use rusqlite::{OptionalExtension, Params, Row};
 
 pub use albums::{AlbumRow, AlbumSort};
 pub use artists::ArtistRow;
 
 use super::Database;
-use super::sql::{Storage, id, opt_duration, opt_id};
+use super::sql::{Storage, first_id, id, opt_duration, opt_id};
 use crate::text::normalize;
 
 /// Порядок списка треков.
@@ -112,6 +112,19 @@ impl Database {
     /// Треки альбома по дискам и номерам (экран альбома).
     pub fn album_tracks(&self, album: AlbumId) -> Result<Vec<TrackRow>, CoreError> {
         self.track_rows("WHERE v.album = ?1", [album.as_bytes()], ON_ALBUM)
+    }
+
+    /// Трек, который играет из файла `uri`, — в том числе пропавшего; файла
+    /// в каталоге нет — `None`. Плеер знает только файл, история — трек.
+    pub fn track_at(&self, uri: &str) -> Result<Option<TrackId>, CoreError> {
+        self.conn()
+            .query_row(
+                "SELECT v.track FROM source s JOIN version v ON v.id = s.version WHERE s.local_uri = ?1",
+                [uri],
+                first_id,
+            )
+            .optional()
+            .storage()
     }
 
     /// Видимые треки с условием `filter` в порядке `order`.
@@ -332,6 +345,18 @@ mod tests {
                 "Track 10"
             ]
         );
+    }
+
+    /// Плеер знает только файл: по нему находится трек, и пропавший тоже.
+    #[test]
+    fn a_track_is_found_by_its_file() {
+        let lib = library();
+        let creep =
+            lib.db.track_list(TrackSort::Title, None).unwrap().into_iter().find(|r| r.title == "Creep").unwrap();
+
+        assert_eq!(lib.db.track_at(creep.uri.as_deref().unwrap()).unwrap(), Some(creep.id));
+        assert!(lib.db.track_at("/storage/emulated/0/Music/Radiohead/Lost Song.mp3").unwrap().is_some());
+        assert_eq!(lib.db.track_at("/storage/emulated/0/Music/Nobody.mp3").unwrap(), None);
     }
 
     /// Строка сортировки из тегов сильнее строки исполнителя: «David Bowie» с

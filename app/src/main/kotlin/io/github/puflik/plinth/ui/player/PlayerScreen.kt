@@ -96,6 +96,7 @@ fun PlayerScreen(
                     onShuffle = viewModel::onShuffle,
                     onRepeat = viewModel::onRepeat,
                     onHoldSkip = { forward -> gesture(PlayerGesture.HOLD_SKIP, forward) },
+                    onLike = viewModel::onLike,
                 ),
             panels =
                 PanelControls(
@@ -212,6 +213,7 @@ private class PlayerControls(
     val onShuffle: () -> Unit,
     val onRepeat: () -> Unit,
     val onHoldSkip: (forward: Boolean) -> Unit,
+    val onLike: () -> Unit,
 )
 
 @Composable
@@ -227,24 +229,27 @@ private fun PlayerCore(
         dots = { PanelDots(selected = panels.panel, onSelect = panels.onPanel) },
         modifier = modifier,
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = state.title ?: stringResource(R.string.player_nothing_open),
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            state.artist?.let { artist ->
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = artist,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    modifier =
-                        Modifier.clickable(onClickLabel = stringResource(R.string.player_go_artist)) {
-                            onOpenArtist(artist)
-                        },
+                    text = state.title ?: stringResource(R.string.player_nothing_open),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                state.artist?.let { artist ->
+                    Text(
+                        text = artist,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        modifier =
+                            Modifier.clickable(onClickLabel = stringResource(R.string.player_go_artist)) {
+                                onOpenArtist(artist)
+                            },
+                    )
+                }
             }
+            state.liked?.let { liked -> LikeButton(liked, controls.onLike) }
         }
         state.error?.let {
             Text(
@@ -255,6 +260,21 @@ private fun PlayerCore(
         }
         SeekBar(state, controls.onSeek)
         Transport(state, controls)
+    }
+}
+
+/** Сердце рядом с названием (план 12, D1): лайк текущего трека. */
+@Composable
+private fun LikeButton(
+    liked: Boolean,
+    onLike: () -> Unit,
+) {
+    IconButton(onClick = onLike) {
+        Icon(
+            painterResource(if (liked) R.drawable.ic_liked else R.drawable.ic_like),
+            contentDescription = stringResource(if (liked) R.string.track_unlike else R.string.track_like),
+            tint = if (liked) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+        )
     }
 }
 

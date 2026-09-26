@@ -41,6 +41,9 @@ class CoreLibrary internal constructor(
     /** Альбомы, где есть треки исполнителя [name]. */
     fun artistAlbums(name: String): List<CoreAlbum> = core.call { rust -> rust.artistAlbums(name).map { it.toApp() } }
 
+    /** Трек библиотеки, который играет из файла [path]; файла в библиотеке нет — `null`. */
+    fun trackAt(path: String): TrackId? = core.call { it.trackAt(path)?.let(::TrackId) }
+
     /** Лайк, оценка и счётчики трека; не слушали и не оценивали — пустые. */
     fun userData(track: TrackId): TrackUserData = core.call { it.userData(track.value).toApp() }
 

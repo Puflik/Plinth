@@ -7,6 +7,7 @@ import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeFolderSettings
 import io.github.puflik.plinth.library.FakeLibraryRepository
+import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.Album
@@ -42,10 +43,12 @@ class LibraryViewModelTest {
     private val repository = FakeLibraryRepository()
     private val engine = FakeAudioEngine()
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
+    private val userData = FakeUserDataRepository()
+    private val actions = TrackActions(playback, userData, CoroutineScope(Dispatchers.Unconfined))
     private val sorts = FakeSortSettings()
     private val folders = FakeFolderSettings()
     private val onboarding = FakeOnboardingSettings(OnboardingRecord(finished = true))
-    private val viewModel by lazy { LibraryViewModel(scan, repository, playback, sorts, folders, onboarding) }
+    private val viewModel by lazy { LibraryViewModel(scan, repository, playback, actions, sorts, folders, onboarding) }
 
     private val bohemian = track(1, "Bohemian Rhapsody", "Queen", "A Night at the Opera", "Music/Queen/")
     private val yesterday = track(2, "Yesterday", "The Beatles", "Rubber Soul", "Music/Beatles/")

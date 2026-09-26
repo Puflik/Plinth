@@ -7,7 +7,7 @@ import io.github.puflik.plinth.queue.QueueAction
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 
-/** Что сделать с треком списка (D1.2): касание — [PLAY], остальное — из меню долгого нажатия. */
+/** Что сделать с треком списка (D1.2, D4a): касание — [PLAY], остальное — из меню долгого нажатия. */
 enum class TrackAction {
     /** Играть список, в котором трек стоит, начиная с него; вручную добавленное остаётся. */
     PLAY,
@@ -16,10 +16,17 @@ enum class TrackAction {
 
     /** Как [PLAY], но вручную добавленное пропадает. */
     REPLACE_QUEUE,
+
+    /** Поставить лайк; снять — [UNLIKE]. Очередь не трогают. */
+    LIKE,
+    UNLIKE,
     ;
 
     /** Трек заиграет сразу — после действия открывается плеер. */
     val startsPlayback: Boolean get() = this == PLAY || this == REPLACE_QUEUE
+
+    /** Трек встал в очередь — об этом коротко говорится. */
+    val queues: Boolean get() = this == PLAY_NEXT || this == ADD_TO_QUEUE
 }
 
 /** Трек библиотеки как элемент очереди: очередь библиотеку не знает. */
@@ -36,6 +43,7 @@ fun LibraryTrack.toQueueItem() =
 /**
  * [action] над [track] из списка [tracks], который играет контекстом
  * [context]. Трека в списке нет (список успел обновиться) — играет он один.
+ * Лайк — не дело очереди: его ставит [TrackActions].
  */
 fun PlaybackController.act(
     action: TrackAction,
@@ -56,5 +64,6 @@ fun PlaybackController.act(
         }
         TrackAction.PLAY_NEXT -> perform(QueueAction.PLAY_NEXT, track.toQueueItem())
         TrackAction.ADD_TO_QUEUE -> perform(QueueAction.ADD_TO_QUEUE, track.toQueueItem())
+        TrackAction.LIKE, TrackAction.UNLIKE -> Unit
     }
 }
