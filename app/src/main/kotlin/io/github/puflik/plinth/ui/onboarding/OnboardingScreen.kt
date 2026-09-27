@@ -28,6 +28,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
 import io.github.puflik.plinth.library.permission.PermissionState
 import io.github.puflik.plinth.startup.OnboardingStep
+import io.github.puflik.plinth.ui.backup.BackupStep
 import io.github.puflik.plinth.ui.common.PermissionRationaleScreen
 import io.github.puflik.plinth.ui.common.openAppSettings
 import io.github.puflik.plinth.ui.common.rememberMediaPermission
@@ -41,7 +42,9 @@ import io.github.puflik.plinth.ui.settings.rememberFolderPicker
  *
  * Шаг разрешения сначала объясняет и спрашивает по кнопке, а проходит сам,
  * как только разрешение выдано. Папки правятся тем же списком, что и в
- * настройках; скан начнётся, когда откроется библиотека.
+ * настройках; скан начнётся, когда откроется библиотека. Шаг копии данных
+ * выбирает папку и, если в ней данные прошлой установки, предлагает их
+ * вернуть (C4).
  */
 @Composable
 fun OnboardingScreen(
@@ -72,6 +75,7 @@ fun OnboardingScreen(
             when (step) {
                 OnboardingStep.PERMISSION -> PermissionStep(onPermission = viewModel::onPermission)
                 OnboardingStep.FOLDERS -> FoldersStep()
+                OnboardingStep.BACKUP -> BackupStep()
             }
         }
     }

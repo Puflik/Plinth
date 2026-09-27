@@ -13,6 +13,7 @@ use plinth_library::db::Database;
 use plinth_types::CoreError;
 
 use super::apply::apply;
+use super::passport::describe;
 use super::rebuild::{rebuild, write};
 use super::{Journal, Op};
 
@@ -30,8 +31,12 @@ pub fn record_and_project(journal: &mut Journal, db: &Database, op: &Op) -> Resu
 }
 
 /// [`record_and_project`] для нескольких операций разом: одна правка журнала,
-/// одна транзакция базы.
+/// одна транзакция базы. Треки каталога, которых операции касаются, журнал
+/// описывает в той же правке (паспорт, C4) — после действий: не записалось
+/// действие — не пишется и паспорт.
 pub fn record_and_project_all(journal: &mut Journal, db: &Database, ops: &[Op]) -> Result<(), CoreError> {
+    let described = describe(journal, db, ops)?;
+    let ops = &[ops, described.as_slice()].concat();
     let before = journal.mark();
     if journal.record_all(ops)?.is_none() {
         return Ok(());

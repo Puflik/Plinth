@@ -8,7 +8,7 @@
 //! - `likes`, `subscriptions`, `blocks` — множества: ключ есть — элемент есть.
 //!   Добавление побеждает параллельное удаление: удаление стирает только ту
 //!   запись, которую видело.
-//! - `ratings`, `playlists`, `entries`, `settings` — регистр на ключ:
+//! - `ratings`, `playlists`, `entries`, `settings`, `passports` — регистр на ключ:
 //!   действует последняя запись. Параллельные записи одного ключа `yrs`
 //!   разводит одинаково на всех устройствах.
 //! - `plays`, `decisions` — только дописываются: прослушивания и решения
@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use plinth_library::model::{
     BlockEntry, BlockTarget, MergeDecision, PlayEvent, Playlist, PlaylistEntry, Rating, Setting, Subscription,
+    TrackPassport,
 };
 use plinth_types::{CoreError, PlaylistEntryId, PlaylistId, TrackId};
 use yrs::{Any, Array, ArrayRef, Doc, Map, MapRef, Out, ReadTxn, TransactionMut};
@@ -39,6 +40,7 @@ pub(crate) struct Roots {
     subscriptions: MapRef,
     blocks: MapRef,
     settings: MapRef,
+    passports: MapRef,
 }
 
 /// Всё, что лежит в журнале, — то, из чего собирается проекция (C3).
@@ -54,6 +56,8 @@ pub struct JournalState {
     pub subscriptions: Vec<Subscription>,
     pub blocklist: Vec<BlockEntry>,
     pub settings: Vec<Setting>,
+    /// Паспорта треков с пользовательскими данными (C4).
+    pub passports: Vec<TrackPassport>,
     /// Записи, которые этот код не прочёл: битые или из более новой версии.
     /// В документе они остаются.
     pub unreadable: usize,
@@ -72,6 +76,7 @@ impl Roots {
             subscriptions: doc.get_or_insert_map("subscriptions"),
             blocks: doc.get_or_insert_map("blocks"),
             settings: doc.get_or_insert_map("settings"),
+            passports: doc.get_or_insert_map("passports"),
         }
     }
 
@@ -132,8 +137,18 @@ impl Roots {
                 let unchanged = read(&self.settings, txn, key, |r| r.setting()) == Some(*setting);
                 !unchanged && put(&self.settings, txn, key.to_owned(), encode(meta, |w| w.setting(*setting)))
             }
+            Op::Describe(passport) => {
+                let unchanged = self.passport(txn, passport.track).as_ref() == Some(passport);
+                !unchanged
+                    && put(&self.passports, txn, passport.track.to_string(), encode(meta, |w| w.passport(passport)))
+            }
         };
         Ok(changed)
+    }
+
+    /// Паспорт трека; нет его или он не читается — `None`.
+    pub(crate) fn passport<T: ReadTxn>(&self, txn: &T, track: TrackId) -> Option<TrackPassport> {
+        read(&self.passports, txn, &track.to_string(), |r| r.passport(track))
     }
 
     /// Плейлист и все его записи.
@@ -177,6 +192,10 @@ impl Roots {
             Ok(BlockEntry { target: block_target(key)?, since: record(value, |r| r.since())? })
         });
         state.settings = keyed(&self.settings, txn, &mut skip, |_, value| record(value, |r| r.setting()));
+        state.passports = keyed(&self.passports, txn, &mut skip, |key, value| {
+            let track = key.parse()?;
+            record(value, |r| r.passport(track))
+        });
         state.unreadable = unreadable;
         state
     }
@@ -302,7 +321,7 @@ mod tests {
 
     use plinth_library::model::{
         BlockEntry, BlockTarget, OutputDevice, PlayEvent, Playlist, PlaylistEntry, PlaylistKind, Rating, Setting,
-        Subscription, VersionPreference, position_for,
+        Subscription, TrackPassport, VersionPreference, position_for,
     };
     use plinth_types::{
         ArtistId, CoreError, DeviceId, PlayEventId, PlaylistEntryId, PlaylistId, Position, Timestamp, TrackId,
@@ -386,6 +405,17 @@ mod tests {
         (list, entries)
     }
 
+    fn passport(track: TrackId, title: &str) -> TrackPassport {
+        TrackPassport {
+            track,
+            title: title.to_owned(),
+            artist: "Кино".to_owned(),
+            album: None,
+            duration: Some(Duration::from_secs(398)),
+            mbid: None,
+        }
+    }
+
     fn play(track: TrackId) -> PlayEvent {
         PlayEvent {
             id: PlayEventId::new(),
@@ -412,6 +442,7 @@ mod tests {
         let subscription = Subscription { artist, since: Timestamp::from_millis(3) };
         let blocked = BlockEntry { target: BlockTarget::Track(track), since: Timestamp::from_millis(4) };
         let setting = Setting::VersionPreference(VersionPreference::Clean);
+        let described = passport(track, "Кукушка");
 
         for op in [
             Op::Like { track },
@@ -420,6 +451,7 @@ mod tests {
             Op::Subscribe(subscription),
             Op::Block(blocked),
             Op::Set(setting),
+            Op::Describe(described.clone()),
         ] {
             assert!(replica.write(&op).unwrap(), "{op:?}");
         }
@@ -434,6 +466,7 @@ mod tests {
         assert_eq!(state.subscriptions, vec![subscription]);
         assert_eq!(state.blocklist, vec![blocked]);
         assert_eq!(state.settings, vec![setting]);
+        assert_eq!(state.passports, vec![described]);
         assert_eq!(state.unreadable, 0);
     }
 
@@ -444,8 +477,10 @@ mod tests {
         let track = TrackId::new();
         let (list, entries) = filled(&replica, 1);
         let setting = Setting::VersionPreference(VersionPreference::Any);
+        let described = passport(track, "Кукушка");
         replica.write(&Op::Like { track }).unwrap();
         replica.write(&Op::Set(setting)).unwrap();
+        replica.write(&Op::Describe(described.clone())).unwrap();
 
         for op in [
             Op::Like { track },
@@ -459,6 +494,7 @@ mod tests {
             Op::Unsubscribe { artist: ArtistId::new() },
             Op::Unblock { target: BlockTarget::Artist(ArtistId::new()) },
             Op::Set(setting),
+            Op::Describe(described.clone()),
         ] {
             assert!(!replica.write(&op).unwrap(), "{op:?}");
         }
@@ -479,6 +515,18 @@ mod tests {
             assert!(matches!(replica.write(&op), Err(CoreError::Unavailable { .. })), "{op:?}");
         }
         assert_eq!(replica.state(), before);
+    }
+
+    /// Паспорт — регистр: теги поправили — действует последнее описание.
+    #[test]
+    fn the_latest_passport_wins() {
+        let replica = Replica::new();
+        let track = TrackId::new();
+        replica.write(&Op::Describe(passport(track, "Кукушка (демо)"))).unwrap();
+
+        assert!(replica.write(&Op::Describe(passport(track, "Кукушка"))).unwrap());
+
+        assert_eq!(replica.state().passports, vec![passport(track, "Кукушка")]);
     }
 
     #[test]

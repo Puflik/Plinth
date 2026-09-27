@@ -32,13 +32,16 @@ pub struct TestFile {
 
 #[uniffi::export]
 impl Core {
-    /// Кладёт `files` в каталог новыми треками одной транзакцией.
+    /// Кладёт `files` в каталог новыми треками одной транзакцией; после —
+    /// как после скана, треки журнала узнаются по паспортам.
     pub fn seed_for_test(&self, files: Vec<TestFile>) -> Result<(), CoreError> {
         panic::guard(|| {
             let now = Timestamp::now();
             let split = ArtistSplit::default();
             let scanned: Vec<ScannedFile> = files.into_iter().map(|file| scanned(file, &split, now)).collect();
-            self.with(|state| state.db.in_transaction(|db| write(db, &scanned, now)))
+            self.with(|state| state.db.in_transaction(|db| write(db, &scanned, now)))?;
+            self.relink_catalog();
+            Ok(())
         })
     }
 

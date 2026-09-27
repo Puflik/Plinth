@@ -87,22 +87,25 @@ class OnboardingViewModelTest {
 
             viewModel.onPermission(PermissionState.Granted)
             viewModel.onNext()
+            assertThat(viewModel.uiState.value).isEqualTo(OnboardingUiState.Step(OnboardingStep.BACKUP))
+            viewModel.onNext()
 
             assertThat(viewModel.uiState.value).isEqualTo(OnboardingUiState.Finished)
             assertThat(settings.record.value).isEqualTo(OnboardingRecord(finished = true, skipped = emptySet()))
         }
 
     @Test
-    fun `skipped folders are remembered`() =
+    fun `skipped folders and backup are remembered`() =
         runTest(UnconfinedTestDispatcher()) {
             val viewModel = OnboardingViewModel(settings)
             collect(viewModel)
 
             viewModel.onPermission(PermissionState.Granted)
             viewModel.onSkip()
+            viewModel.onSkip()
 
             assertThat(viewModel.uiState.value).isEqualTo(OnboardingUiState.Finished)
-            assertThat(settings.record.value.skipped).containsExactly(OnboardingStep.FOLDERS)
+            assertThat(settings.record.value.skipped).containsExactly(OnboardingStep.FOLDERS, OnboardingStep.BACKUP)
         }
 
     @Test
@@ -114,8 +117,7 @@ class OnboardingViewModelTest {
             viewModel.onSkipAll()
 
             assertThat(viewModel.uiState.value).isEqualTo(OnboardingUiState.Finished)
-            assertThat(settings.record.value.skipped)
-                .containsExactly(OnboardingStep.PERMISSION, OnboardingStep.FOLDERS)
+            assertThat(settings.record.value.skipped).containsExactlyElementsIn(OnboardingStep.entries)
         }
 
     private fun TestScope.collect(viewModel: OnboardingViewModel) {

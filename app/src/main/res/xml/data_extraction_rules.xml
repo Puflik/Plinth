@@ -1,30 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Android 12+: ни в облачную копию, ни при переносе на новый телефон не идёт
-  ничего (ревью №7). Правило без <exclude> значит «всё приложение», поэтому
-  исключены все домены. Что переносить, решится в v0.2 вместе с журналом.
+  Android 12+ (C4, план 17.5, уровень 4): и в облачную копию, и при переносе
+  на новый телефон идёт только журнал пользовательских данных —
+  files/core/journal. База, кэш, идентификатор установки, замок и настройки
+  не идут: каталог вернёт скан, а ссылки базы на новом телефоне указывали
+  бы на чужие файлы (ревью №7). Облачная копия — только с шифрованием на
+  устройстве: журнал хранит историю прослушиваний.
 -->
 <data-extraction-rules>
-    <cloud-backup>
-        <exclude domain="root" path="." />
-        <exclude domain="file" path="." />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="." />
-        <exclude domain="external" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="device_file" path="." />
-        <exclude domain="device_database" path="." />
-        <exclude domain="device_sharedpref" path="." />
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <include domain="file" path="core/journal/" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="root" path="." />
-        <exclude domain="file" path="." />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="." />
-        <exclude domain="external" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="device_file" path="." />
-        <exclude domain="device_database" path="." />
-        <exclude domain="device_sharedpref" path="." />
+        <include domain="file" path="core/journal/" />
     </device-transfer>
 </data-extraction-rules>

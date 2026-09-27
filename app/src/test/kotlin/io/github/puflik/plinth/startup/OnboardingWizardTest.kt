@@ -6,10 +6,13 @@ import org.junit.Test
 /** Мастер первого запуска B+ (F1, план 12.4): пройти, пропустить шаг, пропустить всё. */
 class OnboardingWizardTest {
     @Test
-    fun `v0_1 wizard is the permission then the folders, only the permission is required`() {
-        assertThat(OnboardingStep.entries).containsExactly(OnboardingStep.PERMISSION, OnboardingStep.FOLDERS).inOrder()
+    fun `v0_2 wizard is the permission, the folders and the backup, only the permission is required`() {
+        assertThat(OnboardingStep.entries)
+            .containsExactly(OnboardingStep.PERMISSION, OnboardingStep.FOLDERS, OnboardingStep.BACKUP)
+            .inOrder()
         assertThat(OnboardingStep.PERMISSION.skippable).isFalse()
         assertThat(OnboardingStep.FOLDERS.skippable).isTrue()
+        assertThat(OnboardingStep.BACKUP.skippable).isTrue()
     }
 
     @Test
@@ -25,19 +28,25 @@ class OnboardingWizardTest {
     fun `done steps lead to the next and past the last one the wizard is finished`() {
         val folders = OnboardingWizard().next()
         assertThat(folders.step).isEqualTo(OnboardingStep.FOLDERS)
+        val backup = folders.next()
+        assertThat(backup.step).isEqualTo(OnboardingStep.BACKUP)
 
-        val finished = folders.next()
+        val finished = backup.next()
         assertThat(finished.finished).isTrue()
         assertThat(finished.skipped).isEmpty()
         assertThat(finished.next()).isEqualTo(finished)
     }
 
     @Test
-    fun `skipped step is remembered`() {
+    fun `skipped steps are remembered`() {
         val wizard = OnboardingWizard().next().skip()
 
-        assertThat(wizard.finished).isTrue()
+        assertThat(wizard.step).isEqualTo(OnboardingStep.BACKUP)
         assertThat(wizard.skipped).containsExactly(OnboardingStep.FOLDERS)
+
+        val finished = wizard.skip()
+        assertThat(finished.finished).isTrue()
+        assertThat(finished.skipped).containsExactly(OnboardingStep.FOLDERS, OnboardingStep.BACKUP)
     }
 
     @Test
@@ -51,15 +60,15 @@ class OnboardingWizardTest {
     fun `skip all skips the current step and everything after it`() {
         val fromStart = OnboardingWizard().skipAll()
         assertThat(fromStart.finished).isTrue()
-        assertThat(fromStart.skipped).containsExactly(OnboardingStep.PERMISSION, OnboardingStep.FOLDERS)
+        assertThat(fromStart.skipped).containsExactlyElementsIn(OnboardingStep.entries)
 
         val fromFolders = OnboardingWizard().next().skipAll()
-        assertThat(fromFolders.skipped).containsExactly(OnboardingStep.FOLDERS)
+        assertThat(fromFolders.skipped).containsExactly(OnboardingStep.FOLDERS, OnboardingStep.BACKUP)
     }
 
     @Test
     fun `finished wizard stays as it is`() {
-        val finished = OnboardingWizard().next().skip()
+        val finished = OnboardingWizard().next().skipAll()
 
         assertThat(finished.skip()).isEqualTo(finished)
         assertThat(finished.skipAll()).isEqualTo(finished)

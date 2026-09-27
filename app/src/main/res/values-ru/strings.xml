@@ -238,4 +238,32 @@
         <item quantity="many">Остановлено: %d треков подряд не играют</item>
         <item quantity="other">Остановлено: %d трека подряд не играют</item>
     </plurals>
+
+    <!-- C4: копия данных в папке человека и восстановление после переустановки -->
+    <string name="backup_title">Копия ваших данных</string>
+    <string name="backup_text">Plinth сохранит лайки, плейлисты и историю прослушиваний в папку на телефоне. Если переустановите приложение, выберите ту же папку — и всё вернётся.</string>
+    <string name="backup_settings_title">Копия данных</string>
+    <string name="backup_folder">Папка: %1$s</string>
+    <string name="backup_none">Папка не выбрана: после переустановки лайки и плейлисты не вернутся.</string>
+    <string name="backup_choose">Выбрать папку</string>
+    <string name="backup_change">Сменить папку</string>
+    <string name="restore_text">Найдены данные предыдущей установки от %3$s: %1$s, %2$s. Восстановить?</string>
+    <string name="restore_text_undated">Найдены данные предыдущей установки: %1$s, %2$s. Восстановить?</string>
+    <string name="restore_confirm">Восстановить</string>
+    <string name="restore_decline">Не нужно</string>
+    <string name="backup_restored">Данные восстановлены</string>
+    <string name="backup_no_access">Plinth не получил доступ к этой папке. Выберите другую.</string>
+    <string name="backup_failed">Не удалось прочитать копию. Подробности — в логе.</string>
+    <plurals name="backup_likes">
+        <item quantity="one">%d лайк</item>
+        <item quantity="few">%d лайка</item>
+        <item quantity="many">%d лайков</item>
+        <item quantity="other">%d лайка</item>
+    </plurals>
+    <plurals name="backup_playlists">
+        <item quantity="one">%d плейлист</item>
+        <item quantity="few">%d плейлиста</item>
+        <item quantity="many">%d плейлистов</item>
+        <item quantity="other">%d плейлиста</item>
+    </plurals>
 </resources>

@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 
 use plinth_library::db::{Database, IntegrityCheck};
-use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, rebuild, record_and_project};
+use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, describe_missing, rebuild, record_and_project};
 use plinth_types::{CoreError, DeviceId};
 
 use crate::panic;
@@ -69,8 +69,12 @@ impl Core {
         if let Some(recovery) = &opened.recovery {
             log::warn!("core: the database was damaged and is kept aside: {}", recovery.reason);
         }
-        let journal = Journal::open(&dir.join(JOURNAL), device)?;
+        let mut journal = Journal::open(&dir.join(JOURNAL), device)?;
         let rebuilt = catch_up(&journal, &opened.db)? == CatchUp::Rebuilt;
+        // Журнал до C4: трекам с данными — паспорта, иначе переустановка их не узнает.
+        if let Err(error) = describe_missing(&mut journal, &opened.db) {
+            log::error!("core: describing tracks of the journal failed: {error}");
+        }
         let report = StartupReport {
             database_recovered: opened.recovery.is_some(),
             // Пустой журнал «пересобирается» и при первом запуске — это не восстановление.

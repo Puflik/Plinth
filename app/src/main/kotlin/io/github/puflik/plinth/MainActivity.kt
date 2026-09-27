@@ -28,6 +28,7 @@ import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.puflik.plinth.artwork.ArtworkLoader
 import io.github.puflik.plinth.audio.media3.PlaybackServiceConnection
+import io.github.puflik.plinth.backup.MirrorWriter
 import io.github.puflik.plinth.startup.StartDecision
 import io.github.puflik.plinth.startup.StartDestination
 import io.github.puflik.plinth.ui.common.ErrorNotices
@@ -51,11 +52,16 @@ import javax.inject.Inject
 /**
  * Единственная Activity приложения (A2.1): хост Compose и ничего больше.
  * Экранам отсюда же достаётся загрузчик обложек — как `LocalArtworkLoader`.
+ * Ушла с экрана — приложение в фоне: несохранённое в копию журнала пишется
+ * сразу (C4).
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var artworkLoader: ArtworkLoader<ImageBitmap>
+
+    @Inject
+    lateinit var mirrorWriter: MirrorWriter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +74,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        mirrorWriter.flush()
     }
 }
 

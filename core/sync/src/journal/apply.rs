@@ -32,6 +32,8 @@ pub(crate) fn apply(db: &Database, op: &Op) -> Result<(), CoreError> {
         Op::Block(entry) => db.block(entry),
         Op::Unblock { target } => db.unblock(*target),
         Op::Set(setting) => db.save_setting(*setting),
+        // Паспорт в базу не проецируется: его читает перепривязка (C4).
+        Op::Describe(_) => Ok(()),
     }
 }
 

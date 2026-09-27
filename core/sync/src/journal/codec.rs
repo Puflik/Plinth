@@ -16,9 +16,9 @@ use std::time::Duration;
 
 use plinth_library::model::{
     DecidedBy, IdentityBasis, MergeDecision, OutputDevice, PlayEvent, Playlist, PlaylistEntry, PlaylistKind, Rating,
-    Setting, TrackPair, Verdict, VersionPreference,
+    Setting, TrackPair, TrackPassport, Verdict, VersionPreference,
 };
-use plinth_types::{CoreError, DeviceId, EntityId, PlaylistEntryId, PlaylistId, Position, Timestamp};
+use plinth_types::{CoreError, DeviceId, EntityId, PlaylistEntryId, PlaylistId, Position, Timestamp, TrackId};
 
 use super::op_meta::OpMeta;
 
@@ -187,6 +187,25 @@ impl Writer {
     pub(crate) fn since(&mut self, since: Timestamp) {
         self.timestamp(since);
     }
+
+    /// Паспорт без идентификатора трека: он — ключ записи.
+    pub(crate) fn passport(&mut self, passport: &TrackPassport) {
+        self.text(&passport.title);
+        self.text(&passport.artist);
+        let flags = u8::from(passport.album.is_some())
+            | u8::from(passport.duration.is_some()) << 1
+            | u8::from(passport.mbid.is_some()) << 2;
+        self.u8(flags);
+        if let Some(album) = &passport.album {
+            self.text(album);
+        }
+        if let Some(duration) = passport.duration {
+            self.duration(duration);
+        }
+        if let Some(mbid) = passport.mbid {
+            self.text(&mbid.to_string());
+        }
+    }
 }
 
 pub(crate) struct Reader<'a> {
@@ -346,6 +365,17 @@ impl Reader<'_> {
     pub(crate) fn since(&mut self) -> Result<Timestamp, CoreError> {
         self.timestamp()
     }
+
+    pub(crate) fn passport(&mut self, track: TrackId) -> Result<TrackPassport, CoreError> {
+        let title = self.text()?;
+        let artist = self.text()?;
+        let flags = self.u8()?;
+        let has = |bit: u8| flags & (1 << bit) != 0;
+        let album = if has(0) { Some(self.text()?) } else { None };
+        let duration = if has(1) { Some(self.duration()?) } else { None };
+        let mbid = if has(2) { Some(self.text()?.parse()?) } else { None };
+        Ok(TrackPassport { track, title, artist, album, duration, mbid })
+    }
 }
 
 #[cfg(test)]
@@ -354,7 +384,7 @@ mod tests {
 
     use plinth_library::model::{
         DecidedBy, IdentityBasis, MergeDecision, OutputDevice, PlayEvent, Playlist, PlaylistEntry, PlaylistKind,
-        Setting, TrackPair, Verdict, VersionPreference,
+        Setting, TrackPair, TrackPassport, Verdict, VersionPreference,
     };
     use plinth_types::{
         DeviceId, MergeDecisionId, PlayEventId, PlaylistEntryId, PlaylistId, Position, SourceId, Timestamp, TrackId,
@@ -458,6 +488,23 @@ mod tests {
         for preference in [VersionPreference::Original, VersionPreference::Clean, VersionPreference::Any] {
             let setting = Setting::VersionPreference(preference);
             round_trip(&setting, |w, s| w.setting(*s), |r| r.setting());
+        }
+    }
+
+    #[test]
+    fn passports_round_trip_with_and_without_optional_facts() {
+        let full = TrackPassport {
+            track: TrackId::new(),
+            title: "Кукушка".to_owned(),
+            artist: "Кино".to_owned(),
+            album: Some("Звезда по имени Солнце".to_owned()),
+            duration: Some(Duration::from_millis(398_000)),
+            mbid: Some("5b11f4ce-a62d-471e-81fc-a69a8278c7da".parse().unwrap()),
+        };
+        let bare = TrackPassport { album: None, duration: None, mbid: None, ..full.clone() };
+
+        for passport in [full, bare] {
+            round_trip(&passport, |w, p| w.passport(p), |r| r.passport(passport.track));
         }
     }
 

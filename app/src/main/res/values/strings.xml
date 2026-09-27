@@ -221,4 +221,28 @@
         <item quantity="one">Stopped: %d track in a row can’t be played</item>
         <item quantity="other">Stopped: %d tracks in a row can’t be played</item>
     </plurals>
+
+    <!-- C4: копия данных в папке человека и восстановление после переустановки -->
+    <string name="backup_title">Your data backup</string>
+    <string name="backup_text">Plinth keeps your likes, playlists and listening history in a folder on this phone. If you reinstall the app, choose the same folder and everything comes back.</string>
+    <string name="backup_settings_title">Data backup</string>
+    <string name="backup_folder">Folder: %1$s</string>
+    <string name="backup_none">No folder chosen: after a reinstall your likes and playlists won’t come back.</string>
+    <string name="backup_choose">Choose folder</string>
+    <string name="backup_change">Change folder</string>
+    <string name="restore_text">Found data from a previous installation saved on %3$s: %1$s, %2$s. Restore it?</string>
+    <string name="restore_text_undated">Found data from a previous installation: %1$s, %2$s. Restore it?</string>
+    <string name="restore_confirm">Restore</string>
+    <string name="restore_decline">Not needed</string>
+    <string name="backup_restored">Your data is restored</string>
+    <string name="backup_no_access">Plinth didn’t get access to this folder. Choose another one.</string>
+    <string name="backup_failed">Couldn’t read the backup. The details are in the log.</string>
+    <plurals name="backup_likes">
+        <item quantity="one">%d like</item>
+        <item quantity="other">%d likes</item>
+    </plurals>
+    <plurals name="backup_playlists">
+        <item quantity="one">%d playlist</item>
+        <item quantity="other">%d playlists</item>
+    </plurals>
 </resources>

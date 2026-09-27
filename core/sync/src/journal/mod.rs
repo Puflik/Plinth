@@ -10,14 +10,17 @@ mod codec;
 mod doc;
 pub mod op;
 pub mod op_meta;
+mod passport;
 mod projection;
 mod rebuild;
+mod relink;
 mod store;
 
 use std::path::Path;
 
 use plinth_library::db::JournalMark;
-use plinth_types::{CoreError, DeviceId};
+use plinth_library::model::TrackPassport;
+use plinth_types::{CoreError, DeviceId, TrackId};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
@@ -26,8 +29,10 @@ pub use doc::JournalState;
 use doc::Roots;
 pub use op::Op;
 pub use op_meta::{OP_SCHEMA, OpMeta};
+pub use passport::describe_missing;
 pub use projection::{CatchUp, catch_up, record_and_project, record_and_project_all};
 pub use rebuild::rebuild;
+pub use relink::relink;
 use store::Store;
 
 pub struct Journal {
@@ -52,8 +57,7 @@ impl Journal {
         {
             let mut txn = doc.transact_mut();
             if !loaded.snapshot.is_empty() {
-                let update = Update::decode_v2(&loaded.snapshot).map_err(|e| unreadable("snapshot", &e))?;
-                txn.apply_update(update).map_err(|e| unreadable("snapshot", &e))?;
+                apply_v2(&mut txn, &loaded.snapshot)?;
             }
             for (index, frame) in loaded.frames.iter().enumerate() {
                 // Сумма кадра сошлась, значит, байты те, что записаны: не
@@ -111,6 +115,11 @@ impl Journal {
         self.roots.state(&self.doc.transact())
     }
 
+    /// Паспорт трека (C4); нет его — `None`.
+    pub fn passport(&self, track: TrackId) -> Option<TrackPassport> {
+        self.roots.passport(&self.doc.transact(), track)
+    }
+
     /// Что журнал уже знает — для обмена с другим журналом (C4, v1.5).
     pub fn state_vector(&self) -> Vec<u8> {
         self.doc.transact().state_vector().encode_v1()
@@ -141,10 +150,58 @@ impl Journal {
     pub fn compact(&mut self) -> Result<(), CoreError> {
         self.store.compact(&snapshot(&self.doc))
     }
+
+    /// Всё состояние журнала — update v2, как в его файле `snapshot`. Из
+    /// него копия в папке человека (C4).
+    pub fn snapshot(&self) -> Vec<u8> {
+        snapshot(&self.doc)
+    }
+
+    /// Вливает снимок [`Journal::snapshot`] другого журнала; `false` —
+    /// ничего нового. Проекцию после слияния пересобирают.
+    pub fn merge_snapshot(&mut self, snapshot: &[u8]) -> Result<bool, CoreError> {
+        let update = Update::decode_v2(snapshot).map_err(|e| unreadable("snapshot", &e))?;
+        self.merge(&update.encode_v1())
+    }
+
+    /// Есть ли в снимке то, чего журнал не знает: слияние его что-то
+    /// изменило бы. Сам журнал не меняется — сливается его копия в памяти.
+    pub fn news_in(&self, snapshot: &[u8]) -> Result<bool, CoreError> {
+        let update = Update::decode_v2(snapshot).map_err(|e| unreadable("snapshot", &e))?;
+        let copy = Doc::new();
+        apply_v2(&mut copy.transact_mut(), &self.snapshot())?;
+        let mut txn = copy.transact_mut();
+        txn.apply_update(update).map_err(|e| unreadable("snapshot", &e))?;
+        Ok(!(txn.insert_set().is_empty() && txn.delete_set().is_empty()))
+    }
+}
+
+/// Что лежит в снимках `snapshots` вместе, без журнала на диске: осмотр
+/// найденных копий (C4).
+pub fn state_of(snapshots: &[&[u8]]) -> Result<JournalState, CoreError> {
+    let doc = Doc::new();
+    let roots = Roots::new(&doc);
+    {
+        let mut txn = doc.transact_mut();
+        for snapshot in snapshots {
+            apply_v2(&mut txn, snapshot)?;
+        }
+    }
+    Ok(roots.state(&doc.transact()))
+}
+
+/// Байты — снимок журнала: `yrs` его разбирает.
+pub(crate) fn check_snapshot(snapshot: &[u8]) -> Result<(), CoreError> {
+    Update::decode_v2(snapshot).map(drop).map_err(|e| unreadable("snapshot", &e))
 }
 
 fn snapshot(doc: &Doc) -> Vec<u8> {
     doc.transact().encode_state_as_update_v2(&StateVector::default())
+}
+
+fn apply_v2(txn: &mut TransactionMut, snapshot: &[u8]) -> Result<(), CoreError> {
+    let update = Update::decode_v2(snapshot).map_err(|e| unreadable("snapshot", &e))?;
+    txn.apply_update(update).map_err(|e| unreadable("snapshot", &e))
 }
 
 fn apply_v1(txn: &mut TransactionMut, update: &[u8]) -> Result<(), CoreError> {

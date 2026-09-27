@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import io.github.puflik.plinth.audio.QueueKeeper
+import io.github.puflik.plinth.backup.MirrorWriter
 import io.github.puflik.plinth.diagnostics.AppInfo
 import io.github.puflik.plinth.diagnostics.CrashHandler
 import io.github.puflik.plinth.diagnostics.CrashStore
@@ -71,6 +72,9 @@ class PlinthApplication :
     @Inject
     lateinit var oldLibraryCleanup: OldLibraryCleanup
 
+    @Inject
+    lateinit var mirrorWriter: MirrorWriter
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -89,6 +93,8 @@ class PlinthApplication :
         listeningRecorder.start()
         // Rust-ядро — в фоне, после логгера: его первая запись идёт в тот же лог (A3).
         coreInitializer.start()
+        // Копия журнала в папке человека — через паузу после правок (C4).
+        mirrorWriter.start()
         // База фонотеки v0.1 на Room больше не нужна: фонотеку ведёт ядро (D3c).
         oldLibraryCleanup.start()
     }

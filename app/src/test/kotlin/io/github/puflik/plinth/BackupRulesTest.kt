@@ -7,35 +7,47 @@ import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Ревью №7, решение автора: из приложения не уходит ничего — ни в облачную
- * копию, ни при переезде на новый телефон. Ссылки очереди и базы там указывают
- * на чужие файлы, а мастер обещает «Nothing leaves the device».
- *
- * `allowBackup="false"` на Android 12+ не выключает перенос «телефон →
- * телефон» — поэтому правила переноса тоже исключают всё.
+ * Auto Backup и перенос на новый телефон (C4, план 17.5, уровень 4, решение
+ * автора): из приложения уходит только журнал пользовательских данных —
+ * `files/core/journal` (`CoreModule`: ядро живёт в `files/core`, журнал — в
+ * его `journal/`). База, идентификатор установки, замок, настройки и кэш не
+ * уходят: ссылки базы и очереди на новом телефоне указывали бы на чужие
+ * файлы (ревью №7), а восстановленный журнал не делает новую установку старой.
  */
 class BackupRulesTest {
     @Test
-    fun `backup is switched off in the manifest`() {
+    fun `backup is on in the manifest and both rule files are set`() {
         val application = parse(SourceTree.resourceFile("../AndroidManifest.xml")).single("application")
 
-        assertThat(application.getAttribute("android:allowBackup")).isEqualTo("false")
+        assertThat(application.getAttribute("android:allowBackup")).isEqualTo("true")
+        assertThat(application.getAttribute("android:fullBackupContent")).isEqualTo("@xml/backup_rules")
+        assertThat(application.getAttribute("android:dataExtractionRules")).isEqualTo("@xml/data_extraction_rules")
     }
 
     @Test
-    fun `cloud backup and device transfer take nothing`() {
+    fun `cloud backup and device transfer take only the journal`() {
         val rules = parse(SourceTree.resourceFile("xml/data_extraction_rules.xml"))
 
         for (section in listOf("cloud-backup", "device-transfer")) {
-            assertThat(excludedDomains(rules.single(section))).containsAtLeastElementsIn(DOMAINS)
+            assertThat(included(rules.single(section))).containsExactly(JOURNAL)
         }
     }
 
     @Test
-    fun `old full backup takes nothing either`() {
+    fun `old full backup takes only the journal too`() {
         val rules = parse(SourceTree.resourceFile("xml/backup_rules.xml"))
 
-        assertThat(excludedDomains(rules)).containsAtLeastElementsIn(DOMAINS)
+        assertThat(included(rules)).containsExactly(JOURNAL)
+    }
+
+    /** История прослушиваний — в облако только зашифрованной на устройстве. */
+    @Test
+    fun `the cloud copy needs encryption on the device`() {
+        val cloud = parse(SourceTree.resourceFile("xml/data_extraction_rules.xml")).single("cloud-backup")
+        val old = parse(SourceTree.resourceFile("xml/backup_rules.xml")).single("include")
+
+        assertThat(cloud.getAttribute("disableIfNoEncryptionCapabilities")).isEqualTo("true")
+        assertThat(old.getAttribute("requireFlags")).isEqualTo("clientSideEncryption")
     }
 
     private fun parse(file: File): Element =
@@ -51,28 +63,15 @@ class BackupRulesTest {
         return found.item(0) as Element
     }
 
-    /** Домены, исключённые целиком: `<exclude domain="…" path="."/>`. */
-    private fun excludedDomains(section: Element): List<String> {
-        val excludes = section.getElementsByTagName("exclude")
-        return (0 until excludes.length)
-            .map { excludes.item(it) as Element }
-            .filter { it.getAttribute("path") == "." }
-            .map { it.getAttribute("domain") }
+    /** Что берётся: `домен:путь` каждого `<include>`. */
+    private fun included(section: Element): List<String> {
+        val includes = section.getElementsByTagName("include")
+        return (0 until includes.length)
+            .map { includes.item(it) as Element }
+            .map { "${it.getAttribute("domain")}:${it.getAttribute("path")}" }
     }
 
     private companion object {
-        /** Все домены правил: хранилище, защищённое до разблокировки (device_*), — тоже. */
-        val DOMAINS =
-            listOf(
-                "root",
-                "file",
-                "database",
-                "sharedpref",
-                "external",
-                "device_root",
-                "device_file",
-                "device_database",
-                "device_sharedpref",
-            )
+        const val JOURNAL = "file:core/journal/"
     }
 }

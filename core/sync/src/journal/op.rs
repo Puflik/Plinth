@@ -4,6 +4,7 @@
 
 use plinth_library::model::{
     BlockEntry, BlockTarget, MergeDecision, PlayEvent, Playlist, PlaylistEntry, Rating, Setting, Subscription,
+    TrackPassport,
 };
 use plinth_types::{ArtistId, PlaylistEntryId, PlaylistId, Position, TrackId};
 
@@ -51,4 +52,8 @@ pub enum Op {
         target: BlockTarget,
     },
     Set(Setting),
+    /// Паспорт трека, на который есть пользовательские данные (C4): по нему
+    /// новая установка узнает трек, которому скан выдал новый ID. Не
+    /// действие пользователя — его дописывает сам журнал.
+    Describe(TrackPassport),
 }

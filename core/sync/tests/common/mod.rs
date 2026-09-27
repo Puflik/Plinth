@@ -14,8 +14,11 @@ use plinth_library::model::{
     PlaylistKind, Rating, Setting, Subscription, SyncedSettings, TrackPair, TrackUserData, Verdict, VersionPreference,
     ordered_entries, position_for,
 };
+use plinth_library::scan::{ArtistSplit, FoundFile, RawTags, ScannedFile, normalized, write};
 use plinth_sync::journal::{Journal, Op};
-use plinth_types::{ArtistId, DeviceId, MergeDecisionId, PlayEventId, PlaylistEntryId, PlaylistId, Timestamp, TrackId};
+use plinth_types::{
+    ArtistId, DeviceId, Format, MergeDecisionId, PlayEventId, PlaylistEntryId, PlaylistId, Timestamp, TrackId,
+};
 
 /// Временный каталог; стирается в `Drop`.
 pub struct Scratch(pub PathBuf);
@@ -235,4 +238,50 @@ impl Workload {
 /// База в памяти: схема та же, что у файла.
 pub fn memory_db() -> Database {
     Database::open_in_memory().unwrap()
+}
+
+/// Файл библиотеки, как его прочёл бы скан.
+#[derive(Debug, Clone, Copy)]
+pub struct Song {
+    pub path: &'static str,
+    pub title: &'static str,
+    pub artist: &'static str,
+    pub album: Option<&'static str>,
+    pub duration_ms: Option<u64>,
+}
+
+/// Кладёт `songs` в каталог новыми треками — тем же путём, что скан.
+pub fn scan(db: &Database, songs: &[Song]) {
+    let now = Timestamp::now();
+    let split = ArtistSplit::default();
+    let files: Vec<ScannedFile> = songs
+        .iter()
+        .map(|song| {
+            let raw = RawTags {
+                title: Some(song.title.to_owned()),
+                artist: vec![song.artist.to_owned()],
+                album: song.album.map(str::to_owned),
+                duration: song.duration_ms.map(Duration::from_millis),
+                ..RawTags::default()
+            };
+            ScannedFile {
+                file: FoundFile {
+                    uri: song.path.to_owned(),
+                    folder: "Music/".to_owned(),
+                    format: Format::Mp3,
+                    modified_at: now,
+                    size: 0,
+                },
+                known: None,
+                tags: normalized(raw, &split),
+                readable: true,
+            }
+        })
+        .collect();
+    db.in_transaction(|db| write(db, &files, now)).unwrap();
+}
+
+/// Трек каталога, который играет из файла `song`.
+pub fn track_at(db: &Database, song: Song) -> TrackId {
+    db.known_local_files().unwrap()[song.path].track
 }

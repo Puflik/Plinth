@@ -37,11 +37,15 @@ import io.github.puflik.plinth.R
 import io.github.puflik.plinth.diagnostics.vendor.Vendor
 import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.FolderConfig
+import io.github.puflik.plinth.ui.backup.BackupPrompts
+import io.github.puflik.plinth.ui.backup.BackupViewModel
+import io.github.puflik.plinth.ui.backup.backupSection
+import io.github.puflik.plinth.ui.backup.rememberMirrorFolderPicker
 import io.github.puflik.plinth.ui.common.rememberSafeUriHandler
 
 /**
  * Вкладка «Настройки»: стартовый экран (F3), язык приложения (12.12, только
- * Android 13+), папки фонотеки (C2.5) и диагностика (G1.3).
+ * Android 13+), папки фонотеки (C2.5), копия данных (C4) и диагностика (G1.3).
  *
  * Папки — что сканировать и что пропускать; выбираются системным диалогом
  * (`OpenDocumentTree`), до библиотеки доходят после «Пересканировать».
@@ -52,8 +56,11 @@ fun SettingsScreen(
     viewModel: FolderSettingsViewModel = hiltViewModel(),
     start: StartScreenSettingViewModel = hiltViewModel(),
     diagnostics: DiagnosticsViewModel = hiltViewModel(),
+    backup: BackupViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val backupState by backup.uiState.collectAsState()
+    val pickBackupFolder = rememberMirrorFolderPicker(backup::onFolderPicked)
     val startState by start.uiState.collectAsState()
     val include = rememberFolderPicker(viewModel::onInclude)
     val exclude = rememberFolderPicker(viewModel::onExclude)
@@ -69,6 +76,7 @@ fun SettingsScreen(
             onClose = { vendorGuide = false },
         )
     }
+    BackupPrompts(backupState, backup)
     LazyColumn(modifier = modifier.fillMaxSize()) {
         startScreenChoice(startState, onChoose = start::onChoose)
         if (language != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -83,6 +91,7 @@ fun SettingsScreen(
             ) { Text(stringResource(R.string.folders_reset)) }
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
+        backupSection(backupState, onPick = pickBackupFolder)
         diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
         vendorGuideItem(onOpen = { vendorGuide = true })
     }

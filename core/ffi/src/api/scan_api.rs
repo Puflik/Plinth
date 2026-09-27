@@ -57,7 +57,8 @@ impl Core {
     /// Сканирует `volumes` — корни томов (`/storage/emulated/0`, SD-карты) —
     /// по папкам `folders`. Блокирует до конца скана; база занята только на
     /// время записи пачек, экраны читают между ними. Второй скан, пока идёт
-    /// первый, — `Unavailable`.
+    /// первый, — `Unavailable`. После скана треки журнала, которых в каталоге
+    /// нет, узнаются по паспортам (C4): переустановка выдала файлам новые ID.
     pub fn scan(
         &self,
         volumes: Vec<String>,
@@ -68,7 +69,9 @@ impl Core {
             let _scanning = self.scanning()?;
             let roots: Vec<PathBuf> = volumes.into_iter().map(PathBuf::from).collect();
             let reader = FileTags::default();
-            scan(self, &roots, &folders, &reader, &mut |p| listener.progress(p), Timestamp::now())
+            let report = scan(self, &roots, &folders, &reader, &mut |p| listener.progress(p), Timestamp::now())?;
+            self.relink_catalog();
+            Ok(report)
         })
     }
 }
