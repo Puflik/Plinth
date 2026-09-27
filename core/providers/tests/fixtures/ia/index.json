@@ -1,0 +1,47 @@
+[
+ {
+  "url": "https://archive.org/advancedsearch.php?fl%5B%5D=identifier%2Ctitle%2Ccreator%2Cyear&output=json&q=%28creator%3A%28piano%29%20OR%20title%3A%28piano%29%29%20AND%20mediatype%3A%28audio%20OR%20etree%29%20AND%20collection%3A%28etree%20OR%20audio_music%20OR%20netlabels%20OR%2078rpm%29&rows=10&sort%5B%5D=downloads%20desc",
+  "status": 200,
+  "body": "search-piano-10.json"
+ },
+ {
+  "url": "https://archive.org/advancedsearch.php?fl%5B%5D=identifier%2Ctitle%2Ccreator%2Cyear&output=json&q=%28creator%3A%28piano%29%20OR%20title%3A%28piano%29%29%20AND%20mediatype%3A%28audio%20OR%20etree%29%20AND%20collection%3A%28etree%20OR%20audio_music%20OR%20netlabels%20OR%2078rpm%29&rows=1&sort%5B%5D=downloads%20desc",
+  "status": 200,
+  "body": "search-piano-1.json"
+ },
+ {
+  "url": "https://archive.org/advancedsearch.php?fl%5B%5D=identifier%2Ctitle%2Ccreator%2Cyear&output=json&q=%28creator%3A%28zzqx%20plinth%20nothing%29%20OR%20title%3A%28zzqx%20plinth%20nothing%29%29%20AND%20mediatype%3A%28audio%20OR%20etree%29%20AND%20collection%3A%28etree%20OR%20audio_music%20OR%20netlabels%20OR%2078rpm%29&rows=10&sort%5B%5D=downloads%20desc",
+  "status": 200,
+  "body": "search-nothing-10.json"
+ },
+ {
+  "url": "https://archive.org/metadata/MIXG031",
+  "status": 200,
+  "body": "metadata-MIXG031.json"
+ },
+ {
+  "url": "https://archive.org/metadata/BeethovenPianoConcertoNo.5emperormoiseivitch",
+  "status": 200,
+  "body": "metadata-BeethovenPianoConcertoNo.5emperormoiseivitch.json"
+ },
+ {
+  "url": "https://archive.org/metadata/top.09",
+  "status": 200,
+  "body": "metadata-top.09.json"
+ },
+ {
+  "url": "https://archive.org/metadata/MNymanSoloPianoOM11",
+  "status": 200,
+  "body": "metadata-MNymanSoloPianoOM11.json"
+ },
+ {
+  "url": "https://archive.org/metadata/78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a",
+  "status": 200,
+  "body": "metadata-78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a.json"
+ },
+ {
+  "url": "https://archive.org/metadata/plinth-no-such-item-zz",
+  "status": 200,
+  "body": "metadata-gone.json"
+ }
+]

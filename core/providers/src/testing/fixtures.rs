@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::fs;
+use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 
 use plinth_types::CoreError;
+use serde::Deserialize;
 
 use crate::http::{HttpRequest, HttpResponse, HttpTransport};
 
@@ -28,9 +31,32 @@ impl FixtureTransport {
         self
     }
 
+    /// Записанные ответы из каталога: `index.json` — `[{url, status, body}]`,
+    /// тело — файл рядом (`tools/record_ia_fixtures.py`).
+    pub fn recorded(dir: &Path) -> Result<Self, CoreError> {
+        let read =
+            |name: &str| fs::read(dir.join(name)).map_err(|e| CoreError::storage(format!("fixture {name}: {e}")));
+        let index: Vec<Recorded> = serde_json::from_slice(&read("index.json")?)
+            .map_err(|e| CoreError::parse(format!("fixture index: {e}")))?;
+        let mut transport = Self::new();
+        for answer in index {
+            let body = read(&answer.body)?;
+            transport = transport.on(&answer.url, [Ok(HttpResponse { status: answer.status, body })]);
+        }
+        Ok(transport)
+    }
+
     pub fn requests(&self) -> Vec<HttpRequest> {
         self.requests.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Recorded {
+    url: String,
+    status: u16,
+    body: String,
 }
 
 impl HttpTransport for FixtureTransport {
@@ -77,5 +103,21 @@ mod tests {
 
         assert!(matches!(transport.get(&get("https://a.org/y")), Err(CoreError::Network { .. })));
         assert_eq!(transport.requests(), [get("https://a.org/y")]);
+    }
+
+    #[test]
+    fn recorded_answers_come_from_an_index() {
+        let dir = std::env::temp_dir().join(format!("plinth-fixtures-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.json"), "{}").unwrap();
+        std::fs::write(dir.join("index.json"), r#"[{ "url": "https://a.org/m/x", "status": 200, "body": "a.json" }]"#)
+            .unwrap();
+
+        let transport = FixtureTransport::recorded(&dir).unwrap();
+        let broken = FixtureTransport::recorded(&dir.join("missing"));
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert_eq!(transport.get(&get("https://a.org/m/x")), Ok(HttpResponse::ok("{}")));
+        assert!(matches!(broken, Err(CoreError::Storage { .. })));
     }
 }

@@ -1,0 +1,122 @@
+{
+ "metadata": {
+  "identifier": "MIXG031",
+  "title": "[MIXG031] Intoxicated Piano - Vice Versa",
+  "date": "2013-06-25",
+  "year": "2013",
+  "mediatype": "audio"
+ },
+ "files": [
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity.afpk",
+   "source": "derivative",
+   "format": "Columbia Peaks",
+   "original": "01_Intoxicated_Piano_-_Animosity.mp3"
+  },
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "length": "150.77",
+   "album": "Vice Versa",
+   "artist": "Intoxicated Piano",
+   "genre": "Pop",
+   "title": "Animosity",
+   "track": "01",
+   "external-identifier": "urn:acoustid:d48af6b9-bc55-4867-93b2-b336212d7746",
+   "creator": "Intoxicated Piano"
+  },
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "original": "01_Intoxicated_Piano_-_Animosity.mp3",
+   "length": "141.06"
+  },
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "01_Intoxicated_Piano_-_Animosity.mp3"
+  },
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity_esshigh.json.gz",
+   "source": "derivative",
+   "format": "Essentia High GZ",
+   "original": "01_Intoxicated_Piano_-_Animosity_esslow.json.gz"
+  },
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity_esslow.json.gz",
+   "source": "derivative",
+   "format": "Essentia Low GZ",
+   "original": "01_Intoxicated_Piano_-_Animosity.mp3"
+  },
+  {
+   "name": "01_Intoxicated_Piano_-_Animosity_spectrogram.png",
+   "source": "derivative",
+   "format": "Spectrogram",
+   "original": "01_Intoxicated_Piano_-_Animosity.mp3"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams.afpk",
+   "source": "derivative",
+   "format": "Columbia Peaks",
+   "original": "02_Intoxicated_Piano_-_In_My_Dreams.mp3"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "length": "223.02",
+   "album": "Vice Versa",
+   "artist": "Intoxicated Piano",
+   "genre": "Pop",
+   "title": "In My Dreams",
+   "track": "02",
+   "external-identifier": "urn:acoustid:3b3232b0-b934-455d-880c-be949b4466b0",
+   "creator": "Intoxicated Piano"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "original": "02_Intoxicated_Piano_-_In_My_Dreams.mp3",
+   "length": "213.32"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "02_Intoxicated_Piano_-_In_My_Dreams.mp3"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams_esshigh.json.gz",
+   "source": "derivative",
+   "format": "Essentia High GZ",
+   "original": "02_Intoxicated_Piano_-_In_My_Dreams_esslow.json.gz"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams_esslow.json.gz",
+   "source": "derivative",
+   "format": "Essentia Low GZ",
+   "original": "02_Intoxicated_Piano_-_In_My_Dreams.mp3"
+  },
+  {
+   "name": "02_Intoxicated_Piano_-_In_My_Dreams_spectrogram.png",
+   "source": "derivative",
+   "format": "Spectrogram",
+   "original": "02_Intoxicated_Piano_-_In_My_Dreams.mp3"
+  },
+  {
+   "name": "MIXG031.txt",
+   "source": "original",
+   "format": "Text"
+  },
+  {
+   "name": "MIXG031.zip",
+   "source": "original",
+   "format": "ZIP",
+   "filecount": "7"
+  }
+ ]
+}

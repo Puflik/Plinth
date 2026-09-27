@@ -1,0 +1,158 @@
+{
+ "metadata": {
+  "identifier": "MNymanSoloPianoOM11",
+  "title": "Michael Nyman performs solo piano works from the soundtrack to The Piano at Other Minds 11, 2005",
+  "creator": "Michael Nyman",
+  "date": "2005-02-24 00:00:00",
+  "mediatype": "audio"
+ },
+ "files": [
+  {
+   "name": "MNymanSoloPianoOM11.ffp",
+   "source": "derivative",
+   "format": "Flac FingerPrint",
+   "original": "SoloPiano.flac"
+  },
+  {
+   "name": "MNymanSoloPianoOM11.md5",
+   "source": "derivative",
+   "format": "Checksums",
+   "original": "SoloPiano.flac"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_64kb.m3u",
+   "source": "derivative",
+   "format": "64Kbps M3U",
+   "original": "SoloPiano_64kb.mp3",
+   "private": "true"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_64kb_mp3.zip",
+   "source": "derivative",
+   "format": "64Kbps MP3 ZIP",
+   "original": "SoloPiano_64kb.mp3",
+   "length": "532.67",
+   "private": "true",
+   "filecount": "1"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_files.xml",
+   "source": "metadata",
+   "format": "Metadata",
+   "summation": "md5"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_flac.zip",
+   "source": "derivative",
+   "format": "Flac ZIP",
+   "original": "SoloPiano.flac",
+   "private": "true",
+   "filecount": "1"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_meta.xml",
+   "source": "metadata",
+   "format": "Metadata"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_vbr.m3u",
+   "source": "derivative",
+   "format": "VBR M3U",
+   "original": "SoloPiano_vbr.mp3"
+  },
+  {
+   "name": "MNymanSoloPianoOM11_vbr_mp3.zip",
+   "source": "derivative",
+   "format": "VBR ZIP",
+   "original": "SoloPiano_vbr.mp3",
+   "length": "590.25",
+   "private": "true",
+   "filecount": "1"
+  },
+  {
+   "name": "SoloPiano.flac",
+   "source": "derivative",
+   "format": "Flac",
+   "original": "SoloPiano.wav",
+   "length": "532.45",
+   "private": "true"
+  },
+  {
+   "name": "SoloPiano.mp3",
+   "source": "derivative",
+   "creator": "Michael Nyman",
+   "title": "Michael Nyman performs solo pi",
+   "license": "Licensed to the public under http://creativecommons.org/licenses/by-nc-nd/2.0/ verify at http://www.archive.org/audio/audio-details-db.php?collection=other_minds&collectionid=MNymanSoloPianoOM11",
+   "bitrate": "176",
+   "length": "08:52",
+   "format": "VBR MP3",
+   "original": "SoloPiano.wav"
+  },
+  {
+   "name": "SoloPiano.ogg",
+   "source": "derivative",
+   "track": "0",
+   "creator": "Michael Nyman",
+   "title": "Michael Nyman performs solo piano works from The Piano at Other Minds 11, 2005",
+   "original": "SoloPiano.wav",
+   "format": "Ogg Vorbis",
+   "license": "Licensed to the public under http://creativecommons.org/licenses/by-nc-nd/2.0/ verify at http://www.archive.org/audio/audio-details-db.php?collection=other_minds&collectionid=MNymanSoloPianoOM11",
+   "length": "532.45"
+  },
+  {
+   "name": "SoloPiano.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "SoloPiano.flac"
+  },
+  {
+   "name": "SoloPiano.wav",
+   "source": "original",
+   "track": "0",
+   "creator": "Michael Nyman",
+   "title": "Michael Nyman performs solo piano works from The Piano at Other Minds 11, 2005",
+   "format": "WAVE",
+   "license": "Licensed to the public under http://creativecommons.org/licenses/by-nc-nd/2.0/ verify at http://www.archive.org/audio/audio-details-db.php?collection=other_minds&collectionid=MNymanSoloPianoOM11",
+   "length": "532.45",
+   "private": "true"
+  },
+  {
+   "name": "SoloPiano_64kb.mp3",
+   "source": "derivative",
+   "track": "0",
+   "creator": "Michael Nyman",
+   "title": "Michael Nyman performs solo piano works from The Piano at Other Minds 11, 2005",
+   "length": "08:52",
+   "original": "SoloPiano.wav",
+   "bitrate": "64",
+   "format": "64Kbps MP3",
+   "license": "Licensed to the public under http://creativecommons.org/licenses/by-nc-nd/2.0/ verify at http://www.archive.org/audio/audio-details-db.php?collection=other_minds&collectionid=MNymanSoloPianoOM11",
+   "private": "true"
+  },
+  {
+   "name": "SoloPiano_spectrogram.png",
+   "source": "derivative",
+   "format": "Spectrogram",
+   "original": "SoloPiano.wav",
+   "private": "true"
+  },
+  {
+   "name": "SoloPiano_vbr.mp3",
+   "source": "derivative",
+   "track": "0",
+   "creator": "Michael Nyman",
+   "title": "Michael Nyman performs solo piano works from The Piano at Other Minds 11, 2005",
+   "length": "08:52",
+   "original": "SoloPiano.wav",
+   "bitrate": "177",
+   "format": "VBR MP3",
+   "license": "Licensed to the public under http://creativecommons.org/licenses/by-nc-nd/2.0/ verify at http://www.archive.org/audio/audio-details-db.php?collection=other_minds&collectionid=MNymanSoloPianoOM11"
+  },
+  {
+   "name": "SoloPiano_vbr.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "SoloPiano_vbr.mp3"
+  }
+ ]
+}

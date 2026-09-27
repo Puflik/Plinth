@@ -13,5 +13,5 @@ pub use capabilities::Capabilities;
 pub use external_id::ExternalId;
 pub use health::{Health, HealthPolicy};
 pub use search_result::{ResultKind, SearchQuery, SearchResult};
-pub use source_option::{RemoteTrack, SourceOption};
+pub use source_option::{Network, RemoteTrack, SourceOption, playback_order};
 pub use stream::StreamRequest;

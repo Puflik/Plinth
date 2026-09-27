@@ -1,0 +1,105 @@
+{
+ "metadata": {
+  "identifier": "78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a",
+  "title": "\"OH DOCTOR\"",
+  "creator": [
+   "NAOMI BROWN And Her Piano",
+   "H. Pearl"
+  ],
+  "mediatype": "audio"
+ },
+ "files": [
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.afpk",
+   "source": "derivative",
+   "format": "Columbia Peaks",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.flac"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.asr.srt",
+   "source": "derivative",
+   "format": "SubRip",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.asr.vtt"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.asr.vtt",
+   "source": "derivative",
+   "format": "Web Video Text Tracks",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl_intermediate_asr.json"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.flac",
+   "source": "original",
+   "collection-catalog-number": "GBIA0404476A",
+   "matrix_number": "309A",
+   "publisher": "A-Mus-Ing Records",
+   "format": "24bit Flac",
+   "length": "127.45",
+   "title": "\"OH DOCTOR\"",
+   "creator": "H. Pearl",
+   "album": "\"OH DOCTOR\"",
+   "track": "01",
+   "artist": "NAOMI BROWN And Her Piano, H. Pearl",
+   "genre": "Popular Music",
+   "comment": "https://archive.org/details/78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a/%22OH+DOCTOR%22+-+NAOMI+BROWN+And+Her+Piano+-+H.+Pearl.flac\nThis file was digitized at George Blood, L.P. using a 2.8mil truncated conical stylus, and equalized with Turnover: 400.0, Rolloff: -12.0."
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.mp3",
+   "source": "derivative",
+   "creator": "NAOMI BROWN And Her Piano, H. Pearl",
+   "title": "\"OH DOCTOR\"",
+   "track": "01",
+   "album": "\"OH DOCTOR\"",
+   "genre": "Popular Music",
+   "bitrate": "233",
+   "format": "VBR MP3",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.flac",
+   "length": "127.49"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.flac"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl_intermediate_asr.json",
+   "source": "derivative",
+   "format": "Intermediate ASR JSON",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl_whisper_asr.json"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl_spectrogram.png",
+   "source": "derivative",
+   "format": "Spectrogram",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.flac"
+  },
+  {
+   "name": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl_whisper_asr.json",
+   "source": "derivative",
+   "whisper_asr_module_version": "20230415.03",
+   "whisper_version": "20230314",
+   "whisper_model_name": "small.en",
+   "whisper_model_hash": "sha256:f953ad0fd29cacd07d5a9eda5624af0f6bcf2258be67c92b79389873d91e0872",
+   "asr_detected_lang": "en",
+   "asr_detected_lang_conf": "0.85965657234192",
+   "asr_transcribed_lang": "en",
+   "format": "Whisper ASR JSON",
+   "original": "\"OH DOCTOR\" - NAOMI BROWN And Her Piano - H. Pearl.mp3"
+  },
+  {
+   "name": "78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a.jpg",
+   "source": "derivative",
+   "format": "JPEG",
+   "original": "78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a.tif"
+  },
+  {
+   "name": "78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a.tif",
+   "source": "original",
+   "collection-catalog-number": "GBIA0404476A",
+   "matrix_number": "309A",
+   "publisher": "A-Mus-Ing Records",
+   "format": "TIFF"
+  }
+ ]
+}

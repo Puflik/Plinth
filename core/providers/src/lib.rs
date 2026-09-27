@@ -8,7 +8,8 @@
 //! - [`http`] — политика запросов (User-Agent, таймаут, повторы) поверх
 //!   транспорта платформы. Сетевого кода в ядре нет;
 //! - [`config`] — всё изменчивое у провайдера (эндпоинты, параметры,
-//!   заголовки, имена полей) — в данных, а не в коде (E1.3).
+//!   заголовки, имена полей) — в данных, а не в коде (E1.3);
+//! - [`internet_archive`] — первый провайдер (E2).
 //!
 //! Крейт зависит только от `plinth-types`: в каталог ответ переводит ядро.
 
@@ -16,11 +17,14 @@
 
 pub mod config;
 pub mod http;
+pub mod internet_archive;
+mod json;
 pub mod model;
 mod provider;
 mod registry;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
+pub use internet_archive::InternetArchive;
 pub use provider::Provider;
 pub use registry::{ProviderSearch, Registry};

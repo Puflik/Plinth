@@ -1,0 +1,38 @@
+{
+ "response": {
+  "numFound": 4704,
+  "start": 0,
+  "docs": [
+   {
+    "identifier": "MIXG031",
+    "title": "[MIXG031] Intoxicated Piano - Vice Versa",
+    "year": 2013
+   },
+   {
+    "creator": "Benno Moiseivitch, piano",
+    "identifier": "BeethovenPianoConcertoNo.5emperormoiseivitch",
+    "title": "BEETHOVEN: Piano Concerto No. 5 (\"Emperor\")"
+   },
+   {
+    "creator": "top-40.org",
+    "identifier": "top.09",
+    "title": "Steve Reich - Piano Phase (performed by Peter Aidu) [top09]",
+    "year": 2006
+   },
+   {
+    "creator": "Michael Nyman",
+    "identifier": "MNymanSoloPianoOM11",
+    "title": "Michael Nyman performs solo piano works from the soundtrack to The Piano at Other Minds 11, 2005",
+    "year": 2005
+   },
+   {
+    "creator": [
+     "NAOMI BROWN And Her Piano",
+     "H. Pearl"
+    ],
+    "identifier": "78_oh-doctor_naomi-brown-and-her-piano-h-pearl_gbia0404476a",
+    "title": "\"OH DOCTOR\""
+   }
+  ]
+ }
+}

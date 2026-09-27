@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use plinth_types::{CoreError, ProviderId};
+use plinth_types::{Bitrate, CoreError, Format, ProviderId};
 use serde::Deserialize;
 
 use super::template::{Part, Template};
@@ -9,8 +9,9 @@ use crate::http::{HttpPolicy, encode_component, is_header_name, is_header_value}
 use crate::model::HealthPolicy;
 
 /// Конфиг провайдера (E1.3): всё, что у провайдера меняется, — в данных.
-/// Эндпоинты с подстановками, общие заголовки, имена полей ответа,
-/// таймауты и пороги здоровья. Логика разбора остаётся в коде провайдера.
+/// Эндпоинты с подстановками, общие заголовки, имена полей ответа, метки
+/// форматов, строки-образцы (префиксы, значения флагов), таймауты и пороги
+/// здоровья. Логика разбора остаётся в коде провайдера.
 ///
 /// Формат — JSON с номером схемы. Незнакомое поле — ошибка: опечатка во
 /// встроенном конфиге ловится тестом, а новое поле в удалённом конфиге
@@ -25,6 +26,8 @@ pub struct ProviderConfig {
     pub health: HealthPolicy,
     endpoints: BTreeMap<String, Endpoint>,
     fields: BTreeMap<String, String>,
+    formats: BTreeMap<String, (Format, Option<Bitrate>)>,
+    patterns: BTreeMap<String, String>,
 }
 
 /// Эндпоинт: адрес с подстановками в пути и параметры запроса. Параметры
@@ -64,9 +67,14 @@ impl ProviderConfig {
             let shown = if is_header_name(name) { name.as_str() } else { "?" };
             return Err(CoreError::parse(format!("provider config: header {shown} is not allowed")));
         }
-        if raw.fields.iter().any(|(name, path)| name.is_empty() || path.is_empty()) {
-            return Err(CoreError::parse("provider config: empty field name"));
+        if raw.fields.iter().chain(&raw.patterns).any(|(name, value)| name.is_empty() || value.is_empty()) {
+            return Err(CoreError::parse("provider config: empty field or pattern"));
         }
+        let formats = raw
+            .formats
+            .into_iter()
+            .map(|(label, ours)| parse_format(&ours).map(|format| (label, format)))
+            .collect::<Result<_, _>>()?;
         Ok(Self {
             provider,
             headers: raw.headers.into_iter().collect(),
@@ -74,6 +82,8 @@ impl ProviderConfig {
             health: raw.health.policy()?,
             endpoints,
             fields: raw.fields,
+            formats,
+            patterns: raw.patterns,
         })
     }
 
@@ -89,6 +99,42 @@ impl ProviderConfig {
             .map(String::as_str)
             .ok_or_else(|| CoreError::internal(format!("provider config: no field {name}")))
     }
+
+    /// Наш формат по метке провайдера (`"VBR MP3"`, `"64Kbps MP3"`) и
+    /// битрейт, если метка его называет. Незнакомая метка — не звук или звук,
+    /// который мы не играем (Shorten).
+    pub fn format(&self, label: &str) -> Option<(Format, Option<Bitrate>)> {
+        self.formats.get(label).copied()
+    }
+
+    /// Строка-образец: префикс идентификатора, значение флага.
+    pub fn pattern(&self, name: &str) -> Result<&str, CoreError> {
+        self.patterns
+            .get(name)
+            .map(String::as_str)
+            .ok_or_else(|| CoreError::internal(format!("provider config: no pattern {name}")))
+    }
+}
+
+/// `"flac"`, `"mp3"`, `"mp3@64"` — формат и, после `@`, битрейт в кбит/с.
+fn parse_format(ours: &str) -> Result<(Format, Option<Bitrate>), CoreError> {
+    let broken = || CoreError::parse(format!("provider config: format {ours:?}"));
+    let (name, kbps) = match ours.split_once('@') {
+        Some((name, kbps)) => (name, Some(kbps.parse::<u32>().ok().filter(|k| *k > 0).ok_or_else(broken)?)),
+        None => (ours, None),
+    };
+    let format = match name {
+        "flac" => Format::Flac,
+        "alac" => Format::Alac,
+        "wav" => Format::Wav,
+        "aiff" => Format::Aiff,
+        "mp3" => Format::Mp3,
+        "aac" => Format::Aac,
+        "vorbis" => Format::Vorbis,
+        "opus" => Format::Opus,
+        _ => return Err(broken()),
+    };
+    Ok((format, kbps.map(Bitrate::kbps)))
 }
 
 impl Endpoint {
@@ -144,6 +190,10 @@ struct Raw {
     endpoints: BTreeMap<String, RawEndpoint>,
     #[serde(default)]
     fields: BTreeMap<String, String>,
+    #[serde(default)]
+    formats: BTreeMap<String, String>,
+    #[serde(default)]
+    patterns: BTreeMap<String, String>,
     #[serde(default)]
     http: RawHttp,
     #[serde(default)]
@@ -221,7 +271,7 @@ fn in_range<T: PartialOrd + std::fmt::Display>(
 mod tests {
     use std::time::Duration;
 
-    use plinth_types::{CoreError, ProviderId};
+    use plinth_types::{Bitrate, CoreError, Format, ProviderId};
 
     use super::ProviderConfig;
     use crate::http::HttpPolicy;
@@ -239,6 +289,8 @@ mod tests {
             "metadata": { "url": "https://archive.org/metadata/{id}" }
         },
         "fields": { "title": "title", "artist": "creator" },
+        "formats": { "Flac": "flac", "VBR MP3": "mp3", "64Kbps MP3": "mp3@64" },
+        "patterns": { "mbid": "urn:mb_recording_id:" },
         "http": { "timeout_ms": 10000, "attempts": 2, "backoff_ms": 250 },
         "health": { "down_after": 4, "down_for_s": 120 }
     }"#;
@@ -355,5 +407,25 @@ mod tests {
         assert!(matches!(config.endpoint("charts"), Err(CoreError::Internal { .. })));
         assert!(matches!(config.field("year"), Err(CoreError::Internal { .. })));
         assert!(matches!(config.endpoint("metadata").unwrap().url(&[]), Err(CoreError::Internal { .. })));
+    }
+
+    #[test]
+    fn formats_and_patterns_come_from_the_config() {
+        let config = ProviderConfig::parse(FULL).unwrap();
+
+        assert_eq!(config.format("Flac"), Some((Format::Flac, None)));
+        assert_eq!(config.format("VBR MP3"), Some((Format::Mp3, None)));
+        assert_eq!(config.format("64Kbps MP3"), Some((Format::Mp3, Some(Bitrate::kbps(64)))));
+        assert_eq!(config.format("Shorten"), None);
+        assert_eq!(config.pattern("mbid"), Ok("urn:mb_recording_id:"));
+        assert!(matches!(config.pattern("isrc"), Err(CoreError::Internal { .. })));
+    }
+
+    #[test]
+    fn unknown_formats_and_empty_patterns_are_refused() {
+        for bad in ["mp3@", "mp3@0", "mp3@x", "FLAC", "shorten"] {
+            parse_error(&FULL.replace(r#""64Kbps MP3": "mp3@64""#, &format!(r#""64Kbps MP3": "{bad}""#)));
+        }
+        parse_error(&FULL.replace(r#""urn:mb_recording_id:""#, r#""""#));
     }
 }

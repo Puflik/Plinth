@@ -178,3 +178,37 @@ fn each_flaw_breaks_its_rule() {
         assert_eq!(broken_rules(&working, &offline), broken, "{flaw:?}");
     }
 }
+
+/// Провайдер, который строит адрес потока сам, без сети (Internet Archive):
+/// на пропавший источник и без сети отдаёт адрес — проверит плеер.
+struct LocalStream(FakeProvider);
+
+impl Provider for LocalStream {
+    fn id(&self) -> &ProviderId {
+        self.0.id()
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        self.0.capabilities()
+    }
+
+    fn search(&self, query: &SearchQuery) -> Result<Vec<SearchResult>, CoreError> {
+        self.0.search(query)
+    }
+
+    fn resolve(&self, item: &ExternalId) -> Result<Vec<RemoteTrack>, CoreError> {
+        self.0.resolve(item)
+    }
+
+    fn stream_url(&self, source: &ExternalId) -> Result<StreamRequest, CoreError> {
+        StreamRequest::new(
+            &format!("https://fake.test/local/{}", crate::http::encode_component(source.as_str())),
+            Vec::new(),
+        )
+    }
+}
+
+#[test]
+fn stream_address_built_without_network_keeps_the_contract() {
+    assert_eq!(broken_rules(&LocalStream(fake()), &LocalStream(offline())), Vec::<&str>::new());
+}

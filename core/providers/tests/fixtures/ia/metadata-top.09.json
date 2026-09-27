@@ -1,0 +1,38 @@
+{
+ "metadata": {
+  "identifier": "top.09",
+  "title": "Steve Reich - Piano Phase (performed by Peter Aidu) [top09]",
+  "creator": "top-40.org",
+  "date": "2006-12-18",
+  "year": "2006",
+  "mediatype": "audio"
+ },
+ "files": [
+  {
+   "name": "__ia_thumb.jpg",
+   "source": "original",
+   "format": "Item Tile",
+   "rotation": "0"
+  },
+  {
+   "name": "top.09.jpg",
+   "source": "original",
+   "format": "JPEG",
+   "title": "top.09",
+   "rotation": "0"
+  },
+  {
+   "name": "top.09_Steve_Reich_Piano_Phase_performed_by_Peter_Aidu.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "title": "Piano Phase",
+   "creator": "Steve Reich",
+   "album": "Performed By Peter Aidu",
+   "track": "01",
+   "length": "1311.84",
+   "genre": "Top 40",
+   "artist": "Steve Reich",
+   "external-identifier": "urn:acoustid:6da84724-b9b1-4db6-bf0c-cbcdca0c9faa"
+  }
+ ]
+}

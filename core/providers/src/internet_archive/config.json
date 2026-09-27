@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "provider": "archive.org",
+  "headers": { "Accept": "application/json" },
+  "endpoints": {
+    "search": {
+      "url": "https://archive.org/advancedsearch.php",
+      "query": {
+        "q": "(creator:({query}) OR title:({query})) AND mediatype:(audio OR etree) AND collection:(etree OR audio_music OR netlabels OR 78rpm)",
+        "fl[]": "identifier,title,creator,year",
+        "sort[]": "downloads desc",
+        "rows": "{limit}",
+        "output": "json"
+      }
+    },
+    "metadata": { "url": "https://archive.org/metadata/{id}" },
+    "download": { "url": "https://archive.org/download/{id}/{+file}" }
+  },
+  "fields": {
+    "search_docs": "response.docs",
+    "identifier": "identifier",
+    "title": "title",
+    "creator": "creator",
+    "year": "year",
+    "date": "date",
+    "item": "metadata",
+    "files": "files",
+    "file_name": "name",
+    "file_format": "format",
+    "file_original": "original",
+    "file_title": "title",
+    "file_artist": "artist|creator",
+    "file_album": "album",
+    "file_track": "track",
+    "file_length": "length",
+    "file_bitrate": "bitrate",
+    "file_private": "private",
+    "file_ids": "external-identifier"
+  },
+  "formats": {
+    "Flac": "flac",
+    "24bit Flac": "flac",
+    "Apple Lossless Audio": "alac",
+    "WAVE": "wav",
+    "AIFF": "aiff",
+    "VBR MP3": "mp3",
+    "320Kbps MP3": "mp3@320",
+    "256Kbps MP3": "mp3@256",
+    "192Kbps MP3": "mp3@192",
+    "160Kbps MP3": "mp3@160",
+    "128Kbps MP3": "mp3@128",
+    "64Kbps MP3": "mp3@64",
+    "Ogg Vorbis": "vorbis",
+    "Opus": "opus"
+  },
+  "patterns": {
+    "private": "true",
+    "mbid": "urn:mb_recording_id:"
+  },
+  "http": { "timeout_ms": 15000, "attempts": 3, "backoff_ms": 500 },
+  "health": { "down_after": 3, "down_for_s": 300 }
+}

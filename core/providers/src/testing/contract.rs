@@ -121,15 +121,20 @@ pub fn sources_stream(provider: &dyn Provider, case: &ContractCase) -> Verdict {
 }
 
 /// Чего нет — `Unavailable`: реестр не считает это отказом провайдера.
+/// Адрес потока провайдер может строить сам, не спрашивая сеть (Internet
+/// Archive): тогда пропавший источник даёт адрес, а 404 увидит плеер.
 pub fn gone_is_unavailable(provider: &dyn Provider, case: &ContractCase) -> Verdict {
     let gone = external(&case.gone)?;
     let resolved = provider.resolve(&gone).map(|tracks| tracks.len());
     expect(matches!(resolved, Err(CoreError::Unavailable { .. })), || format!("resolve of a gone item: {resolved:?}"))?;
     let streamed = provider.stream_url(&gone).map(|_| ());
-    expect(matches!(streamed, Err(CoreError::Unavailable { .. })), || format!("stream of a gone source: {streamed:?}"))
+    expect(matches!(streamed, Ok(()) | Err(CoreError::Unavailable { .. })), || {
+        format!("stream of a gone source: {streamed:?}")
+    })
 }
 
-/// Без сети — `Network` на всём, кроме пустого поиска.
+/// Без сети — `Network` в поиске и раскрытии; пустой поиск — пустой список.
+/// Адрес потока без сети — `Network` или адрес, построенный без запроса.
 pub fn offline_is_a_network_error(offline: &dyn Provider, case: &ContractCase) -> Verdict {
     let gone = external(&case.gone)?;
     let searched = offline.search(&SearchQuery::new(&case.finds, LIMIT)).map(|found| found.len());
@@ -137,7 +142,9 @@ pub fn offline_is_a_network_error(offline: &dyn Provider, case: &ContractCase) -
     let resolved = offline.resolve(&gone).map(|tracks| tracks.len());
     expect(matches!(resolved, Err(CoreError::Network { .. })), || format!("offline resolve: {resolved:?}"))?;
     let streamed = offline.stream_url(&gone).map(|_| ());
-    expect(matches!(streamed, Err(CoreError::Network { .. })), || format!("offline stream: {streamed:?}"))?;
+    expect(matches!(streamed, Ok(()) | Err(CoreError::Network { .. } | CoreError::Unavailable { .. })), || {
+        format!("offline stream: {streamed:?}")
+    })?;
     blank_query_finds_nothing(offline)
 }
 

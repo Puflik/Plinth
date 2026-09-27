@@ -1,0 +1,84 @@
+{
+ "metadata": {
+  "identifier": "BeethovenPianoConcertoNo.5emperormoiseivitch",
+  "title": "BEETHOVEN: Piano Concerto No. 5 (\"Emperor\")",
+  "creator": "Benno Moiseivitch, piano",
+  "mediatype": "audio"
+ },
+ "files": [
+  {
+   "name": "1.I.Allegro.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "title": "1. I. Allegro",
+   "track": "01",
+   "length": "374491.55",
+   "genre": "Other",
+   "external-identifier": "urn:acoustid:9e3dff34-1ba3-41d9-910c-d1b83ed3bab9",
+   "external-identifier-match-date": "acoustid:2019-04-02T08:51:44Z"
+  },
+  {
+   "name": "1.I.Allegro.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "original": "1.I.Allegro.mp3",
+   "length": "1209.05"
+  },
+  {
+   "name": "1.I.Allegro.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "1.I.Allegro.mp3"
+  },
+  {
+   "name": "2.Ii.AdagioIii.Rondo.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "title": "2. II. Adagio; III. Rondo",
+   "track": "02",
+   "length": "307971.29",
+   "genre": "Other",
+   "external-identifier": "urn:acoustid:5727301a-64dd-4437-a444-8cbdc66e0c00",
+   "external-identifier-match-date": "acoustid:2019-04-02T08:51:44Z"
+  },
+  {
+   "name": "2.Ii.AdagioIii.Rondo.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "original": "2.Ii.AdagioIii.Rondo.mp3",
+   "length": "1046.15"
+  },
+  {
+   "name": "2.Ii.AdagioIii.Rondo.png",
+   "source": "derivative",
+   "format": "PNG",
+   "original": "2.Ii.AdagioIii.Rondo.mp3"
+  },
+  {
+   "name": "BeethovenPianoConcertoNo.5emperormoiseivitch_archive.torrent",
+   "source": "metadata",
+   "btih": "27d11f3f38c8569b30fe6ac3b699a7d0bb1e29b3",
+   "format": "Archive BitTorrent"
+  },
+  {
+   "name": "BeethovenPianoConcertoNo.5emperormoiseivitch_files.xml",
+   "source": "metadata",
+   "format": "Metadata",
+   "summation": "md5"
+  },
+  {
+   "name": "BeethovenPianoConcertoNo.5emperormoiseivitch_vbr.m3u",
+   "source": "derivative",
+   "format": "VBR M3U",
+   "original": "2.Ii.AdagioIii.Rondo.mp3"
+  },
+  {
+   "name": "BeethovenPianoConcertoNo.5emperormoiseivitch_vbr_mp3.zip",
+   "source": "derivative",
+   "format": "VBR ZIP",
+   "original": "2.Ii.AdagioIii.Rondo.mp3",
+   "length": "8708.63",
+   "filecount": "2"
+  }
+ ]
+}

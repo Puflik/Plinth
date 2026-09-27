@@ -3,8 +3,9 @@ use plinth_types::CoreError;
 use crate::http::encode_component;
 
 /// Строка конфига с подстановками `{name}` (имена — строчная латиница и
-/// `_`). Разбирается при загрузке конфига: сломанный шаблон — ошибка
-/// конфига, а не запроса.
+/// `_`) и `{+name}` — путь, в котором `/` остаётся разделителем (RFC 6570:
+/// файл Internet Archive в подкаталоге; `%2F` там — 404). Разбирается при
+/// загрузке конфига: сломанный шаблон — ошибка конфига, а не запроса.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Template(Vec<Part>);
 
@@ -12,6 +13,8 @@ pub(super) struct Template(Vec<Part>);
 pub(super) enum Part {
     Text(String),
     Var(String),
+    /// `{+name}`.
+    Path(String),
 }
 
 impl Template {
@@ -23,14 +26,15 @@ impl Template {
                 return Err(CoreError::parse("config template: '}' without '{'"));
             }
             let close = rest[open..].find('}').ok_or_else(|| CoreError::parse("config template: '{' without '}'"))?;
-            let name = &rest[open + 1..open + close];
+            let inner = &rest[open + 1..open + close];
+            let (name, path) = inner.strip_prefix('+').map_or((inner, false), |name| (name, true));
             if name.is_empty() || !name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
                 return Err(CoreError::parse(format!("config template: bad name {name:?}")));
             }
             if open > 0 {
                 parts.push(Part::Text(rest[..open].to_owned()));
             }
-            parts.push(Part::Var(name.to_owned()));
+            parts.push(if path { Part::Path(name.to_owned()) } else { Part::Var(name.to_owned()) });
             rest = &rest[open + close + 1..];
         }
         if !rest.is_empty() {
@@ -43,29 +47,36 @@ impl Template {
         &self.0
     }
 
-    /// Подстановки кодируются как часть адреса, текст шаблона — как есть:
-    /// для пути.
+    /// Подстановки кодируются как часть адреса (`{+name}` — по сегментам),
+    /// текст шаблона — как есть: для пути.
     pub(super) fn render_encoded(&self, vars: &[(&str, &str)]) -> Result<String, CoreError> {
-        self.render(vars, encode_component)
+        self.render(vars, true)
     }
 
     /// Всё как есть: значение параметра кодируется потом целиком.
     pub(super) fn render_raw(&self, vars: &[(&str, &str)]) -> Result<String, CoreError> {
-        self.render(vars, str::to_owned)
+        self.render(vars, false)
     }
 
-    fn render(&self, vars: &[(&str, &str)], value: impl Fn(&str) -> String) -> Result<String, CoreError> {
+    fn render(&self, vars: &[(&str, &str)], encode: bool) -> Result<String, CoreError> {
         let mut out = String::new();
         for part in &self.0 {
-            match part {
-                Part::Text(text) => out.push_str(text),
-                Part::Var(name) => {
-                    let (_, found) = vars
-                        .iter()
-                        .find(|(var, _)| var == name)
-                        .ok_or_else(|| CoreError::internal(format!("config template: no value for {{{name}}}")))?;
-                    out.push_str(&value(found));
+            let (name, path) = match part {
+                Part::Text(text) => {
+                    out.push_str(text);
+                    continue;
                 }
+                Part::Var(name) => (name, false),
+                Part::Path(name) => (name, true),
+            };
+            let (_, value) = vars
+                .iter()
+                .find(|(var, _)| var == name)
+                .ok_or_else(|| CoreError::internal(format!("config template: no value for {{{name}}}")))?;
+            match (encode, path) {
+                (false, _) => out.push_str(value),
+                (true, false) => out.push_str(&encode_component(value)),
+                (true, true) => out.push_str(&value.split('/').map(encode_component).collect::<Vec<_>>().join("/")),
             }
         }
         Ok(out)
@@ -96,7 +107,7 @@ mod tests {
 
     #[test]
     fn broken_templates_fail_to_load() {
-        for bad in ["a{id", "a}b", "{}", "{Id}", "{id-2}", "{a{b}}"] {
+        for bad in ["a{id", "a}b", "{}", "{+}", "{++a}", "{Id}", "{id-2}", "{a{b}}"] {
             assert!(matches!(Template::parse(bad), Err(CoreError::Parse { .. })), "{bad}");
         }
     }
@@ -115,5 +126,20 @@ mod tests {
         let template = Template::parse("https://a.org/m/{id}").unwrap();
 
         assert!(matches!(template.render_encoded(&[("query", "x")]), Err(CoreError::Internal { .. })));
+    }
+
+    #[test]
+    fn path_keeps_slashes_and_encodes_segments() {
+        let template = Template::parse("https://archive.org/download/{id}/{+file}").unwrap();
+
+        assert_eq!(template.parts()[3], Part::Path("file".to_owned()));
+        assert_eq!(
+            template.render_encoded(&[("id", "gd/77"), ("file", "disc 1/01 Кино.mp3")]).unwrap(),
+            "https://archive.org/download/gd%2F77/disc%201/01%20%D0%9A%D0%B8%D0%BD%D0%BE.mp3"
+        );
+        assert_eq!(
+            template.render_raw(&[("id", "x"), ("file", "a/b c")]).unwrap(),
+            "https://archive.org/download/x/a/b c"
+        );
     }
 }
