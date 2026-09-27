@@ -62,6 +62,18 @@ class CoreJournal internal constructor(
 
     fun removeFromPlaylist(entry: PlaylistEntryId) = write { it.removeFromPlaylist(entry.value) }
 
+    /**
+     * Плейлист [name] из файла M3U, M3U8 или PLS (D4c): [content] — байты
+     * файла, кодировку ядро узнаёт само; [folder] — папка файла, от неё
+     * считаются относительные пути. Ненайденные строки пропускаются и
+     * считаются; не нашлось ничего — плейлиста нет.
+     */
+    fun importPlaylist(
+        name: String,
+        content: ByteArray,
+        folder: String?,
+    ): PlaylistImport = write { it.importPlaylist(name, content, folder).toApp() }
+
     /** Записывает прослушивание; засчитать ли его в счётчик, решает ядро. */
     fun recordPlay(play: NewPlay): PlayEventId = write { PlayEventId(it.recordPlay(play.toRust())) }
 

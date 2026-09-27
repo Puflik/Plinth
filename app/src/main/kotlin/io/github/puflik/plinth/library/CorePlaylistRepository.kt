@@ -3,6 +3,7 @@ package io.github.puflik.plinth.library
 import io.github.puflik.plinth.ffi.Playlist
 import io.github.puflik.plinth.ffi.PlaylistEntryId
 import io.github.puflik.plinth.ffi.PlaylistId
+import io.github.puflik.plinth.ffi.PlaylistImport
 import io.github.puflik.plinth.ffi.PlaylistItem
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.ffi.TrackId
@@ -76,6 +77,15 @@ class CorePlaylistRepository(
     override suspend fun remove(entry: PlaylistEntryId) {
         attempt(io, TAG, "playlist removal") { core.journal.removeFromPlaylist(entry) }
     }
+
+    override suspend fun import(
+        name: String,
+        content: ByteArray,
+        folder: String?,
+    ): PlaylistImport? = attempt(io, TAG, "playlist import") { core.journal.importPlaylist(name, content, folder) }
+
+    override suspend fun export(playlist: PlaylistId): String? =
+        attempt(io, TAG, "playlist export") { core.library.exportPlaylist(playlist) }
 
     /** Видимые треки — те же, что покажет экран: строки без файла отсеиваются и здесь. */
     private fun visible(playlist: PlaylistId): List<PlaylistTrack> =

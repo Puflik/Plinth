@@ -1,11 +1,12 @@
 //! Чтение библиотеки (A3.1, D3): списки экранов одним вызовом, строки готовы
-//! к показу. Видны только треки, которые можно сыграть; названия — в
+//! к показу, экспорт плейлиста (D4c). Видны только треки, которые можно сыграть; названия — в
 //! естественном порядке и без ведущего артикля (`plinth_library::sort`).
 
 use std::path::Path;
 
 use plinth_library::db::query::{AlbumRow, AlbumSort, ArtistRow, PlaylistRow, TrackRow, TrackSort};
 use plinth_library::model::TrackUserData;
+use plinth_library::playlist::write;
 use plinth_library::scan::{Artwork, artwork};
 use plinth_library::sort::sort_key;
 use plinth_types::{AlbumId, CoreError, PlaylistId, TrackId};
@@ -69,6 +70,22 @@ impl Core {
     /// `move_in_playlist`.
     pub fn playlist_tracks(&self, playlist: PlaylistId) -> Result<Vec<PlaylistRow>, CoreError> {
         panic::guard(|| self.with(|state| state.db.playlist_tracks(playlist)))
+    }
+
+    /// Плейлист в M3U8 (D4c): UTF-8, `#EXTINF` с длительностью и «исполнитель
+    /// - название», абсолютные пути видимых треков в его порядке. Нет
+    /// плейлиста — `Unavailable`.
+    pub fn export_playlist(&self, playlist: PlaylistId) -> Result<String, CoreError> {
+        panic::guard(|| {
+            self.with(|state| {
+                if state.db.playlist(playlist)?.is_none() {
+                    return Err(CoreError::unavailable("core: no such playlist"));
+                }
+                let rows: Vec<TrackRow> =
+                    state.db.playlist_tracks(playlist)?.into_iter().map(|row| row.track).collect();
+                Ok(write(&rows))
+            })
+        })
     }
 
     /// Трек библиотеки, который играет из файла `path`; файла в библиотеке нет — `None`.
@@ -221,6 +238,43 @@ mod tests {
             output: plinth_library::model::OutputDevice::Unknown,
             previous_track: None,
         }
+    }
+
+    /// Экспорт — M3U8 видимых треков в порядке плейлиста; файл читается
+    /// импортом обратно в те же треки.
+    #[test]
+    fn a_playlist_exports_as_m3u8_and_imports_back() {
+        let (_data, _volume, core) = scanned();
+        let find = |title: &str| core.tracks(TrackSort::Title, Some(title.to_owned())).unwrap().remove(0);
+        let (tishina, flac, untagged) = (find("тишина"), find("FLAC Silence"), find("plinth-untagged"));
+        let mix = core.create_playlist("Mix".to_owned()).unwrap();
+        for track in [&tishina, &flac, &untagged, &tishina] {
+            core.add_to_playlist(mix.id, track.id, None).unwrap();
+        }
+        core.hide_for_test(vec![flac.uri.clone().unwrap()]).unwrap();
+
+        let text = core.export_playlist(mix.id).unwrap();
+        let back = core.import_playlist("Back".to_owned(), text.clone().into_bytes(), None).unwrap();
+
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[0], "#EXTM3U");
+        assert!(lines[1].starts_with("#EXTINF:") && lines[1].ends_with(",Plinth - Тишина"), "{text}");
+        assert_eq!(lines[2], tishina.uri.as_deref().unwrap());
+        assert_eq!(lines.len(), 1 + 2 * 3, "{text}");
+        let items: Vec<_> =
+            core.playlist_items(back.playlist.unwrap().id).unwrap().into_iter().map(|item| item.track).collect();
+        assert_eq!(items, [tishina.id, untagged.id, tishina.id]);
+        assert_eq!(back.not_found, 0);
+    }
+
+    #[test]
+    fn a_missing_playlist_does_not_export() {
+        let dir = Scratch::new();
+        let core = Core::open(dir.path()).unwrap();
+
+        let result = core.export_playlist(plinth_types::PlaylistId::new());
+
+        assert!(matches!(result, Err(plinth_types::CoreError::Unavailable { .. })), "{result:?}");
     }
 
     #[test]

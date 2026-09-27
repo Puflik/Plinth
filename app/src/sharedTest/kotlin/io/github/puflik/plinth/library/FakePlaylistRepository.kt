@@ -3,11 +3,13 @@ package io.github.puflik.plinth.library
 import io.github.puflik.plinth.ffi.Playlist
 import io.github.puflik.plinth.ffi.PlaylistEntryId
 import io.github.puflik.plinth.ffi.PlaylistId
+import io.github.puflik.plinth.ffi.PlaylistImport
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.model.PlaylistTrack
 import io.github.puflik.plinth.library.sort.CodePointOrder
 import io.github.puflik.plinth.library.sort.SortKeys
+import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -95,6 +97,24 @@ class FakePlaylistRepository(
         stored.update { all ->
             all.mapValues { (_, playlist) -> playlist.copy(entries = playlist.entries.filterNot { it.id == entry }) }
         }
+
+    override suspend fun import(
+        name: String,
+        content: ByteArray,
+        folder: String?,
+    ): PlaylistImport {
+        val present = library.tracks(TrackSort.TITLE).first()
+        val lines = FakeM3u.read(content)
+        val found = lines.mapNotNull { FakeM3u.find(it, present, folder) }
+        val notFound = lines.size - found.size
+        if (found.isEmpty()) return PlaylistImport(null, 0, notFound)
+        val id = create(name)
+        for (track in found) add(id, track.id)
+        return PlaylistImport(stored.value.getValue(id).playlist, found.size, notFound)
+    }
+
+    override suspend fun export(playlist: PlaylistId): String? =
+        if (playlist in stored.value) FakeM3u.write(tracks(playlist).first().map(PlaylistTrack::track)) else null
 
     /** Меняет [playlist], если он есть; удалённый правка не воскрешает. */
     private fun edit(

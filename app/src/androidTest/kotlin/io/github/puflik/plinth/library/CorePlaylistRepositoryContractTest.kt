@@ -33,15 +33,23 @@ class CorePlaylistRepositoryContractTest : PlaylistRepositoryContractTest() {
         dataDir.deleteRecursively()
     }
 
-    override suspend fun seed(
+    override suspend fun seedFiles(
         repository: PlaylistRepository,
-        paths: List<String>,
+        files: List<TaggedFile>,
     ): List<TrackId> =
         withContext(Dispatchers.IO) {
             core.seedForTest(
-                paths.map { CoreTestFile(uri = it, folder = "Music/", title = it.substringAfterLast('/')) },
+                files.map {
+                    CoreTestFile(
+                        uri = it.path,
+                        folder = it.folder,
+                        title = it.title ?: it.path.substringAfterLast('/'),
+                        artist = it.artist,
+                        duration = it.duration,
+                    )
+                },
             )
-            paths.map { checkNotNull(core.library.trackAt(it)) { "no track at $it" } }
+            files.map { checkNotNull(core.library.trackAt(it.path)) { "no track at ${it.path}" } }
         }
 
     override suspend fun hide(

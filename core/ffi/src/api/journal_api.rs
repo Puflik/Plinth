@@ -2,15 +2,17 @@
 //! синхронизируемые настройки. Каждое — операция журнала, в базу она
 //! попадает проекцией (ADR 0007): мимо журнала ядро пользовательское не пишет.
 
+use plinth_library::db::query::TrackSort;
 use plinth_library::model::{
     PlayEvent, Playlist, PlaylistEntry, PlaylistKind, Rating, Setting, SyncedSettings, VersionPreference, position_for,
 };
-use plinth_sync::journal::Op;
-use plinth_types::{CoreError, PlayEventId, PlaylistEntryId, PlaylistId, Timestamp, TrackId};
+use plinth_library::playlist::{match_lines, read};
+use plinth_sync::journal::{Op, record_and_project_all};
+use plinth_types::{CoreError, PlayEventId, PlaylistEntryId, PlaylistId, Position, Timestamp, TrackId};
 
 use crate::panic;
 use crate::session::Core;
-use crate::types::{NewPlay, PlaylistItem};
+use crate::types::{NewPlay, PlaylistImport, PlaylistItem};
 
 #[uniffi::export]
 impl Core {
@@ -105,6 +107,49 @@ impl Core {
         })
     }
 
+    /// Плейлист `name` из файла M3U, M3U8 или PLS (D4c). `content` — байты
+    /// файла, кодировку ядро узнаёт само; `folder` — папка файла, от неё
+    /// считаются относительные пути. Строки ищутся среди видимых треков:
+    /// абсолютный путь, путь от папки, «исполнитель - название»; ненайденные
+    /// пропускаются и считаются. Плейлист и записи ложатся в журнал одной
+    /// правкой; не нашлось ничего — плейлиста нет.
+    pub fn import_playlist(
+        &self,
+        name: String,
+        content: Vec<u8>,
+        folder: Option<String>,
+    ) -> Result<PlaylistImport, CoreError> {
+        panic::guard(|| {
+            let lines = read(&content);
+            self.with(|state| {
+                let rows = state.db.track_list(TrackSort::Title, None)?;
+                let matched = match_lines(&lines, &rows, folder.as_deref());
+                let added = u32::try_from(matched.tracks.len()).unwrap_or(u32::MAX);
+                if matched.tracks.is_empty() {
+                    return Ok(PlaylistImport { playlist: None, added, not_found: matched.not_found });
+                }
+                let now = Timestamp::now();
+                let playlist = Playlist { id: PlaylistId::new(), name, kind: PlaylistKind::Manual, created_at: now };
+                let mut ops = vec![Op::CreatePlaylist(playlist.clone())];
+                let mut previous: Option<Position> = None;
+                for track in matched.tracks {
+                    let position = previous.as_ref().map_or_else(Position::first, Position::after);
+                    previous = Some(position.clone());
+                    let entry = PlaylistEntry {
+                        id: PlaylistEntryId::new(),
+                        playlist: playlist.id,
+                        track,
+                        position,
+                        added_at: now,
+                    };
+                    ops.push(Op::AddEntry(entry));
+                }
+                record_and_project_all(&mut state.journal, &state.db, &ops)?;
+                Ok(PlaylistImport { playlist: Some(playlist), added, not_found: matched.not_found })
+            })
+        })
+    }
+
     pub fn remove_from_playlist(&self, entry: PlaylistEntryId) -> Result<(), CoreError> {
         self.record(&Op::RemoveEntry { entry })
     }
@@ -163,6 +208,88 @@ mod tests {
             output: OutputDevice::Headphones,
             previous_track: None,
         }
+    }
+
+    fn file(uri: &str, artist: Option<&str>, title: &str) -> crate::api::test_api::TestFile {
+        crate::api::test_api::TestFile {
+            uri: uri.to_owned(),
+            folder: "Music/".to_owned(),
+            title: Some(title.to_owned()),
+            artist: artist.map(str::to_owned),
+            album: None,
+            album_artist: None,
+            disc: None,
+            number: None,
+            duration_ms: None,
+        }
+    }
+
+    const QUEEN: &str = "/storage/emulated/0/Music/Queen/Bohemian Rhapsody.mp3";
+    const KINO: &str = "/storage/emulated/0/Music/Кино/Кукушка.mp3";
+    const INTRO: &str = "/storage/emulated/0/Music/intro.mp3";
+
+    /// Queen и Кино с исполнителями, «Intro» — без.
+    fn seeded(dir: &Scratch) -> std::sync::Arc<Core> {
+        let core = core(dir);
+        core.seed_for_test(vec![
+            file(QUEEN, Some("Queen"), "Bohemian Rhapsody"),
+            file(KINO, Some("Кино"), "Кукушка"),
+            file(INTRO, None, "Intro"),
+        ])
+        .unwrap();
+        core
+    }
+
+    fn at(core: &Core, path: &str) -> TrackId {
+        core.track_at(path.to_owned()).unwrap().unwrap()
+    }
+
+    /// Строки файла находятся по пути, по пути от папки и по названию;
+    /// ненайденные пропускаются и считаются.
+    #[test]
+    fn a_playlist_file_becomes_a_playlist_of_what_is_found() {
+        let dir = Scratch::new();
+        let core = seeded(&dir);
+        let text = format!(
+            "#EXTM3U\r\n{QUEEN}\r\nКино/Кукушка.mp3\r\n#EXTINF:5,Nobody - Nothing\r\n/gone.mp3\r\n\
+             #EXTINF:5,Intro\r\nhttp://radio/intro\r\n{QUEEN}\r\n"
+        );
+
+        let report = core
+            .import_playlist("Road".to_owned(), text.into_bytes(), Some("/storage/emulated/0/Music".to_owned()))
+            .unwrap();
+
+        let playlist = report.playlist.unwrap();
+        assert_eq!((playlist.name.as_str(), report.added, report.not_found), ("Road", 4, 1));
+        assert_eq!(
+            tracks_of(&core, playlist.id),
+            [at(&core, QUEEN), at(&core, KINO), at(&core, INTRO), at(&core, QUEEN)]
+        );
+        assert_eq!(core.playlists().unwrap(), [playlist]);
+    }
+
+    /// Не нашлось ни одной строки — пустого плейлиста не будет; пропавший файл не находится.
+    #[test]
+    fn nothing_found_makes_no_playlist() {
+        let dir = Scratch::new();
+        let core = seeded(&dir);
+        core.hide_for_test(vec![KINO.to_owned()]).unwrap();
+
+        let report = core
+            .import_playlist(
+                "Gone".to_owned(),
+                format!(
+                    "{KINO}
+/nowhere.mp3
+"
+                )
+                .into_bytes(),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!((report.playlist, report.added, report.not_found), (None, 0, 2));
+        assert!(core.playlists().unwrap().is_empty());
     }
 
     #[test]

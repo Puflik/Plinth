@@ -196,6 +196,12 @@
     <string name="playlist_remove">Remove from playlist</string>
     <string name="playlist_pick_title">Add to playlist</string>
     <string name="playlist_added">Added to “%1$s”</string>
+    <string name="playlist_import">Import playlist</string>
+    <string name="playlist_imported">Added %1$d, not found %2$d</string>
+    <string name="playlist_import_failed">Couldn’t read the playlist file</string>
+    <string name="playlist_export">Export</string>
+    <string name="playlist_exported">“%1$s” saved</string>
+    <string name="playlist_export_failed">Couldn’t save the playlist</string>
     <string name="track_add_to_playlist">Add to playlist…</string>
     <string name="action_cancel">Cancel</string>
     <string name="error_problem_unavailable">the file is unavailable</string>

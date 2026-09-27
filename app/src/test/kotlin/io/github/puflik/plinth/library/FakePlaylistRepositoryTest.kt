@@ -11,10 +11,10 @@ class FakePlaylistRepositoryTest : PlaylistRepositoryContractTest() {
 
     override fun createRepository(): PlaylistRepository = FakePlaylistRepository(library)
 
-    override suspend fun seed(
+    override suspend fun seedFiles(
         repository: PlaylistRepository,
-        paths: List<String>,
-    ): List<TrackId> = library.add(paths.map(::TaggedFile)).map { it.id }
+        files: List<TaggedFile>,
+    ): List<TrackId> = library.add(files).map { it.id }
 
     override suspend fun hide(
         repository: PlaylistRepository,

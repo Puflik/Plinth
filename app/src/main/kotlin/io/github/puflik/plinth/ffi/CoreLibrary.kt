@@ -58,6 +58,12 @@ class CoreLibrary internal constructor(
     fun playlistTracks(playlist: PlaylistId): List<CorePlaylistTrack> =
         core.call { rust -> rust.playlistTracks(playlist.value).map { it.toApp() } }
 
+    /**
+     * Плейлист в M3U8 (D4c): UTF-8, `#EXTINF` и абсолютные пути видимых
+     * треков в его порядке. Нет плейлиста — [CoreFailure].
+     */
+    fun exportPlaylist(playlist: PlaylistId): String = core.call { it.exportPlaylist(playlist.value) }
+
     /** Трек библиотеки, который играет из файла [path]; файла в библиотеке нет — `null`. */
     fun trackAt(path: String): TrackId? = core.call { it.trackAt(path)?.let(::TrackId) }
 

@@ -26,15 +26,23 @@ pub enum CatchUp {
 /// Записывает операцию в журнал и отражает её в базе. Журнал — первым: если
 /// до базы операция не дойдёт, её вернёт пересборка, а наоборот — нечем.
 pub fn record_and_project(journal: &mut Journal, db: &Database, op: &Op) -> Result<(), CoreError> {
+    record_and_project_all(journal, db, std::slice::from_ref(op))
+}
+
+/// [`record_and_project`] для нескольких операций разом: одна правка журнала,
+/// одна транзакция базы.
+pub fn record_and_project_all(journal: &mut Journal, db: &Database, ops: &[Op]) -> Result<(), CoreError> {
     let before = journal.mark();
-    if journal.record(op)?.is_none() {
+    if journal.record_all(ops)?.is_none() {
         return Ok(());
     }
     let journal: &Journal = journal;
     let after = journal.mark();
     db.in_transaction(|db| {
         if db.journal_mark()? == Some(before) {
-            apply(db, op)?;
+            for op in ops {
+                apply(db, op)?;
+            }
             db.set_journal_mark(after)
         } else {
             log::info!("projection is behind the journal: rebuilding");

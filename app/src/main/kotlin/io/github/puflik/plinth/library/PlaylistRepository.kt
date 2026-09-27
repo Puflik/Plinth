@@ -3,6 +3,7 @@ package io.github.puflik.plinth.library
 import io.github.puflik.plinth.ffi.Playlist
 import io.github.puflik.plinth.ffi.PlaylistEntryId
 import io.github.puflik.plinth.ffi.PlaylistId
+import io.github.puflik.plinth.ffi.PlaylistImport
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.model.PlaylistTrack
 import kotlinx.coroutines.flow.Flow
@@ -59,4 +60,22 @@ interface PlaylistRepository {
 
     /** Убирает запись [entry]; тот же трек на других местах остаётся. */
     suspend fun remove(entry: PlaylistEntryId)
+
+    /**
+     * Плейлист [name] из файла M3U, M3U8 или PLS (D4c) — байты [content] как
+     * есть. Строка находится по абсолютному пути, по пути от папки [folder]
+     * (не знаем её — `null`), потом по «исполнитель - название»; ненайденные
+     * пропускаются и считаются. Не нашлось ничего — плейлиста нет. Отказ — `null`.
+     */
+    suspend fun import(
+        name: String,
+        content: ByteArray,
+        folder: String?,
+    ): PlaylistImport?
+
+    /**
+     * [playlist] в M3U8: UTF-8, `#EXTINF` с длительностью и «исполнитель -
+     * название», абсолютные пути видимых треков. Плейлиста нет — `null`.
+     */
+    suspend fun export(playlist: PlaylistId): String?
 }

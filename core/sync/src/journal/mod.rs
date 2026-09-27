@@ -26,7 +26,7 @@ pub use doc::JournalState;
 use doc::Roots;
 pub use op::Op;
 pub use op_meta::{OP_SCHEMA, OpMeta};
-pub use projection::{CatchUp, catch_up, record_and_project};
+pub use projection::{CatchUp, catch_up, record_and_project, record_and_project_all};
 pub use rebuild::rebuild;
 use store::Store;
 
@@ -83,10 +83,21 @@ impl Journal {
     /// тронут. Ошибка записи на диск — правка осталась в памяти, следующая
     /// запишет её вместе с собой.
     pub fn record(&mut self, op: &Op) -> Result<Option<OpMeta>, CoreError> {
+        self.record_all(std::slice::from_ref(op))
+    }
+
+    /// Записывает операции одной правкой: одна транзакция документа, один
+    /// кадр на диске — импорт плейлиста в сотни строк не пишет сотни кадров.
+    /// `None` — ни одна ничего не меняет.
+    pub fn record_all(&mut self, ops: &[Op]) -> Result<Option<OpMeta>, CoreError> {
         let meta = OpMeta::now(self.device);
         let update = {
             let mut txn = self.doc.transact_mut();
-            if !self.roots.write(&mut txn, op, &meta)? {
+            let mut changed = false;
+            for op in ops {
+                changed |= self.roots.write(&mut txn, op, &meta)?;
+            }
+            if !changed {
                 return Ok(None);
             }
             txn.encode_update_v1()

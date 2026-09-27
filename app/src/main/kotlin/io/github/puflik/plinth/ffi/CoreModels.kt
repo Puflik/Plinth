@@ -170,6 +170,16 @@ data class Playlist(
     val createdAt: Instant,
 )
 
+/**
+ * Итог импорта плейлиста из файла (D4c): сколько строк нашлось в фонотеке
+ * и сколько нет. Не нашлось ни одной — плейлиста нет, [playlist] — `null`.
+ */
+data class PlaylistImport(
+    val playlist: Playlist?,
+    val added: Int,
+    val notFound: Int,
+)
+
 /** Запись плейлиста в его порядке; позицию ведёт ядро, снаружи — индексы. */
 data class PlaylistItem(
     val id: PlaylistEntryId,

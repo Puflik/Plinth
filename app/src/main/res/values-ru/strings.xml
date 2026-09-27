@@ -209,6 +209,12 @@
     <string name="playlist_remove">Убрать из плейлиста</string>
     <string name="playlist_pick_title">Добавить в плейлист</string>
     <string name="playlist_added">Добавлено в «%1$s»</string>
+    <string name="playlist_import">Импорт плейлиста</string>
+    <string name="playlist_imported">Добавлено %1$d, не найдено %2$d</string>
+    <string name="playlist_import_failed">Не удалось прочитать файл плейлиста</string>
+    <string name="playlist_export">Экспорт</string>
+    <string name="playlist_exported">«%1$s» сохранён</string>
+    <string name="playlist_export_failed">Не удалось сохранить плейлист</string>
     <string name="track_add_to_playlist">В плейлист…</string>
     <string name="action_cancel">Отмена</string>
     <string name="error_problem_unavailable">файл недоступен</string>

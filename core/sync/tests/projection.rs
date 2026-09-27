@@ -11,7 +11,7 @@ use plinth_library::model::{
     BlockEntry, BlockTarget, DecidedBy, MergeDecision, PlaylistEntry, Rating, Setting, Subscription, TrackPair,
     TrackUserData, Verdict, VersionPreference, position_for,
 };
-use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, rebuild, record_and_project};
+use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, rebuild, record_and_project, record_and_project_all};
 use plinth_types::{ArtistId, DeviceId, MergeDecisionId, PlaylistEntryId, Timestamp, TrackId};
 
 /// Главное свойство C3: как бы база ни доходила до состояния журнала —
@@ -180,6 +180,57 @@ fn a_no_op_leaves_the_mark_alone() {
     let mark = journal.mark();
 
     record_and_project(&mut journal, &db, &Op::Like { track }).unwrap();
+
+    assert_eq!(journal.mark(), mark);
+    assert_eq!(db.journal_mark().unwrap(), Some(mark));
+}
+
+/// Пакет — одна правка журнала: плейлист и его записи ложатся разом (импорт
+/// M3U, D4c), в базе — то же, что даёт пересборка.
+#[test]
+fn a_batch_is_one_change_and_projects_whole() {
+    let dir = Scratch::new();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    let db = memory_db();
+    record_and_project(&mut journal, &db, &Op::Like { track: TrackId::new() }).unwrap();
+    let before = journal.mark();
+    let mix = playlist("Imported");
+    let mut ops = vec![Op::CreatePlaylist(mix.clone())];
+    let mut entries: Vec<PlaylistEntry> = Vec::new();
+    for _ in 0..3 {
+        let entry = PlaylistEntry {
+            id: PlaylistEntryId::new(),
+            playlist: mix.id,
+            track: TrackId::new(),
+            position: position_for(&entries, entries.len(), None),
+            added_at: Timestamp::from_millis(10),
+        };
+        entries.push(entry.clone());
+        ops.push(Op::AddEntry(entry));
+    }
+
+    record_and_project_all(&mut journal, &db, &ops).unwrap();
+
+    let rebuilt = memory_db();
+    rebuild(&journal, &rebuilt).unwrap();
+    assert_eq!(journal.mark().seq, before.seq + 1);
+    assert_eq!(db.journal_mark().unwrap(), Some(journal.mark()));
+    assert_eq!(db.entries(mix.id).unwrap(), entries);
+    assert_eq!(dump(&db), dump(&rebuilt));
+}
+
+/// Пакет без последствий журнал и базу не трогает.
+#[test]
+fn an_empty_batch_leaves_the_mark_alone() {
+    let dir = Scratch::new();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    let db = memory_db();
+    let track = TrackId::new();
+    record_and_project(&mut journal, &db, &Op::Like { track }).unwrap();
+    let mark = journal.mark();
+
+    record_and_project_all(&mut journal, &db, &[]).unwrap();
+    record_and_project_all(&mut journal, &db, &[Op::Like { track }, Op::Like { track }]).unwrap();
 
     assert_eq!(journal.mark(), mark);
     assert_eq!(db.journal_mark().unwrap(), Some(mark));
