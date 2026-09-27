@@ -413,6 +413,7 @@ mod tests {
             album: None,
             duration: Some(Duration::from_secs(398)),
             mbid: None,
+            sources: Vec::new(),
         }
     }
 

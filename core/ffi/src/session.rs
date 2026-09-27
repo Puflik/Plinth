@@ -12,9 +12,10 @@
 use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, TryLockError};
 
 use plinth_library::db::{Database, IntegrityCheck};
+use plinth_providers::Registry;
 use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, describe_missing, rebuild, record_and_project};
 use plinth_types::{CoreError, DeviceId};
 
@@ -32,6 +33,9 @@ pub struct Core {
     /// Скан идёт один: два разом добавили бы одни файлы дважды.
     scan: Mutex<()>,
     report: StartupReport,
+    /// Онлайн-источники (E3): реестр провайдеров поверх транспорта Kotlin;
+    /// `None` — выключены. Отдельно от `state`: запрос в сеть не держит базу.
+    online: RwLock<Option<Arc<Registry>>>,
     /// Замок держится, пока жив объект; закрытие файла его снимает.
     _lock: File,
 }
@@ -81,7 +85,13 @@ impl Core {
             restored_from_journal: rebuilt && journal.mark().seq > 0,
         };
         log::info!("core opened: {report:?}, schema v{}", opened.db.schema_version()?);
-        Ok(Self { state: Mutex::new(State { db: opened.db, journal }), scan: Mutex::new(()), report, _lock: lock })
+        Ok(Self {
+            state: Mutex::new(State { db: opened.db, journal }),
+            scan: Mutex::new(()),
+            report,
+            online: RwLock::new(None),
+            _lock: lock,
+        })
     }
 
     /// Работа с базой и журналом под замком. Паника в прошлом вызове могла
@@ -100,6 +110,15 @@ impl Core {
             }
         };
         work(&mut state)
+    }
+
+    /// Реестр онлайн-источников; выключены — `None`.
+    pub(crate) fn online(&self) -> Option<Arc<Registry>> {
+        self.online.read().unwrap_or_else(PoisonError::into_inner).clone()
+    }
+
+    pub(crate) fn set_online(&self, registry: Option<Arc<Registry>>) {
+        *self.online.write().unwrap_or_else(PoisonError::into_inner) = registry;
     }
 
     /// Право на скан; пока оно у кого-то, второй скан — `Unavailable`.

@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use plinth_types::{Mbid, TrackId};
 
+use super::OnlineSource;
+
 /// Паспорт трека (C4, ADR 0007): по чему узнать трек, когда скан новой
 /// установки выдаст его файлу новый ID. Лежит в журнале рядом с
 /// пользовательскими данными трека; путей нет — они привязаны к устройству.
@@ -16,4 +18,7 @@ pub struct TrackPassport {
     pub duration: Option<Duration>,
     /// Запись MusicBrainz — если известна, узнаёт трек точнее всего.
     pub mbid: Option<Mbid>,
+    /// Варианты у провайдеров (E3): по ним сетевой трек возвращается после
+    /// переустановки без скана. Файлы устройства сюда не попадают.
+    pub sources: Vec<OnlineSource>,
 }

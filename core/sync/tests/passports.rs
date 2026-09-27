@@ -215,6 +215,7 @@ fn text_is_compared_normalized() {
         album: None,
         duration: None,
         mbid: None,
+        sources: Vec::new(),
     };
     journal.record_all(&[Op::Describe(passport), Op::Like { track: old_id }]).unwrap();
     catch_up(&journal, &db).unwrap();
@@ -241,6 +242,7 @@ fn album_and_duration_pick_the_right_file() {
         album: Some(album.to_owned()),
         duration: Some(std::time::Duration::from_millis(duration_ms)),
         mbid: None,
+        sources: Vec::new(),
     };
     journal
         .record_all(&[
@@ -276,4 +278,77 @@ fn a_track_with_data_of_this_installation_is_not_taken() {
     assert_eq!(track_at(&db, KINO), fresh_kino);
     assert_eq!(track_at(&db, QUEEN), old.queen);
     assert_eq!(liked_titles(&db), ["Кукушка"]);
+}
+
+fn oh_doctor() -> plinth_library::model::OnlineTrack {
+    let source = |external: &str, format, kbps: Option<u32>| plinth_library::model::OnlineSource {
+        provider: plinth_types::ProviderId::new("archive.org").unwrap(),
+        external_id: external.to_owned(),
+        audio: plinth_library::model::AudioSpec {
+            format,
+            bitrate: kbps.map(plinth_types::Bitrate::kbps),
+            sample_rate_hz: None,
+            bit_depth: None,
+        },
+    };
+    plinth_library::model::OnlineTrack {
+        title: "OH DOCTOR".to_owned(),
+        artist: Some("H. Pearl".to_owned()),
+        album: Some("OH DOCTOR".to_owned()),
+        number: Some(1),
+        year: None,
+        duration: Some(std::time::Duration::from_millis(127_450)),
+        mbid: None,
+        sources: vec![
+            source("78_oh/a.flac", plinth_types::Format::Flac, None),
+            source("78_oh/a.mp3", plinth_types::Format::Mp3, Some(233)),
+        ],
+    }
+}
+
+/// Сетевой трек (E3) после переустановки возвращается без скана: паспорт
+/// хранит его варианты у провайдера, трек заводится с ID из журнала.
+#[test]
+fn an_online_track_comes_back_without_a_scan() {
+    let old_dir = Scratch::new();
+    let old_db = memory_db();
+    let mut old_journal = journal(&old_dir);
+    let track = old_db.add_online_track(&oh_doctor(), Timestamp::from_millis(1)).unwrap();
+    record_and_project(&mut old_journal, &old_db, &Op::Like { track }).unwrap();
+    let dir = Scratch::new();
+    let db = memory_db();
+    let mut journal = journal(&dir);
+
+    journal.merge(&old_journal.updates_since(&journal.state_vector()).unwrap()).unwrap();
+    catch_up(&journal, &db).unwrap();
+    relink(&journal, &db).unwrap();
+
+    assert_eq!(liked_titles(&db), ["OH DOCTOR"]);
+    assert_eq!(db.online_sources(track).unwrap(), oh_doctor().sources);
+    assert!(db.track_list(plinth_library::db::query::TrackSort::Title, None).unwrap().is_empty());
+}
+
+/// Новая установка сама уже завела тот же сетевой трек и данных на него не
+/// ставила: он узнаётся по паспорту и берёт ID из журнала, а не заводится
+/// вторым.
+#[test]
+fn an_online_track_added_again_takes_the_journal_id() {
+    let old_dir = Scratch::new();
+    let old_db = memory_db();
+    let mut old_journal = journal(&old_dir);
+    let track = old_db.add_online_track(&oh_doctor(), Timestamp::from_millis(1)).unwrap();
+    record_and_project(&mut old_journal, &old_db, &Op::Like { track }).unwrap();
+    let dir = Scratch::new();
+    let db = memory_db();
+    let mut journal = journal(&dir);
+    let fresh = db.add_online_track(&oh_doctor(), Timestamp::from_millis(2)).unwrap();
+
+    journal.merge(&old_journal.updates_since(&journal.state_vector()).unwrap()).unwrap();
+    catch_up(&journal, &db).unwrap();
+    relink(&journal, &db).unwrap();
+
+    assert_ne!(fresh, track);
+    assert!(db.track(fresh).unwrap().is_none());
+    assert_eq!(db.online_sources(track).unwrap(), oh_doctor().sources);
+    assert_eq!(liked_titles(&db), ["OH DOCTOR"]);
 }

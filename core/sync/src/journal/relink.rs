@@ -12,9 +12,9 @@ use std::collections::{BTreeSet, HashMap};
 use std::time::Duration;
 
 use plinth_library::db::Database;
-use plinth_library::model::TrackPassport;
+use plinth_library::model::{OnlineTrack, TrackPassport};
 use plinth_library::text::normalize;
-use plinth_types::{CoreError, TrackId};
+use plinth_types::{CoreError, Timestamp, TrackId};
 
 use super::Journal;
 use super::passport::referenced;
@@ -39,19 +39,42 @@ pub fn relink(journal: &Journal, db: &Database) -> Result<usize, CoreError> {
     for track in catalog.into_iter().filter(|p| !claimed.contains(&p.track)) {
         free.entry(key(&track)).or_default().push(track);
     }
-    let moved = db.in_transaction(|db| {
-        let mut moved = 0;
+    let now = Timestamp::now();
+    let (moved, restored) = db.in_transaction(|db| {
+        let (mut moved, mut restored) = (0, 0);
         for passport in lost {
-            let Some(candidates) = free.get_mut(&key(passport)) else { continue };
-            let Some(index) = best(passport, candidates) else { continue };
-            let found = candidates.remove(index);
-            db.rekey_track(found.track, passport.track)?;
-            moved += 1;
+            let found = free
+                .get_mut(&key(passport))
+                .and_then(|candidates| best(passport, candidates).map(|index| candidates.remove(index)));
+            if let Some(found) = found {
+                db.rekey_track(found.track, passport.track)?;
+                moved += 1;
+            } else if db.restore_online_track(passport.track, &online(passport), now)? {
+                restored += 1;
+            }
         }
-        Ok(moved)
+        Ok((moved, restored))
     })?;
-    log::info!("relink: {moved} of {} tracks of the journal found in the catalog", state.passports.len());
-    Ok(moved)
+    log::info!(
+        "relink: {moved} of {} tracks of the journal found in the catalog, {restored} online tracks restored",
+        state.passports.len()
+    );
+    Ok(moved + restored)
+}
+
+/// Сетевой трек по паспорту (E3): его варианты у провайдера и описание.
+/// Без вариантов — трек устройства, заводить нечего.
+fn online(passport: &TrackPassport) -> OnlineTrack {
+    OnlineTrack {
+        title: passport.title.clone(),
+        artist: Some(passport.artist.clone()).filter(|artist| !artist.is_empty()),
+        album: passport.album.clone(),
+        number: None,
+        year: None,
+        duration: passport.duration,
+        mbid: passport.mbid,
+        sources: passport.sources.clone(),
+    }
 }
 
 fn key(passport: &TrackPassport) -> (String, String) {

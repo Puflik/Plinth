@@ -17,8 +17,13 @@ crate-type = ["cdylib"]
 plinth-types.workspace = true
 plinth-library.workspace = true
 plinth-sync.workspace = true
+plinth-providers.workspace = true
 uniffi.workspace = true
 log.workspace = true
+
+[dev-dependencies]
+# Записанные ответы Internet Archive для тестов онлайн-API.
+plinth-providers = { workspace = true, features = ["testing"] }
 
 [lints]
 workspace = true

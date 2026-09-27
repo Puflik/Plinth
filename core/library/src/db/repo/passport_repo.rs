@@ -19,13 +19,18 @@ const PASSPORTS: &str = "SELECT t.id, t.title, t.artist_credit, a.title AS album
 impl Database {
     /// Паспорт трека каталога; трека нет — `None`.
     pub fn track_passport(&self, track: TrackId) -> Result<Option<TrackPassport>, CoreError> {
-        self.conn()
+        let found = self
+            .conn()
             .query_row(&format!("{PASSPORTS} WHERE t.id = ?1"), [track.as_bytes()], read_passport)
             .optional()
-            .storage()
+            .storage()?;
+        let Some(mut passport) = found else { return Ok(None) };
+        passport.sources = self.online_sources(track)?;
+        Ok(Some(passport))
     }
 
-    /// Паспорта всех треков каталога, по ID.
+    /// Паспорта всех треков каталога — для перепривязки: сравниваются
+    /// описания, источники провайдеров ей не нужны.
     pub fn track_passports(&self) -> Result<Vec<TrackPassport>, CoreError> {
         let mut statement = self.conn().prepare(&format!("{PASSPORTS} ORDER BY t.id")).storage()?;
         statement.query_map([], read_passport).storage()?.collect::<Result<_, _>>().storage()
@@ -56,6 +61,7 @@ fn read_passport(row: &Row<'_>) -> rusqlite::Result<TrackPassport> {
         album: row.get("album")?,
         duration: opt_duration(row, "duration_ms")?,
         mbid: opt_mbid(row, "mbid_recording")?,
+        sources: Vec::new(),
     })
 }
 
@@ -84,6 +90,7 @@ mod tests {
                 album: Some(album.title),
                 duration: Some(Duration::from_millis(238_640)),
                 mbid: None,
+                sources: Vec::new(),
             })
         );
         assert_eq!(db.track_passport(TrackId::new()).unwrap(), None);

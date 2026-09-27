@@ -8,6 +8,7 @@ mod blocklist_repo;
 mod history_repo;
 mod journal_repo;
 mod merge_repo;
+mod online_repo;
 mod passport_repo;
 mod playlist_repo;
 mod scan_repo;

@@ -68,6 +68,14 @@ const PLAYABLE: &str = "
     JOIN source s ON s.id = (SELECT id FROM source WHERE version = v.id AND availability = 'available'
                              ORDER BY local_uri IS NULL, id LIMIT 1)";
 
+/// То же, но источник — только файл на устройстве: вкладки библиотеки —
+/// музыка на устройстве, трек провайдера (E3) в них не виден.
+const ON_DEVICE: &str = "
+    FROM track t
+    JOIN version v ON v.id = (SELECT id FROM version WHERE track = t.id ORDER BY kind <> 'original', id LIMIT 1)
+    JOIN source s ON s.id = (SELECT id FROM source WHERE version = v.id AND availability = 'available'
+                             AND local_uri IS NOT NULL ORDER BY id LIMIT 1)";
+
 const TRACK_COLUMNS: &str = "
     SELECT t.id, t.title, t.artist_credit, v.album AS album, a.title AS album_title,
            nullif(a.artist_credit, '') AS album_artist, v.disc, v.number, v.duration_ms,
@@ -104,33 +112,34 @@ impl Database {
             TrackSort::RecentlyAdded => "t.added_at DESC, t.id DESC".to_owned(),
             TrackSort::MostPlayed => "play_count DESC, t.title_sort, t.id".to_owned(),
         };
-        let Some(search) = search else { return self.track_rows("", [], &order) };
+        let Some(search) = search else { return self.track_rows(ON_DEVICE, "", [], &order) };
         let search = normalize(search);
         let words: Vec<&str> = search.split(' ').filter(|w| !w.is_empty()).collect();
         if words.is_empty() {
             return Ok(Vec::new());
         }
-        let rows = self.track_rows("", [], &order)?;
+        let rows = self.track_rows(ON_DEVICE, "", [], &order)?;
         Ok(rows.into_iter().filter(|row| matches(row, &words)).collect())
     }
 
     /// Видимые треки с лайком, по названию, — «Любимое» (D4b).
     pub fn liked_tracks(&self) -> Result<Vec<TrackRow>, CoreError> {
-        self.track_rows("WHERE u.liked = 1", [], BY_TITLE)
+        self.track_rows(PLAYABLE, "WHERE u.liked = 1", [], BY_TITLE)
     }
 
     /// Видимые треки по последнему засчитанному прослушиванию, новые первыми,
     /// не больше `limit`, — «Недавнее» (D4b). Засчитывает правило Last.fm
     /// (`PlayEvent::counts`): брошенный на первых секундах трек сюда не попадает.
     pub fn recent_tracks(&self, limit: u32) -> Result<Vec<TrackRow>, CoreError> {
-        let mut rows = self.track_rows("WHERE u.last_played_at IS NOT NULL", [], "u.last_played_at DESC, t.id")?;
+        let mut rows =
+            self.track_rows(PLAYABLE, "WHERE u.last_played_at IS NOT NULL", [], "u.last_played_at DESC, t.id")?;
         rows.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
         Ok(rows)
     }
 
     /// Треки альбома по дискам и номерам (экран альбома).
     pub fn album_tracks(&self, album: AlbumId) -> Result<Vec<TrackRow>, CoreError> {
-        self.track_rows("WHERE v.album = ?1", [album.as_bytes()], ON_ALBUM)
+        self.track_rows(ON_DEVICE, "WHERE v.album = ?1", [album.as_bytes()], ON_ALBUM)
     }
 
     /// Трек, который играет из файла `uri`, — в том числе пропавшего; файла
@@ -146,9 +155,16 @@ impl Database {
             .storage()
     }
 
-    /// Видимые треки с условием `filter` в порядке `order`.
-    fn track_rows(&self, filter: &str, params: impl Params, order: &str) -> Result<Vec<TrackRow>, CoreError> {
-        let sql = format!("{TRACK_COLUMNS} {PLAYABLE} {TRACK_JOINS} {filter} ORDER BY {order}");
+    /// Видимые треки (`from` — [`PLAYABLE`] или [`ON_DEVICE`]) с условием
+    /// `filter` в порядке `order`.
+    fn track_rows(
+        &self,
+        from: &str,
+        filter: &str,
+        params: impl Params,
+        order: &str,
+    ) -> Result<Vec<TrackRow>, CoreError> {
+        let sql = format!("{TRACK_COLUMNS} {from} {TRACK_JOINS} {filter} ORDER BY {order}");
         let mut statement = self.conn().prepare(&sql).storage()?;
         statement.query_map(params, read_row).storage()?.collect::<Result<_, _>>().storage()
     }
@@ -563,5 +579,46 @@ mod tests {
         let tracks: Vec<String> = lib.db.album_tracks(honey).unwrap().into_iter().map(|row| row.title).collect();
 
         assert_eq!(tracks, ["You", "Creep", "Anyone Can Play Guitar"]);
+    }
+
+    /// Вкладки библиотеки — музыка на устройстве (E3): трек провайдера в них
+    /// не виден, в «Любимом» и «Недавнем» — виден, без пути к файлу.
+    #[test]
+    fn online_tracks_stay_out_of_the_library_tabs() {
+        let mut lib = Library::new();
+        lib.track("Local Song", "Band", &[], None, true);
+        let online = crate::model::OnlineTrack {
+            title: "Online Song".to_owned(),
+            artist: Some("Band".to_owned()),
+            album: Some("Live".to_owned()),
+            number: Some(1),
+            year: None,
+            duration: None,
+            mbid: None,
+            sources: vec![crate::model::OnlineSource {
+                provider: plinth_types::ProviderId::new("archive.org").unwrap(),
+                external_id: "live/01.mp3".to_owned(),
+                audio: crate::model::AudioSpec {
+                    format: plinth_types::Format::Mp3,
+                    bitrate: None,
+                    sample_rate_hz: None,
+                    bit_depth: None,
+                },
+            }],
+        };
+        let online = lib.db.add_online_track(&online, Timestamp::from_millis(1)).unwrap();
+        listened(&lib, online, true, Some(1_000));
+        let titles = |rows: Vec<super::TrackRow>| -> Vec<String> { rows.into_iter().map(|row| row.title).collect() };
+
+        assert_eq!(titles(lib.db.track_list(TrackSort::Title, None).unwrap()), ["Local Song"]);
+        assert!(titles(lib.db.track_list(TrackSort::Title, Some("online")).unwrap()).is_empty());
+        assert!(lib.db.album_list(super::AlbumSort::Title).unwrap().is_empty());
+        assert!(lib.db.artist_tracks("Band").unwrap().iter().all(|row| row.title == "Local Song"));
+        assert!(lib.db.artist_list().unwrap().is_empty(), "the online artist has no track on the device");
+        let liked = lib.db.liked_tracks().unwrap();
+        assert_eq!(titles(liked.clone()), ["Online Song"]);
+        assert_eq!(liked[0].uri, None);
+        assert_eq!(liked[0].album_title.as_deref(), Some("Live"));
+        assert_eq!(titles(lib.db.recent_tracks(10).unwrap()), ["Online Song"]);
     }
 }

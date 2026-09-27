@@ -649,6 +649,7 @@ version = "0.2.0"
 dependencies = [
  "log",
  "plinth-library",
+ "plinth-providers",
  "plinth-sync",
  "plinth-types",
  "uniffi",

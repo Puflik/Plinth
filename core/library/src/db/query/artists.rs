@@ -6,7 +6,7 @@
 use plinth_types::{ArtistId, CoreError};
 use rusqlite::Row;
 
-use super::{BY_ALBUM, ON_ALBUM, PLAYABLE, TrackRow};
+use super::{BY_ALBUM, ON_ALBUM, ON_DEVICE, TrackRow};
 use crate::db::Database;
 use crate::db::sql::{Storage, id};
 use crate::text::normalize;
@@ -25,7 +25,7 @@ impl Database {
     /// Исполнители видимых треков по имени, без артикля, в естественном порядке.
     pub fn artist_list(&self) -> Result<Vec<ArtistRow>, CoreError> {
         let sql = format!(
-            "WITH visible AS (SELECT t.id AS track, v.album AS album {PLAYABLE})
+            "WITH visible AS (SELECT t.id AS track, v.album AS album {ON_DEVICE})
              SELECT ar.id, ar.name, count(DISTINCT w.album) AS album_count, count(*) AS track_count
              FROM artist ar
              JOIN track_artist ta ON ta.artist = ar.id
@@ -44,7 +44,7 @@ impl Database {
                                      JOIN artist ar ON ar.id = ta.artist
                                      WHERE ar.name_normalized = ?1)";
         let order = format!("{BY_ALBUM}, {ON_ALBUM}");
-        self.track_rows(filter, [normalize(name)], &order)
+        self.track_rows(ON_DEVICE, filter, [normalize(name)], &order)
     }
 }
 

@@ -15,10 +15,13 @@
 use std::time::Duration;
 
 use plinth_library::model::{
-    DecidedBy, IdentityBasis, MergeDecision, OutputDevice, PlayEvent, Playlist, PlaylistEntry, PlaylistKind, Rating,
-    Setting, TrackPair, TrackPassport, Verdict, VersionPreference,
+    AudioSpec, DecidedBy, IdentityBasis, MergeDecision, OnlineSource, OutputDevice, PlayEvent, Playlist, PlaylistEntry,
+    PlaylistKind, Rating, Setting, TrackPair, TrackPassport, Verdict, VersionPreference,
 };
-use plinth_types::{CoreError, DeviceId, EntityId, PlaylistEntryId, PlaylistId, Position, Timestamp, TrackId};
+use plinth_types::{
+    Bitrate, CoreError, DeviceId, EntityId, Format, PlaylistEntryId, PlaylistId, Position, ProviderId, Timestamp,
+    TrackId,
+};
 
 use super::op_meta::OpMeta;
 
@@ -194,7 +197,8 @@ impl Writer {
         self.text(&passport.artist);
         let flags = u8::from(passport.album.is_some())
             | u8::from(passport.duration.is_some()) << 1
-            | u8::from(passport.mbid.is_some()) << 2;
+            | u8::from(passport.mbid.is_some()) << 2
+            | u8::from(!passport.sources.is_empty()) << 3;
         self.u8(flags);
         if let Some(album) = &passport.album {
             self.text(album);
@@ -204,6 +208,17 @@ impl Writer {
         }
         if let Some(mbid) = passport.mbid {
             self.text(&mbid.to_string());
+        }
+        if !passport.sources.is_empty() {
+            // Вариантов у трека единицы; больше 255 не бывает — лишние не пишутся.
+            let sources = &passport.sources[..passport.sources.len().min(usize::from(u8::MAX))];
+            self.u8(u8::try_from(sources.len()).unwrap_or(u8::MAX));
+            for source in sources {
+                self.text(source.provider.as_str());
+                self.text(&source.external_id);
+                self.u8(format_code(source.audio.format));
+                self.text(&source.audio.bitrate.map(|kbps| kbps.as_kbps().to_string()).unwrap_or_default());
+            }
         }
     }
 }
@@ -374,7 +389,53 @@ impl Reader<'_> {
         let album = if has(0) { Some(self.text()?) } else { None };
         let duration = if has(1) { Some(self.duration()?) } else { None };
         let mbid = if has(2) { Some(self.text()?.parse()?) } else { None };
-        Ok(TrackPassport { track, title, artist, album, duration, mbid })
+        let mut sources = Vec::new();
+        if has(3) {
+            for _ in 0..self.u8()? {
+                let provider = ProviderId::new(&self.text()?)?;
+                let external_id = self.text()?;
+                let format = format_of(self.u8()?);
+                let bitrate = self.text()?;
+                let bitrate = if bitrate.is_empty() {
+                    None
+                } else {
+                    Some(Bitrate::kbps(bitrate.parse().map_err(|_| broken("passport bitrate"))?))
+                };
+                let audio = AudioSpec { format, bitrate, sample_rate_hz: None, bit_depth: None };
+                sources.push(OnlineSource { provider, external_id, audio });
+            }
+        }
+        Ok(TrackPassport { track, title, artist, album, duration, mbid, sources })
+    }
+}
+
+/// Код формата в паспорте. Незнакомый код (формат новее приложения) —
+/// `Other`: источник всё равно играет, сыграет его плеер.
+fn format_code(format: Format) -> u8 {
+    match format {
+        Format::Flac => 0,
+        Format::Alac => 1,
+        Format::Wav => 2,
+        Format::Aiff => 3,
+        Format::Mp3 => 4,
+        Format::Aac => 5,
+        Format::Vorbis => 6,
+        Format::Opus => 7,
+        Format::Other => 8,
+    }
+}
+
+fn format_of(code: u8) -> Format {
+    match code {
+        0 => Format::Flac,
+        1 => Format::Alac,
+        2 => Format::Wav,
+        3 => Format::Aiff,
+        4 => Format::Mp3,
+        5 => Format::Aac,
+        6 => Format::Vorbis,
+        7 => Format::Opus,
+        _ => Format::Other,
     }
 }
 
@@ -491,6 +552,39 @@ mod tests {
         }
     }
 
+    fn online(external: &str, format: plinth_types::Format, kbps: Option<u32>) -> plinth_library::model::OnlineSource {
+        plinth_library::model::OnlineSource {
+            provider: plinth_types::ProviderId::new("archive.org").unwrap(),
+            external_id: external.to_owned(),
+            audio: plinth_library::model::AudioSpec {
+                format,
+                bitrate: kbps.map(plinth_types::Bitrate::kbps),
+                sample_rate_hz: None,
+                bit_depth: None,
+            },
+        }
+    }
+
+    /// Формат источника в паспорте — туда и обратно; незнакомый код — `Other`.
+    #[test]
+    fn every_format_survives_a_passport() {
+        use plinth_types::Format;
+        for format in [
+            Format::Flac,
+            Format::Alac,
+            Format::Wav,
+            Format::Aiff,
+            Format::Mp3,
+            Format::Aac,
+            Format::Vorbis,
+            Format::Opus,
+            Format::Other,
+        ] {
+            assert_eq!(super::format_of(super::format_code(format)), format, "{format:?}");
+        }
+        assert_eq!(super::format_of(200), Format::Other);
+    }
+
     #[test]
     fn passports_round_trip_with_and_without_optional_facts() {
         let full = TrackPassport {
@@ -500,8 +594,12 @@ mod tests {
             album: Some("Звезда по имени Солнце".to_owned()),
             duration: Some(Duration::from_millis(398_000)),
             mbid: Some("5b11f4ce-a62d-471e-81fc-a69a8278c7da".parse().unwrap()),
+            sources: vec![
+                online("78_oh/a.flac", plinth_types::Format::Flac, None),
+                online("78_oh/a.mp3", plinth_types::Format::Mp3, Some(233)),
+            ],
         };
-        let bare = TrackPassport { album: None, duration: None, mbid: None, ..full.clone() };
+        let bare = TrackPassport { album: None, duration: None, mbid: None, sources: Vec::new(), ..full.clone() };
 
         for passport in [full, bare] {
             round_trip(&passport, |w, p| w.passport(p), |r| r.passport(passport.track));

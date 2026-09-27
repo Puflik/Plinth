@@ -4,7 +4,7 @@
 use plinth_types::{AlbumId, CoreError};
 use rusqlite::{Params, Row};
 
-use super::PLAYABLE;
+use super::ON_DEVICE;
 use crate::db::Database;
 use crate::db::sql::{Storage, id};
 use crate::text::normalize;
@@ -64,7 +64,7 @@ impl Database {
 
     fn album_rows(&self, filter: &str, params: impl Params, order: &str) -> Result<Vec<AlbumRow>, CoreError> {
         let sql = format!(
-            "WITH visible AS ({VISIBLE} {PLAYABLE})
+            "WITH visible AS ({VISIBLE} {ON_DEVICE})
              SELECT a.id, a.title, nullif(a.artist_credit, '') AS artist_credit, count(*) AS track_count,
                     (SELECT w.uri FROM visible w WHERE w.album = a.id
                      ORDER BY w.disc IS NOT NULL, w.disc, w.number IS NULL, w.number, w.title_sort, w.track
