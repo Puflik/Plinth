@@ -9,6 +9,7 @@ mod availability;
 mod error;
 mod id;
 mod position;
+mod provider;
 mod quality;
 mod time;
 
@@ -19,5 +20,6 @@ pub use id::{
     TrackId, VersionId,
 };
 pub use position::Position;
+pub use provider::ProviderId;
 pub use quality::{Bitrate, Format, QualityTier};
 pub use time::Timestamp;

@@ -1,6 +1,4 @@
-use std::fmt;
-
-use plinth_types::{Availability, Bitrate, CoreError, Format, QualityTier, SourceId, Timestamp, VersionId};
+use plinth_types::{Availability, Bitrate, Format, ProviderId, QualityTier, SourceId, Timestamp, VersionId};
 
 /// Откуда брать байты записи (plan.md 2.1). У версии их может быть
 /// несколько: локальный FLAC и стрим провайдера. Каталог.
@@ -61,30 +59,11 @@ impl AudioSpec {
     }
 }
 
-/// Имя провайдера: `archive.org`, `bandcamp`. Строчные латиница, цифры,
-/// точка и дефис, до 64 знаков — идёт в журнал и в ключи базы.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ProviderId(String);
-
-impl ProviderId {
-    pub fn new(name: &str) -> Result<Self, CoreError> {
-        let valid = (1..=64).contains(&name.len())
-            && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-');
-        if valid { Ok(Self(name.to_owned())) } else { Err(CoreError::parse(format!("provider id: {name:?}"))) }
-    }
-}
-
-impl fmt::Display for ProviderId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use plinth_types::{Availability, Bitrate, CoreError, Format, QualityTier, SourceId, VersionId};
+    use plinth_types::{Availability, Bitrate, Format, ProviderId, QualityTier, SourceId, VersionId};
 
-    use super::{AudioSpec, CacheState, ProviderId, Source, SourceLocation};
+    use super::{AudioSpec, CacheState, Source, SourceLocation};
 
     fn source(location: SourceLocation, format: Format, kbps: Option<u32>) -> Source {
         Source {
@@ -123,15 +102,5 @@ mod tests {
 
         assert!(local.is_device_bound());
         assert!(!remote.is_device_bound());
-    }
-
-    #[test]
-    fn provider_id_is_a_short_lowercase_name() {
-        for good in ["archive.org", "youtube", "bandcamp", "my-navidrome"] {
-            assert_eq!(ProviderId::new(good).map(|p| p.to_string()), Ok(good.to_owned()));
-        }
-        for bad in ["", "YouTube", "you tube", "a/b", &"x".repeat(65)] {
-            assert!(matches!(ProviderId::new(bad), Err(CoreError::Parse { .. })), "{bad}");
-        }
     }
 }

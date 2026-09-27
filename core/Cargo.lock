@@ -666,6 +666,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "plinth-providers"
+version = "0.2.0"
+dependencies = [
+ "log",
+ "plinth-providers",
+ "plinth-types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "plinth-sync"
 version = "0.2.0"
 dependencies = [

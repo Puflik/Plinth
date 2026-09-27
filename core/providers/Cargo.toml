@@ -1,0 +1,29 @@
+# trait Provider и всё общее у провайдеров (E1): модель ответа, реестр со
+# здоровьем, HTTP-политика поверх транспорта платформы, конфиги. Сети в
+# ядре нет: запрос делает транспорт (на Android — Kotlin), в тестах —
+# записанные ответы (docs/adr/0008-provider-trait.md).
+[package]
+name = "plinth-providers"
+description = "Провайдеры контента Plinth: интерфейс, реестр, HTTP-политика"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# Фейковый провайдер, записанные ответы и общий контракт — для тестов этого
+# и других крейтов ядра.
+testing = []
+
+[dependencies]
+plinth-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+# Интеграционные тесты видят `testing` без флага в `cargo test`.
+plinth-providers = { path = ".", features = ["testing"] }
+
+[lints]
+workspace = true

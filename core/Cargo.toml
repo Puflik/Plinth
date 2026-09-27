@@ -2,13 +2,14 @@
 #   types           — общие типы и ошибки, не зависит ни от одного крейта ядра
 #   library         — модель библиотеки и её SQLite: Track / Version / Source и остальное (B)
 #   sync            — CRDT-журнал пользовательских данных и его проекция в базу (C)
+#   providers       — trait Provider, реестр провайдеров, HTTP-политика и конфиги (E)
 #   ffi             — граница с Kotlin (UniFFI), единственный cdylib
 #   uniffi-bindgen  — генератор Kotlin-биндингов, запускается на машине сборки
 # Как собрать — docs/BUILD.md, что пересекает границу — docs/adr/0010-ffi-boundary.md.
 
 [workspace]
 resolver = "3"
-members = ["types", "library", "sync", "ffi", "uniffi-bindgen"]
+members = ["types", "library", "sync", "providers", "ffi", "uniffi-bindgen"]
 
 [workspace.package]
 # Версия ядра идёт вместе с версией приложения, в котором ядро появилось.
@@ -21,6 +22,7 @@ publish = false
 plinth-types = { path = "types" }
 plinth-library = { path = "library" }
 plinth-sync = { path = "sync" }
+plinth-providers = { path = "providers" }
 uniffi = "0.32.2"
 log = "0.4.34"
 thiserror = "2.0.21"
@@ -37,6 +39,9 @@ crc32fast = "1.5.0"
 # Теги (D2, docs/adr/0009-tag-library.md). Фича по умолчанию остаётся:
 # без id3v2_compression_support 0.25.4 не собирается.
 lofty = "0.25.4"
+# Конфиги провайдеров (E1.3) и ответы их API (E2).
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 
 # Ни одна функция, видимая из Kotlin, не паникует (A3.3): unwrap, expect и
 # panic! в коде ядра — ошибка CI (`clippy -D warnings`). В тестах можно —

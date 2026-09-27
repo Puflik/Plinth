@@ -31,8 +31,9 @@ pub use merge_decision::{DecidedBy, IdentityBasis, MergeDecision, TrackPair, Ver
 pub use passport::TrackPassport;
 pub use play_event::{OutputDevice, PlayEvent};
 pub use playlist::{Playlist, PlaylistEntry, PlaylistKind, ordered_entries, position_for};
+pub use plinth_types::ProviderId;
 pub use settings::{Setting, SyncedSettings, VersionPreference};
-pub use source::{AudioSpec, CacheState, ProviderId, Source, SourceLocation};
+pub use source::{AudioSpec, CacheState, Source, SourceLocation};
 pub use subscription::Subscription;
 pub use track::{Rating, Track, TrackUserData};
 pub use version::{AlbumPlacement, Explicitness, Fingerprint, Version, VersionKind};
