@@ -136,6 +136,7 @@ private fun Problem(
                 ),
             style = MaterialTheme.typography.bodyLarge,
         )
+        if (problem == OnlineProblem.NO_NETWORK && rememberFirmwareNetworkBlock()) FirmwareNetworkNote()
         OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.online_retry)) }
     }
 }

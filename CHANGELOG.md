@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- On TECNO, Infinix and itel phones, when the phone is online but search
+  or an album says there is no network, Plinth explains that the firmware
+  may be blocking it and opens Phone Master's network settings.
+
 ## [0.2.0] - 2026-09-28
 
 The second wave, "Core and first source": the library and your likes,

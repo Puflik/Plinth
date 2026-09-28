@@ -39,8 +39,10 @@ import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.library.TrackAction
 import io.github.puflik.plinth.ui.library.components.TrackRow
 import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
+import io.github.puflik.plinth.ui.online.FirmwareNetworkNote
 import io.github.puflik.plinth.ui.online.OnlineAlbumHeader
 import io.github.puflik.plinth.ui.online.providerName
+import io.github.puflik.plinth.ui.online.rememberFirmwareNetworkBlock
 
 /**
  * Поиск (C4.4, E3): название, исполнитель, альбом. Сначала «В библиотеке» —
@@ -122,7 +124,7 @@ private fun LazyListScope.section(
     item(key = "section-${section.provider}") { SectionTitle(name) }
     val problem = section.problem
     when {
-        problem != null -> item(key = "problem-${section.provider}") { Note(problemText(problem, name)) }
+        problem != null -> item(key = "problem-${section.provider}") { ProblemNote(problem, name) }
         section.results.isEmpty() ->
             item(key = "empty-${section.provider}") { Note(stringResource(R.string.search_nothing_found)) }
         else ->
@@ -151,6 +153,19 @@ private fun ResultRow(
         leadingContent = { Icon(painterResource(R.drawable.ic_album), contentDescription = null) },
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/** «Нет сети» при живой сети на телефоне Transsion — где прошивка её закрыла (Н7). */
+@Composable
+private fun ProblemNote(
+    problem: OnlineProblem,
+    provider: String,
+) {
+    if (problem == OnlineProblem.NO_NETWORK && rememberFirmwareNetworkBlock()) {
+        FirmwareNetworkNote(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+    } else {
+        Note(problemText(problem, provider))
+    }
 }
 
 @Composable

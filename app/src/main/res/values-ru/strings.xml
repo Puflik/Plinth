@@ -274,6 +274,8 @@
     <string name="search_library_nothing">В библиотеке ничего не найдено.</string>
     <string name="online_searching">Ищем…</string>
     <string name="online_no_network">Нет сети.</string>
+    <string name="online_firmware_block">Сеть есть, но прошивка, похоже, не пускает в неё Plinth. В Phone Master → «Управление сетями» разрешите Plinth Wi-Fi и мобильные данные; если они уже включены — выключите и включите снова.</string>
+    <string name="online_firmware_block_open">Открыть настройки сети</string>
     <string name="online_provider_down">%1$s не отвечает. Попробуйте позже.</string>
     <string name="online_broken">%1$s ответил непонятно.</string>
     <string name="online_retry">Повторить</string>

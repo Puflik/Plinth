@@ -5163,3 +5163,37 @@ D4b1 — данные для вкладки «Плейлисты», D4b2 — э�
   `git -C C:\claude\Plinth restore --source=c73c19d --worktree -- .claude
   CLAUDE.md .graphifyignore tools/graphify_update.py`. В новый ворктри —
   той же командой (или копией из `C:\claude\Plinth`).
+- **Подсказка для Н7 (ответ автора — «да, давай»):** `online/FirmwareNetworkBlock`
+  — телефон Transsion (`Build.MANUFACTURER` tecno, infinix, itel) и сеть
+  Android `VALIDATED` → «Нет сети» объясняется прошивкой; `ui/online/
+  FirmwareNetworkNote` — текст и кнопка «Открыть настройки сети»: «Управление
+  сетями» Phone Master (`NetWorkRuleActivity`, есть фильтр `VIEW`), иначе
+  страница приложения. В поиске (раздел провайдера) и на экране альбома.
+  `FirmwareNetworkBlockTest` 3, ktlint, detekt, страж перевода — зелёные.
+  Совет «выключите и включите снова» в тексте — не проверен: проверить на
+  телефоне вместе с кнопкой. В `CHANGELOG.md` — `[Unreleased]`, «Added».
+- **CI:** `8e1fb7e` и `2cfdb1a` — зелёные; `c73c19d` отменён (его сменил
+  `2cfdb1a`, `cancel-in-progress`).
+- **Автообновление (вопрос автора):** фича 140, v0.5, эпик F
+  `tasks-v0.5.md` «Проверка обновлений» (8–12 ч, «можно раньше, как
+  передышка»), только flavor `github`: раз в сутки по Wi-Fi, GitHub
+  Releases API, semver, версия и заметки, кнопка — страница релиза.
+  **Ловушка плана:** `docs/plan/17-reliability.md` берёт
+  `/releases/latest`, а он не отдаёт pre-release — все 0.x выходят с
+  `--prerelease`, так что до 1.0 проверка ничего бы не нашла. Брать
+  `/releases` и первый не-черновик (pre-release — да).
+- **Выпуск 0.2.0 на GitHub:** `release.yml` по тегу — успех, первый прогон
+  с Rust-ядром. Release «Plinth v0.2.0», pre-release,
+  `app-github-release.apk` (16 345 225 байт) и `mapping-v0.2.0.txt.gz`
+  (4 596 578 байт), заметки — раздел [0.2.0] (76 строк).
+- **`C:\claude\Plinth`** по слову автора: `pull --ff-only` до `2cfdb1a`
+  (рабочее дерево было чистым), инструменты Claude сразу возвращены
+  `restore --source=c73c19d --worktree` — на диске, игнорируются.
+- **Граф:** `graphify update .` (только код) в ворктри — 5447 узлов, 13269
+  связей. Семантика документов (`/graphify . --update`) — в новом чате.
+- **Дальше (автор: телефон — завтра, About — потом):** подсказка Н7 на
+  телефоне — поставить подписанную сборку поверх 0.2.0 (`install -r`, тот
+  же `versionCode` 3), «Нет сети» → подсказка → кнопка → «Управление
+  сетями», проверить совет «выключите и включите»; затем удалить
+  `keystore.properties`. Потом — About (текст предложен в чате: описание и
+  темы), Н3, Н4, lint `NewApi` — отдельными чатами.
