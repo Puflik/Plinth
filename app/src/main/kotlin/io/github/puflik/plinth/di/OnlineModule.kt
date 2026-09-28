@@ -12,6 +12,7 @@ import io.github.puflik.plinth.audio.engine.StreamResolver
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.online.CoreOnlineRepository
 import io.github.puflik.plinth.online.DataStoreOnlineSettings
+import io.github.puflik.plinth.online.DeviceDecoders
 import io.github.puflik.plinth.online.HttpUrlTransport
 import io.github.puflik.plinth.online.MeteredNetwork
 import io.github.puflik.plinth.online.OnlineRepository
@@ -49,5 +50,5 @@ object OnlineModule {
     fun provideStreamResolver(
         online: OnlineRepository,
         @ApplicationContext context: Context,
-    ): StreamResolver = OnlineStreams(online, MeteredNetwork(context))
+    ): StreamResolver = OnlineStreams(online, DeviceDecoders::missing, MeteredNetwork(context))
 }

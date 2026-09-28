@@ -198,8 +198,15 @@ impl Core {
 
     /// Адрес потока трека каталога — в момент загрузки: вариант по сети
     /// (`metered` — сотовая: MP3; иначе лучший), первый ответивший
-    /// провайдер. Источники выключены или сетевых вариантов нет — `Unavailable`.
-    pub fn online_stream(&self, track: TrackId, metered: bool) -> Result<StreamAddress, CoreError> {
+    /// провайдер. `undecodable` — форматы без декодера на устройстве (FLAC на
+    /// Android 8.0): они пробуются последними. Источники выключены или
+    /// сетевых вариантов нет — `Unavailable`.
+    pub fn online_stream(
+        &self,
+        track: TrackId,
+        metered: bool,
+        undecodable: Vec<Format>,
+    ) -> Result<StreamAddress, CoreError> {
         panic::guard(|| {
             let registry = self.online().ok_or_else(off)?;
             let sources = self.with(|state| state.db.online_sources(track))?;
@@ -213,7 +220,7 @@ impl Core {
                 .unzip();
             let network = if metered { Network::Metered } else { Network::Unmetered };
             // `playback_order` отдаёт ссылки в `options`: по ним — свой провайдер.
-            let candidates: Vec<(ProviderId, ExternalId)> = playback_order(&options, network)
+            let candidates: Vec<(ProviderId, ExternalId)> = playback_order(&options, network, &undecodable)
                 .into_iter()
                 .filter_map(|chosen| options.iter().position(|option| std::ptr::eq(option, chosen)))
                 .map(|index| (providers[index].clone(), options[index].external.clone()))
@@ -361,15 +368,17 @@ fn millis(duration: Duration) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::io::{Seek, SeekFrom, Write};
     use std::path::Path;
     use std::sync::{Arc, Mutex};
 
     use plinth_providers::http::{HttpRequest, HttpTransport};
     use plinth_providers::testing::FixtureTransport;
-    use plinth_types::CoreError;
+    use plinth_types::{CoreError, Format};
 
     use super::{NetAnswer, NetRequest, NetTransport, OnlineKind, OnlineProblem, PlatformTransport, registry};
-    use crate::session::Core;
+    use crate::session::{Core, DATABASE, JOURNAL};
     use crate::testing::Scratch;
 
     /// Записанные ответы Internet Archive (E2) как сеть Kotlin.
@@ -430,7 +439,7 @@ mod tests {
         core.disconnect_online().unwrap();
 
         assert!(core.online_search("piano".to_owned(), 10).unwrap().is_empty());
-        assert!(matches!(core.online_stream(ids[0], false), Err(CoreError::Unavailable { .. })));
+        assert!(matches!(core.online_stream(ids[0], false, Vec::new()), Err(CoreError::Unavailable { .. })));
         assert!(matches!(
             core.online_album("archive.org".to_owned(), RECORD.to_owned()),
             Err(CoreError::Unavailable { .. })
@@ -478,12 +487,25 @@ mod tests {
         let again = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
 
         assert_eq!(ids, again, "the same tracks are found, not added twice");
-        let wifi = core.online_stream(ids[0], false).unwrap();
-        let cellular = core.online_stream(ids[0], true).unwrap();
+        let wifi = core.online_stream(ids[0], false, Vec::new()).unwrap();
+        let cellular = core.online_stream(ids[0], true, Vec::new()).unwrap();
         assert!(wifi.url.starts_with(&format!("https://archive.org/download/{RECORD}/")), "{}", wifi.url);
         assert!(wifi.url.ends_with(".flac"), "{}", wifi.url);
         assert!(cellular.url.ends_with(".mp3"), "{}", cellular.url);
         assert!(wifi.headers.is_empty());
+    }
+
+    /// Android 8.0 не декодирует FLAC: по Wi-Fi — MP3, а не «формат не поддерживается».
+    #[test]
+    fn a_format_without_a_decoder_is_not_picked_while_there_is_another() {
+        let dir = Scratch::new();
+        let core = online(&dir, recorded());
+        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap();
+        let ids = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
+
+        let wifi = core.online_stream(ids[0], false, vec![Format::Flac]).unwrap();
+
+        assert!(wifi.url.ends_with(".mp3"), "{}", wifi.url);
     }
 
     #[test]
@@ -519,12 +541,70 @@ mod tests {
         );
     }
 
+    /// Сетевой трек альбома MIXG031 в «Любимом» — установка, которую дальше портят.
+    fn liked_online_track(dir: &Scratch) {
+        let core = online(dir, recorded());
+        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap();
+        let ids = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
+        core.like(ids[1]).unwrap();
+    }
+
+    fn liked(core: &Core) -> Vec<String> {
+        core.liked_tracks().unwrap().into_iter().map(|row| row.title).collect()
+    }
+
+    /// Испорченная база пересобирается из журнала при открытии, и сетевой
+    /// трек в «Любимом» виден сразу: скана, который бы его перепривязал, у
+    /// человека без разрешения на музыку нет вовсе.
+    #[test]
+    fn a_liked_online_track_is_back_right_after_a_damaged_database() {
+        let dir = Scratch::new();
+        liked_online_track(&dir);
+        let mut file = fs::OpenOptions::new().write(true).open(dir.0.join(DATABASE)).unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        file.write_all(&[0xde; 4096]).unwrap();
+        drop(file);
+
+        let core = Core::open(dir.path()).unwrap();
+
+        assert!(core.startup_report().unwrap().database_recovered);
+        assert_eq!(liked(&core), ["In My Dreams"]);
+    }
+
+    /// Auto Backup возвращает только журнал (C4): новая установка открывает
+    /// его без базы и без `device` — сетевой трек в «Любимом» сразу.
+    #[test]
+    fn a_liked_online_track_comes_back_with_a_journal_from_the_backup() {
+        let old = Scratch::new();
+        liked_online_track(&old);
+        let dir = Scratch::new();
+        copy_dir(&old.0.join(JOURNAL), &dir.0.join(JOURNAL));
+
+        let core = Core::open(dir.path()).unwrap();
+
+        assert!(core.startup_report().unwrap().restored_from_journal);
+        assert_eq!(liked(&core), ["In My Dreams"]);
+    }
+
+    fn copy_dir(from: &Path, to: &Path) {
+        fs::create_dir_all(to).unwrap();
+        for entry in fs::read_dir(from).unwrap() {
+            let path = entry.unwrap().path();
+            let target = to.join(path.file_name().unwrap());
+            if path.is_dir() {
+                copy_dir(&path, &target);
+            } else {
+                fs::copy(&path, &target).unwrap();
+            }
+        }
+    }
+
     #[test]
     fn a_local_track_has_no_stream() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
 
-        let missing = core.online_stream(plinth_types::TrackId::new(), false);
+        let missing = core.online_stream(plinth_types::TrackId::new(), false, Vec::new());
 
         assert!(matches!(missing, Err(CoreError::Unavailable { .. })));
     }

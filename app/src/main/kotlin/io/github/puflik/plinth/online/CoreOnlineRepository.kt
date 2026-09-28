@@ -3,6 +3,7 @@ package io.github.puflik.plinth.online
 import io.github.puflik.plinth.audio.engine.StreamLookup
 import io.github.puflik.plinth.core.CoreProblem
 import io.github.puflik.plinth.diagnostics.log.AppLog
+import io.github.puflik.plinth.ffi.AudioFormat
 import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.ffi.NetTransport
 import io.github.puflik.plinth.ffi.OnlineProblem
@@ -59,9 +60,10 @@ class CoreOnlineRepository(
     override fun stream(
         track: TrackId,
         metered: Boolean,
+        undecodable: Set<AudioFormat>,
     ): StreamLookup =
         try {
-            val address = core.online.stream(track, metered)
+            val address = core.online.stream(track, metered, undecodable)
             StreamLookup.Found(address.url, address.headers.toMap())
         } catch (failure: CoreFailure) {
             when (failure.error.problem) {

@@ -16,14 +16,14 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, TryLockError};
 
 use plinth_library::db::{Database, IntegrityCheck};
 use plinth_providers::Registry;
-use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, describe_missing, rebuild, record_and_project};
+use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, describe_missing, rebuild, record_and_project, relink};
 use plinth_types::{CoreError, DeviceId};
 
 use crate::panic;
 use crate::types::StartupReport;
 
 pub(crate) const DATABASE: &str = "library.db";
-const JOURNAL: &str = "journal";
+pub(crate) const JOURNAL: &str = "journal";
 pub(crate) const DEVICE: &str = "device";
 const LOCK: &str = "lock";
 
@@ -78,6 +78,12 @@ impl Core {
         // Журнал до C4: трекам с данными — паспорта, иначе переустановка их не узнает.
         if let Err(error) = describe_missing(&mut journal, &opened.db) {
             log::error!("core: describing tracks of the journal failed: {error}");
+        }
+        // База пересобрана без каталога (порча, журнал из Auto Backup): сетевые
+        // треки журнала заводятся по паспортам сразу — без разрешения на музыку
+        // скана, который их перепривязал бы, не будет. Файлы узнает скан.
+        if rebuilt && let Err(error) = relink(&journal, &opened.db) {
+            log::error!("core: relink after a rebuild failed: {error}");
         }
         let report = StartupReport {
             database_recovered: opened.recovery.is_some(),

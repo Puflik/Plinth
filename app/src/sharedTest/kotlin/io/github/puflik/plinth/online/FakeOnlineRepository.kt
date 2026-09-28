@@ -104,9 +104,11 @@ class FakeOnlineRepository(
     override fun stream(
         track: TrackId,
         metered: Boolean,
+        undecodable: Set<AudioFormat>,
     ): StreamLookup {
-        val options = variants[track]?.variants.orEmpty()
-        if (!enabled || options.isEmpty()) return StreamLookup.Unavailable
+        val all = variants[track]?.variants.orEmpty()
+        if (!enabled || all.isEmpty()) return StreamLookup.Unavailable
+        val options = all.filter { it.format !in undecodable }.ifEmpty { all }
         val chosen =
             if (metered) {
                 options.firstOrNull { it.format == AudioFormat.MP3 }

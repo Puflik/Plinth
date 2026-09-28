@@ -12,7 +12,8 @@ object TreeLabel {
         val encoded = tree.substringAfter("/tree/", missingDelimiterValue = "").substringBefore('/')
         if (encoded.isEmpty()) return tree
         // SAF кодирует пробел как %20, а «+» — как %2B: URLDecoder их не спутает.
-        val document = URLDecoder.decode(encoded, Charsets.UTF_8)
+        // Перегрузка с `Charset` есть только с Android 13 (API 33): на 8–12 падало.
+        val document = URLDecoder.decode(encoded, Charsets.UTF_8.name())
         return document.substringAfter(':').trim('/').ifEmpty { "/" }
     }
 }

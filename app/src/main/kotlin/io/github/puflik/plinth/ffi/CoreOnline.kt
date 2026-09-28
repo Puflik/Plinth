@@ -69,13 +69,16 @@ class CoreOnline internal constructor(
 
     /**
      * Адрес потока трека каталога — в момент загрузки: [metered] — сотовая
-     * сеть (MP3), иначе лучший вариант. Выключено или вариантов нет —
+     * сеть (MP3), иначе лучший вариант; форматы из [undecodable] устройство
+     * не декодирует — они пробуются последними. Выключено или вариантов нет —
      * [CoreFailure] вида `Unavailable`.
      */
     fun stream(
         track: TrackId,
         metered: Boolean,
-    ): StreamAddress = core.quietCall { it.onlineStream(track.value, metered).toApp() }
+        undecodable: Set<AudioFormat> = emptySet(),
+    ): StreamAddress =
+        core.quietCall { it.onlineStream(track.value, metered, undecodable.map(AudioFormat::toRust)).toApp() }
 }
 
 /** Сеть платформы для ядра: один GET без повторов, ответ с любым статусом — [NetAnswer.Response]. */

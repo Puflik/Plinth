@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.online
 
 import io.github.puflik.plinth.audio.engine.StreamLookup
+import io.github.puflik.plinth.ffi.AudioFormat
 import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.ffi.OnlineTrack
@@ -47,11 +48,14 @@ interface OnlineRepository {
 
     /**
      * Адрес потока [track] в момент загрузки: [metered] — сотовая сеть (MP3),
-     * иначе лучший вариант. Блокирует — зовёт загрузчик плеера.
+     * иначе лучший вариант. Форматы из [undecodable] устройство не декодирует
+     * (FLAC на Android 8.0) — они берутся, только если другого нет.
+     * Блокирует — зовёт загрузчик плеера.
      */
     fun stream(
         track: TrackId,
         metered: Boolean,
+        undecodable: Set<AudioFormat> = emptySet(),
     ): StreamLookup
 
     companion object {

@@ -118,6 +118,20 @@ abstract class OnlineRepositoryContractTest {
             assertThat(cellular.url).endsWith(".mp3")
         }
 
+    /** Android 8.0 не декодирует FLAC (F): по Wi-Fi тогда MP3, а не «формат не поддерживается». */
+    @Test
+    fun a_format_the_device_cannot_decode_is_taken_only_without_another() =
+        contract { online ->
+            val tracks = (online.album(ARCHIVE, CONCERT) as OnlineAlbum.Tracks).tracks
+            val id = checkNotNull(online.add(ARCHIVE, tracks)).first()
+
+            val noFlac = online.stream(id, metered = false, undecodable = setOf(AudioFormat.FLAC)) as StreamLookup.Found
+            val nothing = online.stream(id, metered = false, undecodable = AudioFormat.entries.toSet())
+
+            assertThat(noFlac.url).endsWith(".mp3")
+            assertThat(nothing).isInstanceOf(StreamLookup.Found::class.java)
+        }
+
     @Test
     fun a_track_without_variants_has_nothing_to_stream() =
         contract { online ->

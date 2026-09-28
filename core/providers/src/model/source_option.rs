@@ -46,8 +46,14 @@ pub enum Network {
 /// Варианты в порядке, в котором их пробовать играть (E2.3; политики
 /// качества — v0.5). Безлимитная сеть — по ступени качества, внутри — по
 /// битрейту. Лимитная — MP3 по битрейту, потом прочий lossy, lossless —
-/// последним. Равные остаются в исходном порядке.
-pub fn playback_order(sources: &[SourceOption], network: Network) -> Vec<&SourceOption> {
+/// последним. Равные остаются в исходном порядке. Форматы из `undecodable`
+/// (их не декодирует устройство — FLAC на Android 8.0) идут после всех
+/// остальных: пробуются, только если другого нет.
+pub fn playback_order<'a>(
+    sources: &'a [SourceOption],
+    network: Network,
+    undecodable: &[Format],
+) -> Vec<&'a SourceOption> {
     let mut ordered: Vec<&SourceOption> = sources.iter().collect();
     // `Reverse(Option)`: больший битрейт раньше, неизвестный — последним.
     let kbps = |source: &SourceOption| Reverse(source.bitrate.map(Bitrate::as_kbps));
@@ -57,6 +63,8 @@ pub fn playback_order(sources: &[SourceOption], network: Network) -> Vec<&Source
             ordered.sort_by_key(|source| (source.is_lossless(), source.format != Format::Mp3, kbps(source)));
         }
     }
+    // Сортировка устойчивая: внутри обеих групп порядок сети сохраняется.
+    ordered.sort_by_key(|source| undecodable.contains(&source.format));
     ordered
 }
 
@@ -100,7 +108,7 @@ mod tests {
         ];
 
         let order: Vec<_> =
-            playback_order(&sources, Network::Unmetered).iter().map(|s| (s.format, s.bitrate)).collect();
+            playback_order(&sources, Network::Unmetered, &[]).iter().map(|s| (s.format, s.bitrate)).collect();
 
         assert_eq!(
             order,
@@ -122,7 +130,8 @@ mod tests {
             option(Format::Mp3, Some(233)),
         ];
 
-        let order: Vec<_> = playback_order(&sources, Network::Metered).iter().map(|s| (s.format, s.bitrate)).collect();
+        let order: Vec<_> =
+            playback_order(&sources, Network::Metered, &[]).iter().map(|s| (s.format, s.bitrate)).collect();
 
         assert_eq!(
             order,
@@ -135,8 +144,25 @@ mod tests {
         );
     }
 
+    /// Android 8.0 не декодирует FLAC (F): по Wi-Fi играет лучший из
+    /// остальных, FLAC — последним, а не пропадает совсем.
+    #[test]
+    fn a_format_the_device_cannot_decode_goes_last() {
+        let sources = [option(Format::Flac, None), option(Format::Mp3, Some(64)), option(Format::Mp3, Some(320))];
+
+        let order: Vec<_> = playback_order(&sources, Network::Unmetered, &[Format::Flac])
+            .iter()
+            .map(|s| (s.format, s.bitrate))
+            .collect();
+
+        assert_eq!(
+            order,
+            [(Format::Mp3, Some(Bitrate::kbps(320))), (Format::Mp3, Some(Bitrate::kbps(64))), (Format::Flac, None)]
+        );
+    }
+
     #[test]
     fn nothing_to_order() {
-        assert!(playback_order(&[], Network::Metered).is_empty());
+        assert!(playback_order(&[], Network::Metered, &[]).is_empty());
     }
 }

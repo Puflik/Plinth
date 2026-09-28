@@ -2,6 +2,7 @@ package io.github.puflik.plinth.online
 
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.StreamLookup
+import io.github.puflik.plinth.ffi.AudioFormat
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -41,5 +42,18 @@ class OnlineSwitchTest {
 
             assertThat(wifi.url).endsWith(".flac")
             assertThat(cellular.url).endsWith(".mp3")
+        }
+
+    /** Android 8.0 (F): FLAC не декодируется — по Wi-Fi играет MP3. */
+    @Test
+    fun `a format the device cannot decode is not asked for`() =
+        runTest {
+            online.setEnabled(true)
+            val track = checkNotNull(online.add(FakeOnlineRepository.PROVIDER, TestConcert.tracks)).first()
+            val streams = OnlineStreams(online, { setOf(AudioFormat.FLAC) }) { false }
+
+            val wifi = streams.resolve(track.value) as StreamLookup.Found
+
+            assertThat(wifi.url).endsWith(".mp3")
         }
 }
