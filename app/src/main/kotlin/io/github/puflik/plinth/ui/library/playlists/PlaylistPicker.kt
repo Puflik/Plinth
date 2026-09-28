@@ -49,6 +49,23 @@ fun PlaylistPicker(
     track: LibraryTrack,
     onDismiss: () -> Unit,
     viewModel: PlaylistPickerViewModel = hiltViewModel(),
+) = PlaylistPicker(
+    onAdd = { viewModel.add(track, it) },
+    onAddToNew = { viewModel.addToNew(track, it) },
+    onDismiss = onDismiss,
+    viewModel = viewModel,
+)
+
+/**
+ * «В плейлист» для трека, которого ещё нет в фонотеке (альбом провайдера,
+ * E3): что делать с выбором, решает экран — [onAdd] и [onAddToNew].
+ */
+@Composable
+fun PlaylistPicker(
+    onAdd: (Playlist) -> Unit,
+    onAddToNew: (String) -> Unit,
+    onDismiss: () -> Unit,
+    viewModel: PlaylistPickerViewModel = hiltViewModel(),
 ) {
     val playlists by viewModel.playlists.collectAsState()
     var naming by rememberSaveable { mutableStateOf(false) }
@@ -62,7 +79,7 @@ fun PlaylistPicker(
             title = R.string.playlist_new,
             confirm = R.string.playlist_create,
             onConfirm = { name ->
-                viewModel.addToNew(track, name)
+                onAddToNew(name)
                 added(name)
             },
             onDismiss = onDismiss,
@@ -79,7 +96,7 @@ fun PlaylistPicker(
                 }
                 items(playlists, key = { it.id.value }) { playlist ->
                     PickerRow(R.drawable.ic_playlist, playlist.name) {
-                        viewModel.add(track, playlist)
+                        onAdd(playlist)
                         added(playlist.name)
                     }
                 }

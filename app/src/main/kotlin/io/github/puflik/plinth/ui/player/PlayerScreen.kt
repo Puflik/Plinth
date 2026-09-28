@@ -253,7 +253,7 @@ private fun PlayerCore(
         }
         state.error?.let {
             Text(
-                text = stringResource(it.messageRes),
+                text = stringResource(playerErrorText(it, state.online)),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -388,15 +388,20 @@ private fun TransportButton(
     }
 }
 
-private val PlaybackError.messageRes: Int
-    @StringRes get() =
-        when (this) {
-            is PlaybackError.SourceUnavailable -> R.string.player_error_unavailable
-            is PlaybackError.UnsupportedFormat -> R.string.player_error_format
-            is PlaybackError.Malformed -> R.string.player_error_malformed
-            is PlaybackError.Network -> R.string.player_error_network
-            is PlaybackError.Unknown -> R.string.player_error_unknown
-        }
+/** Ошибка под названием; «недоступен» у сетевого трека (E3) — про сеть, файла у него нет. */
+@StringRes
+internal fun playerErrorText(
+    error: PlaybackError,
+    online: Boolean,
+): Int =
+    when (error) {
+        is PlaybackError.SourceUnavailable ->
+            if (online) R.string.player_error_online_unavailable else R.string.player_error_unavailable
+        is PlaybackError.UnsupportedFormat -> R.string.player_error_format
+        is PlaybackError.Malformed -> R.string.player_error_malformed
+        is PlaybackError.Network -> R.string.player_error_network
+        is PlaybackError.Unknown -> R.string.player_error_unknown
+    }
 
 private const val NO_TIME = "--:--"
 private val PLAY_SIZE = 64.dp

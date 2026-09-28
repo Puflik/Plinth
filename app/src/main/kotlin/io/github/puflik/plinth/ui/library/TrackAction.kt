@@ -35,7 +35,8 @@ enum class TrackAction {
 /** Трек библиотеки как элемент очереди: очередь библиотеку не знает. */
 fun LibraryTrack.toQueueItem() =
     QueueItem(
-        source = AudioSource.LocalFile(uri),
+        // Сетевой трек — своим ID: адрес спросят в момент загрузки (E3).
+        source = uri?.let(AudioSource::LocalFile) ?: AudioSource.Online(id.value),
         title = title,
         artist = artist,
         album = album,

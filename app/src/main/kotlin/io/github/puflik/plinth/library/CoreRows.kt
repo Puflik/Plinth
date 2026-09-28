@@ -10,13 +10,18 @@ import kotlinx.coroutines.withContext
 // Общее у фасадов поверх ядра (D3b, D4): перевод строк ядра в модель и
 // вызовы, отказ которых уже ушёл в `CoreErrors` и здесь только пишется в лог.
 
-/** Играть можно только файл: строки без пути (сетевые источники — эпик E) не показываются. */
+/**
+ * Строка ядра — трек фонотеки. Без пути — сетевой трек (E3): его видят
+ * «Любимое», плейлисты и «Недавнее», играет он из сети. Без названия и без
+ * файла назвать трек нечем — такая строка не показывается.
+ */
 internal fun CoreTrack.toLibraryTrack(): LibraryTrack? {
-    val path = uri?.takeIf(String::isNotBlank) ?: return null
+    val path = uri?.takeIf(String::isNotBlank)
+    val name = title.ifBlank { path?.substringAfterLast('/').orEmpty() }.ifBlank { return null }
     return LibraryTrack(
         id = id,
         uri = path,
-        title = title.ifBlank { path.substringAfterLast('/') },
+        title = name,
         artist = artistCredit.ifEmpty { null },
         album = albumTitle,
         albumArtist = albumArtist,

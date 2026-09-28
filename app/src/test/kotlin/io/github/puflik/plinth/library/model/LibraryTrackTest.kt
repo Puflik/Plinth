@@ -26,9 +26,16 @@ class LibraryTrackTest {
     }
 
     @Test
-    fun `track needs an uri and a title`() {
+    fun `track needs a title and a real uri if it has one`() {
         assertThrows(IllegalArgumentException::class.java) { track(uri = " ") }
         assertThrows(IllegalArgumentException::class.java) { track(title = "") }
+    }
+
+    /** Сетевой трек (E3) играет из сети по своему ID — пути у него нет. */
+    @Test
+    fun `a track without a file is an online track`() {
+        assertThat(track(uri = null).online).isTrue()
+        assertThat(track().online).isFalse()
     }
 
     @Test
@@ -44,7 +51,7 @@ class LibraryTrackTest {
     }
 
     private fun track(
-        uri: String = "/storage/emulated/0/Music/Queen/Bohemian Rhapsody.flac",
+        uri: String? = "/storage/emulated/0/Music/Queen/Bohemian Rhapsody.flac",
         title: String = "Bohemian Rhapsody",
         artist: String? = null,
         albumArtist: String? = null,

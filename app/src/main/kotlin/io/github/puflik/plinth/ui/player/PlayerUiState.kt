@@ -24,6 +24,8 @@ import kotlin.time.Duration
  *   паузе; по нему показывается мини-плеер.
  * @property liked лайк текущего трека (D4a); `null` — трек не из фонотеки
  *   (или его ещё ищут), сердца нет.
+ * @property online текущий трек сетевой (E3): файла у него нет, и ошибка
+ *   «недоступен» говорит о сети, а не о файле.
  */
 data class PlayerUiState(
     val title: String?,
@@ -40,6 +42,7 @@ data class PlayerUiState(
     val hasTrack: Boolean,
     val album: Album?,
     val liked: Boolean? = null,
+    val online: Boolean = false,
 ) {
     /** Какая доля трека сыграна, `0..1`; без длительности — `0`. */
     val progressFraction: Float
@@ -66,6 +69,7 @@ data class PlayerUiState(
             artworkUri = (queue.current?.source as? AudioSource.LocalFile)?.uri,
             hasTrack = queue.current != null,
             album = queue.current?.let { item -> item.album?.let { Album(it, item.albumOwner, trackCount = 0) } },
+            online = queue.current?.source is AudioSource.Online,
         )
     }
 }

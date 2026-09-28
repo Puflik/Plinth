@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
-import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.ffi.TrackId
+import io.github.puflik.plinth.history.trackOf
 import io.github.puflik.plinth.library.UserDataRepository
 import io.github.puflik.plinth.queue.QueueItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,7 +27,8 @@ import kotlin.time.Duration
  * Экран плеера: то, что открыли библиотека или SAF, — звук, название,
  * перемотка, очередь. Сам плеер ничего не открывает: трек и очередь знает
  * [PlaybackController]. Лайк текущего трека (D4a) — через [UserDataRepository]:
- * очередь фонотеку не знает, трек находится по файлу.
+ * очередь фонотеку не знает, трек находится по источнику — файл по пути,
+ * сетевой трек (E3) своим ID.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -40,9 +41,9 @@ class PlayerViewModel
         /** Трек фонотеки, который играет; файл не из фонотеки — `null`. */
         private val track: StateFlow<TrackId?> =
             playback.queue
-                .map { (it.current?.source as? AudioSource.LocalFile)?.uri }
+                .map { it.current?.source }
                 .distinctUntilChanged()
-                .mapLatest { uri -> uri?.let { userData.trackAt(it) } }
+                .mapLatest { source -> source?.let { userData.trackOf(it) } }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
         private val liked: Flow<Boolean?> =

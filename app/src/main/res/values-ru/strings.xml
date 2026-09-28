@@ -12,6 +12,7 @@
     <string name="player_play">Играть</string>
     <string name="player_pause">Пауза</string>
     <string name="player_error_unavailable">Файл недоступен: его переместили, удалили или отозвали доступ.</string>
+    <string name="player_error_online_unavailable">Недоступен в сети: онлайн-источники выключены или у провайдера этого трека больше нет.</string>
     <string name="player_error_format">Этот формат не поддерживается.</string>
     <string name="player_error_malformed">Файл повреждён.</string>
     <string name="player_error_network">Ошибка сети. Проверьте соединение и попробуйте снова.</string>
@@ -218,6 +219,7 @@
     <string name="track_add_to_playlist">В плейлист…</string>
     <string name="action_cancel">Отмена</string>
     <string name="error_problem_unavailable">файл недоступен</string>
+    <string name="error_problem_online_unavailable">недоступен в сети</string>
     <string name="error_problem_unplayable">файл повреждён или его формат не поддерживается</string>
     <string name="error_problem_network">ошибка сети</string>
     <string name="error_problem_unknown">ошибка воспроизведения</string>
@@ -266,4 +268,18 @@
         <item quantity="many">%d плейлистов</item>
         <item quantity="other">%d плейлиста</item>
     </plurals>
+    <!-- Онлайн-источники (E3) -->
+    <string name="track_online">Из Internet Archive</string>
+    <string name="search_section_library">В библиотеке</string>
+    <string name="search_library_nothing">В библиотеке ничего не найдено.</string>
+    <string name="online_searching">Ищем…</string>
+    <string name="online_no_network">Нет сети.</string>
+    <string name="online_provider_down">%1$s не отвечает. Попробуйте позже.</string>
+    <string name="online_broken">%1$s ответил непонятно.</string>
+    <string name="online_retry">Повторить</string>
+    <string name="online_album_play">Играть</string>
+    <string name="online_album_source">Источник: %1$s</string>
+    <string name="online_album_unavailable">Альбом недоступен.</string>
+    <string name="settings_online_title">Онлайн-источники</string>
+    <string name="settings_online_summary">Поиск в Internet Archive: запросы уходят на archive.org</string>
 </resources>

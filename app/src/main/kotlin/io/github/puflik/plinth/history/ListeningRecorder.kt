@@ -1,7 +1,6 @@
 package io.github.puflik.plinth.history
 
 import io.github.puflik.plinth.audio.PlaybackController
-import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
@@ -27,9 +26,10 @@ import kotlin.time.Instant
  * Last.fm (`PlayEvent::counts`).
  *
  * Сколько звучал трек, считает [ListenTracker] по сигналам
- * [PlaybackController]. Трек узнаётся по файлу: очередь фонотеку не знает.
- * Файл не из фонотеки (открыт через SAF) в историю не попадает. Прослушивание,
- * прерванное смертью процесса, теряется.
+ * [PlaybackController]. Трек узнаётся по источнику ([trackOf]): сетевой —
+ * своим ID, файл — по пути, очередь фонотеку не знает. Файл не из фонотеки
+ * (открыт через SAF) в историю не попадает. Прослушивание, прерванное
+ * смертью процесса, теряется.
  */
 @Singleton
 class ListeningRecorder
@@ -62,8 +62,7 @@ class ListeningRecorder
         }
 
         private suspend fun record(listen: Listen) {
-            val uri = (listen.item.source as? AudioSource.LocalFile)?.uri ?: return
-            val track = userData.trackAt(uri) ?: return
+            val track = userData.trackOf(listen.item.source) ?: return
             userData.recordPlay(
                 NewPlay(
                     track = track,

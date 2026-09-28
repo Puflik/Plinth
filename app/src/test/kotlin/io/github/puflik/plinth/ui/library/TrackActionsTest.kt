@@ -74,7 +74,7 @@ class TrackActionsTest {
 
         actions.act(TrackAction.PLAY, QueueContext.Liked, listOf(song, other, song), song, at = 2)
 
-        assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(song.uri))
+        assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(checkNotNull(song.uri)))
         assertThat(playback.queue.value.upcoming).isEmpty()
     }
 

@@ -206,6 +206,10 @@ class FileQueueStore(
                 writeUTF("remote")
                 writeUTF(source.url)
             }
+            is AudioSource.Online -> {
+                writeUTF("online")
+                writeUTF(source.track)
+            }
         }
         writeNullable(item.title)
         writeNullable(item.artist)
@@ -219,6 +223,7 @@ class FileQueueStore(
             when (val kind = readUTF()) {
                 "file" -> AudioSource.LocalFile(readUTF())
                 "remote" -> AudioSource.Remote(readUTF())
+                "online" -> AudioSource.Online(readUTF())
                 else -> throw IOException("неизвестный источник $kind")
             }
         return QueueItem(

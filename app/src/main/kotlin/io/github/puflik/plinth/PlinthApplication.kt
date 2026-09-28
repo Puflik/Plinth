@@ -18,6 +18,7 @@ import io.github.puflik.plinth.ffi.CoreInitializer
 import io.github.puflik.plinth.history.ListeningRecorder
 import io.github.puflik.plinth.library.OldLibraryCleanup
 import io.github.puflik.plinth.library.UnavailableRescan
+import io.github.puflik.plinth.online.OnlineSwitch
 import javax.inject.Inject
 import kotlin.time.Clock
 
@@ -75,6 +76,9 @@ class PlinthApplication :
     @Inject
     lateinit var mirrorWriter: MirrorWriter
 
+    @Inject
+    lateinit var onlineSwitch: OnlineSwitch
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -95,6 +99,8 @@ class PlinthApplication :
         coreInitializer.start()
         // Копия журнала в папке человека — через паузу после правок (C4).
         mirrorWriter.start()
+        // Онлайн-источники — по переключателю в настройках (E3); до него ядро в сеть не ходит.
+        onlineSwitch.start()
         // База фонотеки v0.1 на Room больше не нужна: фонотеку ведёт ядро (D3c).
         oldLibraryCleanup.start()
     }

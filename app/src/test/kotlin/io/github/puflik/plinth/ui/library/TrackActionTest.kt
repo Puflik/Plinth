@@ -25,11 +25,19 @@ class TrackActionTest {
 
         val item = track.toQueueItem()
 
-        assertThat(item.source).isEqualTo(AudioSource.LocalFile(track.uri))
+        assertThat(item.source).isEqualTo(AudioSource.LocalFile("/storage/emulated/0/Music/track-1.mp3"))
         assertThat(listOf(item.title, item.artist, item.album))
             .containsExactly("Bicycle Race", "Queen", "Now 1")
             .inOrder()
         assertThat(item.albumOwner).isEqualTo("Various Artists")
         assertThat(item.duration).isEqualTo(3.minutes)
+    }
+
+    /** Сетевой трек (E3) встаёт в очередь своим ID: адрес спросят при загрузке. */
+    @Test
+    fun `an online track is queued as the track itself`() {
+        val track = LibraryTrack(TrackId("track-2"), uri = null, title = "Opening", duration = null, folder = "")
+
+        assertThat(track.toQueueItem().source).isEqualTo(AudioSource.Online("track-2"))
     }
 }

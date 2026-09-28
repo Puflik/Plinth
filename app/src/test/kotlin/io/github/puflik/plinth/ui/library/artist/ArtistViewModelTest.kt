@@ -76,7 +76,7 @@ class ArtistViewModelTest {
 
             viewModel.onTrack(bohemian, TrackAction.PLAY)
 
-            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(bohemian.uri))
+            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(checkNotNull(bohemian.uri)))
             val queue = playback.queue.value
             assertThat(queue.context).isEqualTo(QueueContext.Artist("Queen"))
             assertThat(queue.contextItems.map { it.title }).containsExactly("Innuendo", "Bohemian Rhapsody").inOrder()

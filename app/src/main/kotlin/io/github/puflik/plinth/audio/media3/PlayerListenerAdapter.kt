@@ -5,6 +5,7 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.datasource.HttpDataSource
 import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackEvent
 import io.github.puflik.plinth.audio.engine.PlaybackProgress
@@ -165,14 +166,26 @@ internal fun Player.toPlaybackProgress(): PlaybackProgress =
  */
 internal fun PlaybackException.toPlaybackError(): PlaybackError {
     val detail = listOfNotNull(errorCodeName, message).joinToString(": ")
-    return when (errorCode) {
-        in SOURCE_UNAVAILABLE -> PlaybackError.SourceUnavailable(detail)
+    return when {
+        errorCode in SOURCE_UNAVAILABLE || isGoneStream() -> PlaybackError.SourceUnavailable(detail)
+        else -> byCode(detail)
+    }
+}
+
+/** Провайдер ответил, что файла нет (E3): 404 и 410 — как у ядра, пропавший источник, а не сеть. */
+private fun PlaybackException.isGoneStream(): Boolean =
+    errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS &&
+        (cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode in GONE
+
+private fun PlaybackException.byCode(detail: String): PlaybackError =
+    when (errorCode) {
         in NETWORK -> PlaybackError.Network(detail)
         in UNSUPPORTED_FORMAT -> PlaybackError.UnsupportedFormat(detail)
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED -> PlaybackError.Malformed(detail)
         else -> PlaybackError.Unknown(detail)
     }
-}
+
+private val GONE = setOf(404, 410)
 
 private val SOURCE_UNAVAILABLE =
     setOf(

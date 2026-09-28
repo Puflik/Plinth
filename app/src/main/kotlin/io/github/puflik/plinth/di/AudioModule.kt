@@ -9,8 +9,10 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.puflik.plinth.BuildConfig
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioEngine
+import io.github.puflik.plinth.audio.engine.StreamResolver
 import io.github.puflik.plinth.audio.media3.ExoPlayerFactory
 import io.github.puflik.plinth.audio.media3.Media3Engine
 import io.github.puflik.plinth.library.LibraryScan
@@ -38,7 +40,9 @@ object AudioModule {
     @Singleton
     fun providePlayer(
         @ApplicationContext context: Context,
-    ): ExoPlayer = ExoPlayerFactory(context).create(Looper.getMainLooper())
+        streams: StreamResolver,
+    ): ExoPlayer =
+        ExoPlayerFactory(context, streams, userAgent(BuildConfig.VERSION_NAME)).create(Looper.getMainLooper())
 
     @Provides
     @Singleton
@@ -60,6 +64,9 @@ object AudioModule {
         @ApplicationScope scope: CoroutineScope,
     ): UnavailableRescan = UnavailableRescan(playback.errors, scan, scope)
 }
+
+/** Как плеер представляется провайдеру — так же, как ядро (`HttpClient`). */
+internal fun userAgent(version: String) = "Plinth/$version (+https://github.com/Puflik/Plinth)"
 
 /**
  * Доступ к движку оттуда, куда Hilt не внедряет: инструментальные тесты,

@@ -9,7 +9,12 @@ import io.github.puflik.plinth.ui.library.album.AlbumViewModel.Companion.ARG_TRA
 import io.github.puflik.plinth.ui.library.artist.ArtistViewModel.Companion.ARG_NAME
 import io.github.puflik.plinth.ui.library.playlists.AutoPlaylistViewModel.Companion.ARG_KIND
 import io.github.puflik.plinth.ui.library.playlists.PlaylistViewModel.Companion.ARG_ID
+import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel.Companion.ARG_ITEM
+import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel.Companion.ARG_PROVIDER
+import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel.Companion.ARG_YEAR
 import io.github.puflik.plinth.ui.library.playlists.PlaylistViewModel.Companion.ARG_NAME as ARG_PLAYLIST_NAME
+import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel.Companion.ARG_ARTIST as ARG_ONLINE_ARTIST
+import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel.Companion.ARG_TITLE as ARG_ONLINE_TITLE
 
 /**
  * Перечень экранов приложения (A2.1).
@@ -51,6 +56,13 @@ enum class Destination(
 
     /** Шаблон маршрута «Любимого» и «Недавнего» (D4b). */
     AutoPlaylist(route = "auto-playlist?$ARG_KIND={$ARG_KIND}"),
+
+    /** Шаблон маршрута альбома провайдера (E3); строки кодирует навигация. */
+    OnlineAlbum(
+        route =
+            "online-album?$ARG_PROVIDER={$ARG_PROVIDER}&$ARG_ITEM={$ARG_ITEM}&$ARG_ONLINE_TITLE={$ARG_ONLINE_TITLE}" +
+                "&$ARG_ONLINE_ARTIST={$ARG_ONLINE_ARTIST}&$ARG_YEAR={$ARG_YEAR}",
+    ),
     ;
 
     companion object {

@@ -98,6 +98,12 @@ impl Database {
         Ok(sources)
     }
 
+    /// Уже заведённый трек провайдера — по любому из его источников; каталог
+    /// не меняется. Экрану альбома — лайк трека, который ещё не играл.
+    pub fn find_online_track(&self, track: &OnlineTrack) -> Result<Option<TrackId>, CoreError> {
+        Ok(self.known_online(&track.sources)?.map(|(track, _)| track))
+    }
+
     /// Трек и версия, у которых уже есть один из `sources`.
     fn known_online(&self, sources: &[OnlineSource]) -> Result<Option<(TrackId, VersionId)>, CoreError> {
         for source in sources {
@@ -272,6 +278,22 @@ mod tests {
 
         assert_eq!(db.add_online_track(&more, NOW).unwrap(), first);
         assert_eq!(db.online_sources(first).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn a_known_track_is_found_without_adding() {
+        let db = db();
+        assert_eq!(db.find_online_track(&oh_doctor()).unwrap(), None);
+
+        let id = db.add_online_track(&oh_doctor(), NOW).unwrap();
+        let by_one_variant =
+            OnlineTrack { sources: vec![source("78_oh/a.mp3", Format::Mp3, Some(233))], ..oh_doctor() };
+        let stranger = OnlineTrack { sources: vec![source("78_oh/b.mp3", Format::Mp3, None)], ..oh_doctor() };
+
+        assert_eq!(db.find_online_track(&oh_doctor()).unwrap(), Some(id));
+        assert_eq!(db.find_online_track(&by_one_variant).unwrap(), Some(id));
+        assert_eq!(db.find_online_track(&stranger).unwrap(), None, "the same title is not the same track");
+        assert_eq!(db.find_online_track(&OnlineTrack { sources: Vec::new(), ..oh_doctor() }).unwrap(), None);
     }
 
     #[test]

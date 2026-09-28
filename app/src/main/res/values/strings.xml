@@ -12,6 +12,7 @@
     <string name="player_play">Play</string>
     <string name="player_pause">Pause</string>
     <string name="player_error_unavailable">The file is unavailable: it was moved, deleted, or access was revoked.</string>
+    <string name="player_error_online_unavailable">Not available online: online sources are off or the provider no longer has this track.</string>
     <string name="player_error_format">This format is not supported.</string>
     <string name="player_error_malformed">The file is damaged.</string>
     <string name="player_error_network">Network error. Check the connection and try again.</string>
@@ -205,6 +206,7 @@
     <string name="track_add_to_playlist">Add to playlist…</string>
     <string name="action_cancel">Cancel</string>
     <string name="error_problem_unavailable">the file is unavailable</string>
+    <string name="error_problem_online_unavailable">not available online</string>
     <string name="error_problem_unplayable">the file is damaged or its format isn’t supported</string>
     <string name="error_problem_network">network error</string>
     <string name="error_problem_unknown">playback failed</string>
@@ -245,4 +247,18 @@
         <item quantity="one">%d playlist</item>
         <item quantity="other">%d playlists</item>
     </plurals>
+    <!-- Онлайн-источники (E3) -->
+    <string name="track_online">From Internet Archive</string>
+    <string name="search_section_library">In your library</string>
+    <string name="search_library_nothing">Nothing in your library.</string>
+    <string name="online_searching">Searching…</string>
+    <string name="online_no_network">No network.</string>
+    <string name="online_provider_down">%1$s is not responding. Try again later.</string>
+    <string name="online_broken">%1$s sent an answer Plinth does not understand.</string>
+    <string name="online_retry">Retry</string>
+    <string name="online_album_play">Play</string>
+    <string name="online_album_source">Source: %1$s</string>
+    <string name="online_album_unavailable">The album is not available.</string>
+    <string name="settings_online_title">Online sources</string>
+    <string name="settings_online_summary">Search Internet Archive: requests go to archive.org</string>
 </resources>

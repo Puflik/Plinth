@@ -103,6 +103,18 @@ class FileQueueStoreTest {
             ).isFalse()
         }
 
+    @Test
+    fun `an online track comes back as the same track, not as an address`() =
+        runTest {
+            val online = QueueItem(AudioSource.Online("0192f7c4-0000-7000-8000-00000000000a"), "Opening", "Plinth Band")
+            val file = QueueItem(AudioSource.LocalFile("/storage/emulated/0/Music/a.mp3"), "a")
+            store.saveQueue(PlaybackQueue.EMPTY.play(QueueContext.Liked, listOf(online, file), start = 0))
+
+            val items = store.load()?.queue?.contextItems
+
+            assertThat(items).containsExactly(online, file).inOrder()
+        }
+
     /**
      * `QueueKeeper` пишет очередь и позицию из двух корутин, и на пуле IO они
      * идут одновременно. Быстрая смена треков (свайпы по мини-плееру) роняла

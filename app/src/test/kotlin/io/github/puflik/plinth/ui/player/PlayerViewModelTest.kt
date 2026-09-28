@@ -5,6 +5,7 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackError
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.PlaybackQueue
@@ -72,6 +73,22 @@ class PlayerViewModelTest {
                 listOf(before, after, viewModel.uiState.value.liked),
             ).containsExactly(false, true, false).inOrder()
             assertThat(userData.liked(track).first()).isFalse()
+        }
+
+    /** Сетевой трек (E3) — трек фонотеки без файла: сердце ставит лайк на его ID. */
+    @Test
+    fun `the heart of an online track likes the track itself`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val track = TrackId("0192f7c4-0000-7000-8000-00000000000a")
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            playback.play(album, listOf(QueueItem(AudioSource.Online(track.value), "Opening")), start = 0)
+            val before = viewModel.uiState.value.liked
+
+            viewModel.onLike()
+
+            assertThat(before).isFalse()
+            assertThat(userData.liked(track).first()).isTrue()
+            assertThat(viewModel.uiState.value.liked).isTrue()
         }
 
     /** Файл не из фонотеки (SAF) лайка не имеет — сердца нет, касание ничего не делает. */

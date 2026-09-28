@@ -57,9 +57,11 @@ fun SettingsScreen(
     start: StartScreenSettingViewModel = hiltViewModel(),
     diagnostics: DiagnosticsViewModel = hiltViewModel(),
     backup: BackupViewModel = hiltViewModel(),
+    online: OnlineSourcesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val backupState by backup.uiState.collectAsState()
+    val onlineEnabled by online.enabled.collectAsState()
     val pickBackupFolder = rememberMirrorFolderPicker(backup::onFolderPicked)
     val startState by start.uiState.collectAsState()
     val include = rememberFolderPicker(viewModel::onInclude)
@@ -91,6 +93,7 @@ fun SettingsScreen(
             ) { Text(stringResource(R.string.folders_reset)) }
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
+        onlineSources(onlineEnabled, onToggle = online::onToggle)
         backupSection(backupState, onPick = pickBackupFolder)
         diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
         vendorGuideItem(onOpen = { vendorGuide = true })

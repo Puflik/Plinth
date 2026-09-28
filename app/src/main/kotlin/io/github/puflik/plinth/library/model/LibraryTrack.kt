@@ -10,7 +10,9 @@ import kotlin.time.Duration
  *
  * @property id трек ядра — тот, на который ссылаются лайки, плейлисты и
  *   история.
- * @property uri путь к файлу — из него собирается `AudioSource.LocalFile`.
+ * @property uri путь к файлу — из него собирается `AudioSource.LocalFile`;
+ *   `null` — сетевой трек (E3): «Любимое», плейлисты и «Недавнее» его
+ *   показывают, играет он из сети по [id].
  * @property title название; без тега — имя файла, пустым не бывает.
  * @property albumArtist исполнитель альбома; `null` — трек не на альбоме или
  *   у альбома нет исполнителя.
@@ -22,7 +24,7 @@ import kotlin.time.Duration
  */
 data class LibraryTrack(
     val id: TrackId,
-    val uri: String,
+    val uri: String?,
     val title: String,
     val artist: String? = null,
     val album: String? = null,
@@ -34,7 +36,7 @@ data class LibraryTrack(
     val liked: Boolean = false,
 ) {
     init {
-        require(uri.isNotBlank()) { "uri трека не может быть пустым" }
+        require(uri == null || uri.isNotBlank()) { "uri трека не может быть пустым" }
         require(title.isNotBlank()) { "у трека должно быть название" }
         require(discNumber == null || discNumber > 0) { "номер диска начинается с 1: $discNumber" }
         require(trackNumber == null || trackNumber > 0) { "номер трека начинается с 1: $trackNumber" }
@@ -46,4 +48,7 @@ data class LibraryTrack(
      * одним альбомом, а не рассыпается на десять.
      */
     val albumOwner: String? get() = albumArtist ?: artist
+
+    /** Сетевой трек: файла нет, звук — у провайдера. */
+    val online: Boolean get() = uri == null
 }

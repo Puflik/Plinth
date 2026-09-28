@@ -22,6 +22,14 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
+      Онлайн-источники (E3): поиск и поток Internet Archive. Тип сети — чтобы
+      по сотовой играть MP3, а FLAC — по Wi-Fi. Переключатель «Онлайн-
+      источники» в настройках выключает запросы совсем.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
       Auto Backup и перенос на новый телефон — только журнал пользовательских
       данных (C4, план 17.5, уровень 4): лайки, плейлисты и история в личном
       Google Drive человека. База, очередь и кэш не идут — их ссылки на новом

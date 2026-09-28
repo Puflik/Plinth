@@ -15,7 +15,8 @@ import io.github.puflik.plinth.ffi.generated.start as coreStart
  * Фасад над Rust-ядром (A3.2) — единственное место приложения, которое
  * зовёт сгенерированные биндинги (`FfiBoundaryTest`). API — по темам, как в
  * ядре: [library] — чтение библиотеки, [journal] — действия пользователя,
- * [scan] — скан, [mirror] — копия журнала в папке человека.
+ * [scan] — скан, [mirror] — копия журнала в папке человека, [online] —
+ * онлайн-источники.
  *
  * Ядро живёт в [dataDir]: база, журнал пользовательских данных и
  * идентификатор установки (docs/adr/0007-journal-as-source-of-truth.md).
@@ -48,6 +49,7 @@ class PlinthCore(
     val journal = CoreJournal(this)
     val scan = CoreScan(this)
     val mirror = CoreMirror(this)
+    val online = CoreOnline(this)
 
     /**
      * Сигнал «каталог изменился» (D3b) — счётчик. Его двигают запись каждой

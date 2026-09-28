@@ -41,4 +41,27 @@ sealed interface AudioSource {
 
         override val key: String get() = url
     }
+
+    /**
+     * Сетевой трек фонотеки (E3): в очереди — трек, а не адрес. Адрес
+     * движок спрашивает у [StreamResolver], когда начинает загрузку: вариант
+     * (FLAC или MP3) зависит от сети в эту минуту, а адрес провайдера может
+     * устареть, пока трек ждёт очереди.
+     *
+     * @property track ID трека ядра.
+     */
+    data class Online(
+        val track: String,
+    ) : AudioSource {
+        init {
+            require(track.isNotBlank()) { "ID сетевого трека не может быть пустым" }
+        }
+
+        override val key: String get() = "$KEY_PREFIX$track"
+
+        companion object {
+            /** Начало [key]: по нему сетевой трек отличается от файла и адреса. */
+            const val KEY_PREFIX = "online:"
+        }
+    }
 }

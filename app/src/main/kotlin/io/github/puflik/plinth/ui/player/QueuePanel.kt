@@ -24,12 +24,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.ui.common.DragHandle
 import io.github.puflik.plinth.ui.common.RemoveBackground
 import io.github.puflik.plinth.ui.common.ReorderState
 import io.github.puflik.plinth.ui.common.RowDrag
 import io.github.puflik.plinth.ui.common.reorderActions
+import io.github.puflik.plinth.ui.library.components.OnlineMark
 import kotlinx.coroutines.launch
 
 /**
@@ -144,6 +146,7 @@ private fun QueueRow(
                     )
                 }
             }
+            if (item.source is AudioSource.Online) OnlineMark()
             DragHandle(actions.drag)
         }
     }

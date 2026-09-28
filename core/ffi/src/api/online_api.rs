@@ -181,6 +181,21 @@ impl Core {
         })
     }
 
+    /// Какие из треков провайдера уже в каталоге — ID или `None`, в том же
+    /// порядке; каталог не меняется. Экрану альбома — лайк до первой игры.
+    pub fn known_online_tracks(
+        &self,
+        provider: String,
+        tracks: Vec<OnlineTrackInfo>,
+    ) -> Result<Vec<Option<TrackId>>, CoreError> {
+        panic::guard(|| {
+            let provider = ProviderId::new(&provider)?;
+            let tracks: Vec<OnlineTrack> =
+                tracks.into_iter().map(|track| online_track(&provider, track)).collect::<Result<_, _>>()?;
+            self.with(|state| tracks.iter().map(|track| state.db.find_online_track(track)).collect())
+        })
+    }
+
     /// Адрес потока трека каталога — в момент загрузки: вариант по сети
     /// (`metered` — сотовая: MP3; иначе лучший), первый ответивший
     /// провайдер. Источники выключены или сетевых вариантов нет — `Unavailable`.
@@ -469,6 +484,22 @@ mod tests {
         assert!(wifi.url.ends_with(".flac"), "{}", wifi.url);
         assert!(cellular.url.ends_with(".mp3"), "{}", cellular.url);
         assert!(wifi.headers.is_empty());
+    }
+
+    #[test]
+    fn known_tracks_are_found_without_adding_the_rest() {
+        let dir = Scratch::new();
+        let core = online(&dir, recorded());
+        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap();
+        let added = core.add_online_tracks("archive.org".to_owned(), vec![album[1].clone()]).unwrap();
+
+        let known = core.known_online_tracks("archive.org".to_owned(), album.clone()).unwrap();
+
+        assert_eq!(known.len(), album.len());
+        assert_eq!(known[1], Some(added[0]));
+        assert!(known.iter().enumerate().all(|(i, id)| i == 1 || id.is_none()), "{known:?}");
+        let again = core.known_online_tracks("archive.org".to_owned(), album).unwrap();
+        assert_eq!(again, known, "looking does not add");
     }
 
     #[test]

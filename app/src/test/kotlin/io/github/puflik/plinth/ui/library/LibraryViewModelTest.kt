@@ -191,7 +191,7 @@ class LibraryViewModelTest {
             viewModel.onTrack(bohemian, TrackAction.PLAY)
 
             val queue = playback.queue.value
-            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(bohemian.uri))
+            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(checkNotNull(bohemian.uri)))
             assertThat(queue.context).isEqualTo(QueueContext.Tracks)
             assertThat(queue.current?.title).isEqualTo("Bohemian Rhapsody")
             assertThat(queue.current?.artist).isEqualTo("Queen")

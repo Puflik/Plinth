@@ -2,6 +2,7 @@ package io.github.puflik.plinth.audio.media3
 
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.puflik.plinth.audio.engine.AudioEngine
@@ -94,6 +95,8 @@ class Media3Engine(
             onPlayer {
                 synchronized(lock) { applied = generation }
                 adapter.onPrepare()
+                // Поток по Wi-Fi: без блокировки Wi-Fi засыпает с экраном посреди трека.
+                player.setWakeMode(if (source is AudioSource.LocalFile) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
                 player.setMediaItem(item, params.startPosition.inWholeMilliseconds)
                 player.playWhenReady = params.autoPlay
                 player.prepare()

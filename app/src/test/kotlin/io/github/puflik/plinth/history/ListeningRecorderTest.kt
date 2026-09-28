@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
@@ -45,6 +46,28 @@ class ListeningRecorderTest {
             assertThat(plays[1].skippedAt).isNull()
             assertThat(plays[1].previousTrack).isEqualTo(song)
             assertThat(plays[1].trackLength).isEqualTo(engine.trackDuration)
+        }
+
+    /** Сетевой трек (E3) — трек фонотеки без файла: в историю он идёт своим ID, не путём. */
+    @Test
+    fun `an online track goes to the history by its id`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (song) = userData.add(SONG)
+            val online = TrackId("0192f7c4-0000-7000-8000-00000000000a")
+            val controller = recording()
+
+            controller.play(
+                QueueContext.Liked,
+                listOf(QueueItem(AudioSource.Online(online.value), "Opening"), item(SONG)),
+                start = 0,
+            )
+            advanceTimeBy(2.minutes)
+            controller.next()
+            advanceTimeBy(1.minutes)
+            engine.completeTrack()
+
+            assertThat(userData.recorded.map { it.track }).containsExactly(online, song).inOrder()
+            assertThat(userData.recorded[1].previousTrack).isEqualTo(online)
         }
 
     /** Файл, открытый через SAF, не из фонотеки: у него нет трека и истории. */

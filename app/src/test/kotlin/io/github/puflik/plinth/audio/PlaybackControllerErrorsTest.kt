@@ -110,6 +110,26 @@ class PlaybackControllerErrorsTest {
                 ).inOrder()
         }
 
+    /**
+     * Сеть пропала посреди сетевого трека (E3b, ответ автора): очередь встаёт
+     * на нём, а «Играть» продолжает с той же секунды, а не с начала.
+     */
+    @Test
+    fun `after a network stop play goes on from the same second`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.play(album, tracks, start = 1)
+            controller.seekTo(95.seconds)
+
+            engine.failWith(PlaybackError.Network())
+            controller.togglePlayPause()
+
+            assertThat(engine.preparedSources).containsExactly(tracks[1].source, tracks[1].source).inOrder()
+            assertThat(engine.lastParams?.startPosition).isEqualTo(95.seconds)
+            assertThat(engine.lastParams?.autoPlay).isTrue()
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+        }
+
     /** Повтор одного трека держит доигравший трек, но не битый — иначе он бы повторял ошибку. */
     @Test
     fun `repeat one does not hold a broken track`() =

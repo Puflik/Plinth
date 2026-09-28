@@ -91,7 +91,7 @@ class AlbumViewModelTest {
 
             viewModel.onTrack(first, TrackAction.PLAY)
 
-            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(first.uri))
+            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(checkNotNull(first.uri)))
             assertThat(playback.queue.value.context).isEqualTo(QueueContext.Album("A Night at the Opera", "Queen"))
             assertThat(
                 playback.queue.value.upcoming
@@ -105,7 +105,7 @@ class AlbumViewModelTest {
         runTest(UnconfinedTestDispatcher()) {
             val song = track(1, "Mustapha", "Jazz", "Queen", number = 1)
             repository.upsert(listOf(song))
-            val id = userData.add(song.uri).single()
+            val id = userData.add(checkNotNull(song.uri)).single()
             val viewModel = viewModelFor(Album("Jazz", "Queen", 1))
 
             viewModel.onTrack(song, TrackAction.LIKE)

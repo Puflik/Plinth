@@ -85,7 +85,7 @@ class PlaylistViewModelTest {
 
             viewModel.onTrack(index = 2, TrackAction.PLAY)
 
-            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(a.uri))
+            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(checkNotNull(a.uri)))
             assertThat(playback.queue.value.context).isEqualTo(QueueContext.Playlist(mix, "Mix"))
             assertThat(playback.queue.value.upcoming).isEmpty()
         }

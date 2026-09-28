@@ -4,15 +4,20 @@ import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.online.FakeOnlineRepository
+import io.github.puflik.plinth.online.FakeOnlineSettings
+import io.github.puflik.plinth.online.TestConcert
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.ui.library.TrackAction
 import io.github.puflik.plinth.ui.library.TrackActions
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,7 +45,9 @@ class SearchViewModelTest {
     private val userData = FakeUserDataRepository()
     private val actions =
         TrackActions(playback, userData, FakePlaylistRepository(), CoroutineScope(Dispatchers.Unconfined))
-    private val viewModel by lazy { SearchViewModel(library, actions) }
+    private val online = FakeOnlineRepository()
+    private val onlineSettings = FakeOnlineSettings()
+    private val viewModel by lazy { SearchViewModel(library, online, onlineSettings, actions) }
 
     private val yesterday = track(1, "Yesterday", "The Beatles")
     private val bohemian = track(2, "Bohemian Rhapsody", "Queen")
@@ -123,12 +130,91 @@ class SearchViewModelTest {
 
             viewModel.onTrack(bohemian, TrackAction.PLAY)
 
-            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(bohemian.uri))
+            assertThat(engine.preparedSources).containsExactly(AudioSource.LocalFile(checkNotNull(bohemian.uri)))
             assertThat(playback.queue.value.context).isEqualTo(QueueContext.Search("e"))
             assertThat(
                 playback.queue.value.upcoming
                     .map { it.title },
             ).containsExactly("Yesterday")
+        }
+
+    /** Ответ автора E3: сначала «В библиотеке», ниже — секция Internet Archive, догружается после ответа сети. */
+    @Test
+    fun `the archive is asked after the pause and answers in its own section`() =
+        runTest(dispatcher) {
+            online.setEnabled(true)
+            val gate = CompletableDeferred<Unit>()
+            online.gate = gate
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            viewModel.onQuery("concert")
+            advanceTimeBy(SearchViewModel.DEBOUNCE_MS - 1)
+            runCurrent()
+            val beforePause = viewModel.uiState.value.online
+            advanceTimeBy(2)
+            runCurrent()
+            val waiting = viewModel.uiState.value.online
+            gate.complete(Unit)
+            runCurrent()
+
+            assertThat(beforePause).isEqualTo(OnlineResults.None)
+            assertThat(waiting).isEqualTo(OnlineResults.Searching)
+            val found = viewModel.uiState.value.online as OnlineResults.Found
+            assertThat(
+                found.sections
+                    .single()
+                    .results
+                    .map { it.title },
+            ).containsExactly(TestConcert.TITLE)
+            assertThat(online.searches).containsExactly("concert")
+        }
+
+    @Test
+    fun `without network the section says so and the library still answers`() =
+        runTest(dispatcher) {
+            online.setEnabled(true)
+            online.networkUp = false
+            fake.upsert(listOf(yesterday))
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            viewModel.onQuery("yes")
+            advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
+            runCurrent()
+
+            assertThat(viewModel.uiState.value.results).containsExactly(yesterday)
+            val found = viewModel.uiState.value.online as OnlineResults.Found
+            assertThat(found.sections.single().problem).isEqualTo(OnlineProblem.NO_NETWORK)
+        }
+
+    @Test
+    fun `switched off the archive is not asked at all`() =
+        runTest(dispatcher) {
+            online.setEnabled(true)
+            onlineSettings.setEnabled(false)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            viewModel.onQuery("concert")
+            advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
+            runCurrent()
+
+            assertThat(viewModel.uiState.value.online).isEqualTo(OnlineResults.None)
+            assertThat(online.searches).isEmpty()
+        }
+
+    @Test
+    fun `a cleared query clears the archive section without asking it`() =
+        runTest(dispatcher) {
+            online.setEnabled(true)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onQuery("concert")
+            advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
+            runCurrent()
+
+            viewModel.onQuery("")
+            runCurrent()
+
+            assertThat(viewModel.uiState.value.online).isEqualTo(OnlineResults.None)
+            assertThat(online.searches).containsExactly("concert")
         }
 
     /** Запоминает, с чем библиотеку спрашивали. */

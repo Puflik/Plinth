@@ -69,7 +69,16 @@ class PlaybackController
         /** Последний трек просили играть сразу; пропуск идёт так же — после восстановления он на паузе. */
         private var autoPlay = false
 
+        /**
+         * Докуда дошёл текущий трек. После ошибки движок позицию забывает, а
+         * сетевой трек, вставший без сети (E3b), продолжают с той же секунды.
+         */
+        private var reached = Duration.ZERO
+
         init {
+            scope.launch {
+                engine.progress.collect { if (it != PlaybackProgress.NONE) reached = it.position }
+            }
             scope.launch {
                 engine.events.collect { event ->
                     when (event) {
@@ -174,7 +183,7 @@ class PlaybackController
                 PlaybackState.Paused, PlaybackState.Ended -> engine.play()
                 PlaybackState.Idle, is PlaybackState.Error ->
                     queue.value.current?.let { item ->
-                        prepare(item, PlaybackParams(startPosition = progress.value.position, autoPlay = true))
+                        prepare(item, PlaybackParams(startPosition = reached, autoPlay = true))
                     }
             }
         }
@@ -228,6 +237,7 @@ class PlaybackController
             params: PlaybackParams,
         ) {
             autoPlay = params.autoPlay
+            reached = params.startPosition
             engine.prepare(item.source, params.copy(info = TrackInfo(item.title, item.artist, item.album)))
         }
 

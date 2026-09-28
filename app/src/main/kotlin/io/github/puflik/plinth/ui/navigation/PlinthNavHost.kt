@@ -20,6 +20,9 @@ import io.github.puflik.plinth.ui.library.playlists.AutoPlaylistScreen
 import io.github.puflik.plinth.ui.library.playlists.AutoPlaylistViewModel
 import io.github.puflik.plinth.ui.library.playlists.PlaylistScreen
 import io.github.puflik.plinth.ui.library.playlists.PlaylistViewModel
+import io.github.puflik.plinth.ui.online.OnlineAlbumHeader
+import io.github.puflik.plinth.ui.online.OnlineAlbumScreen
+import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel
 import io.github.puflik.plinth.ui.player.PlayerScreen
 import io.github.puflik.plinth.ui.search.SearchScreen
 import io.github.puflik.plinth.ui.settings.SettingsScreen
@@ -82,7 +85,10 @@ fun PlinthNavHost(
             AutoPlaylistScreen(onBack = back, onOpenPlayer = openPlayer)
         }
         composable(Destination.Search.route) {
-            SearchScreen(onOpenPlayer = openPlayer)
+            SearchScreen(onOpenPlayer = openPlayer, onOpenAlbum = { navController.navigate(onlineAlbumRoute(it)) })
+        }
+        composable(Destination.OnlineAlbum.route, arguments = ONLINE_ALBUM_ARGUMENTS) {
+            OnlineAlbumScreen(onBack = back, onOpenPlayer = openPlayer)
         }
         composable(Destination.Settings.route) {
             SettingsScreen()
@@ -116,6 +122,33 @@ private val PLAYLIST_ARGUMENTS =
     )
 
 private val AUTO_PLAYLIST_ARGUMENTS = listOf(navArgument(AutoPlaylistViewModel.ARG_KIND) { type = NavType.StringType })
+
+private val ONLINE_ALBUM_ARGUMENTS =
+    listOf(
+        navArgument(OnlineAlbumViewModel.ARG_PROVIDER) { type = NavType.StringType },
+        navArgument(OnlineAlbumViewModel.ARG_ITEM) { type = NavType.StringType },
+        navArgument(OnlineAlbumViewModel.ARG_TITLE) {
+            type = NavType.StringType
+            defaultValue = ""
+        },
+        navArgument(OnlineAlbumViewModel.ARG_ARTIST) {
+            type = NavType.StringType
+            nullable = true
+            defaultValue = null
+        },
+        navArgument(OnlineAlbumViewModel.ARG_YEAR) {
+            type = NavType.IntType
+            defaultValue = 0
+        },
+    )
+
+/** Маршрут альбома провайдера: ID элемента и подписи — любые строки, поэтому кодируются. */
+private fun onlineAlbumRoute(album: OnlineAlbumHeader): String =
+    OnlineAlbumViewModel
+        .arguments(album)
+        .filterValues { it != null }
+        .entries
+        .joinToString("&", prefix = "online-album?") { (name, value) -> "$name=${Uri.encode(value.toString())}" }
 
 /** Маршрут своего плейлиста: имя — любая строка, поэтому кодируется. */
 private fun playlistRoute(playlist: Playlist): String =

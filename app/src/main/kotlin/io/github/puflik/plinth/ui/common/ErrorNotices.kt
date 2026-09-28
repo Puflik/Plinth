@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.ui.common
 
 import android.content.res.Resources
+import androidx.annotation.StringRes
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -15,6 +16,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.core.ErrorNotice
 import io.github.puflik.plinth.core.FailedTrack
 import io.github.puflik.plinth.core.TrackProblem
@@ -95,12 +97,22 @@ private fun Resources.text(notice: ErrorNotice): String =
 
 private fun Resources.name(track: FailedTrack): String = track.title ?: getString(R.string.error_untitled)
 
-private fun Resources.problem(track: FailedTrack): String =
-    getString(
-        when (track.problem) {
-            TrackProblem.UNAVAILABLE -> R.string.error_problem_unavailable
-            TrackProblem.UNPLAYABLE -> R.string.error_problem_unplayable
-            TrackProblem.NETWORK -> R.string.error_problem_network
-            TrackProblem.UNKNOWN -> R.string.error_problem_unknown
-        },
-    )
+private fun Resources.problem(track: FailedTrack): String = getString(problemText(track))
+
+/**
+ * Беда трека словами. У сетевого трека (E3) файла нет: «недоступен» у него —
+ * источники выключены или трек пропал у провайдера.
+ */
+@StringRes
+internal fun problemText(track: FailedTrack): Int =
+    when (track.problem) {
+        TrackProblem.UNAVAILABLE ->
+            if (track.file.startsWith(AudioSource.Online.KEY_PREFIX)) {
+                R.string.error_problem_online_unavailable
+            } else {
+                R.string.error_problem_unavailable
+            }
+        TrackProblem.UNPLAYABLE -> R.string.error_problem_unplayable
+        TrackProblem.NETWORK -> R.string.error_problem_network
+        TrackProblem.UNKNOWN -> R.string.error_problem_unknown
+    }
