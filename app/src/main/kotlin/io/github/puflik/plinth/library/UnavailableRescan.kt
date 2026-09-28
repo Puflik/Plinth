@@ -17,15 +17,21 @@ import kotlinx.coroutines.launch
  * дёргала бы его на каждом круге. Трек фонотеки узнаётся по пути к файлу
  * (D3c); файлы из «Открыть файл» (`content://`) скан не видит, битый файл
  * на месте — их это не касается.
+ *
+ * Без доступа к музыке ([canRead]) файлы не открываются все, а скан
+ * откажет: такой повод пропускается, и библиотека не пишет «не удалось
+ * просканировать» рядом с просьбой о доступе (Н4). Выданный доступ сам
+ * запускает скан.
  */
 class UnavailableRescan(
     private val errors: Flow<AppError>,
     private val scan: LibraryScan,
     private val scope: CoroutineScope,
+    private val canRead: () -> Boolean,
 ) {
     fun start() {
         scope.launch {
-            errors.first { error -> error.failedTracks.any(::isGoneFromLibrary) }
+            errors.first { error -> error.failedTracks.any(::isGoneFromLibrary) && canRead() }
             AppLog.i(TAG, "library track unavailable, rescanning")
             scan.start()
         }

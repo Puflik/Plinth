@@ -30,8 +30,7 @@ import io.github.puflik.plinth.library.ScanProgress
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.permission.PermissionState
-import io.github.puflik.plinth.startup.OnboardingStep
-import io.github.puflik.plinth.ui.common.PermissionRationaleScreen
+import io.github.puflik.plinth.ui.common.PermissionRationaleCard
 import io.github.puflik.plinth.ui.common.openAppSettings
 import io.github.puflik.plinth.ui.common.rememberMediaPermission
 import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
@@ -51,7 +50,9 @@ import io.github.puflik.plinth.ui.settings.rememberFolderPicker
  *
  * Разрешение проверяется при каждом возврате на экран: его могли выдать или
  * отозвать в настройках. Первый раз экран спрашивает сам, не объясняя, —
- * объяснение нужно только после отказа.
+ * объяснение нужно только после отказа. Вкладки видны и без разрешения (Н4):
+ * «Любимое» и плейлисты с сетевыми треками играют и так, а просьба о доступе —
+ * карточкой над файловыми вкладками.
  */
 @Composable
 fun LibraryScreen(
@@ -88,85 +89,101 @@ fun LibraryScreen(
         LibraryTopBar(
             tab = tab,
             state = state,
-            showSort = state.permission == PermissionState.Granted && !state.isEmpty,
+            showSort = state.files == FilesView.LISTS,
             onTrackSort = viewModel::onTrackSort,
             onAlbumSort = viewModel::onAlbumSort,
             onOpenFile = openFile,
         )
-        when (state.permission) {
-            PermissionState.Granted ->
-                LibraryContent(
-                    state = state,
-                    tab = tab,
-                    onTab = { tab = it },
-                    onTrack = onTrack,
-                    onFolderTrack = onFolderTrack,
-                    onOpenAlbum = onOpenAlbum,
-                    onOpenArtist = onOpenArtist,
-                    onOpenPlaylist = onOpenPlaylist,
-                    onOpenAutoPlaylist = onOpenAutoPlaylist,
-                    onOpenFolder = viewModel::openFolder,
-                    onFolderUp = viewModel::folderUp,
-                    onPickFolder = pickFolder,
-                    onDismissPrompt = viewModel::onDismissPrompt,
-                )
-            PermissionState.Denied, PermissionState.PermanentlyDenied ->
-                PermissionRationaleScreen(
+        LibraryContent(
+            state = state,
+            tab = tab,
+            onTab = { tab = it },
+            access = {
+                PermissionRationaleCard(
                     permanentlyDenied = state.permission == PermissionState.PermanentlyDenied,
                     onRequest = requestPermission,
                     onOpenSettings = { openAppSettings(context) },
                 )
-            PermissionState.NotRequested -> Unit
-        }
+            },
+            empty = { EmptyLibrary(state.scannedFolders, state.prompt, pickFolder, viewModel::onDismissPrompt) },
+            lists = { fileTab ->
+                FileLists(
+                    tab = fileTab,
+                    state = state,
+                    onTrack = onTrack,
+                    onFolderTrack = onFolderTrack,
+                    onOpenAlbum = onOpenAlbum,
+                    onOpenArtist = onOpenArtist,
+                    onOpenFolder = viewModel::openFolder,
+                    onFolderUp = viewModel::folderUp,
+                )
+            },
+            playlists = { PlaylistsTab(onOpenAuto = onOpenAutoPlaylist, onOpenPlaylist = onOpenPlaylist) },
+        )
     }
 }
 
 /**
- * Выданное разрешение: статус скана и вкладки. Пустая библиотека —
- * проводник и «что дальше» (F2); пока скан идёт по пустой — «ищу музыку».
+ * Статус скана, ряд вкладок — всегда, и открытая вкладка (Н4). Плейлисты от
+ * разрешения не зависят. На файловых вкладках сверху — просьба о доступе
+ * ([access]) после отказа, ниже — [LibraryUiState.files]: списки ([lists]),
+ * пустая библиотека ([empty], F2), «ищу музыку» или ничего.
  */
 @Composable
-private fun LibraryContent(
+internal fun LibraryContent(
     state: LibraryUiState,
     tab: LibraryTab,
     onTab: (LibraryTab) -> Unit,
+    access: @Composable () -> Unit,
+    empty: @Composable () -> Unit,
+    lists: @Composable (LibraryTab) -> Unit,
+    playlists: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        ScanStatus(state.scan)
+        // Пять вкладок в ширину телефона не влезают — ряд прокручивается, подпись в одну строку.
+        PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 0.dp) {
+            LibraryTab.entries.forEach { entry ->
+                Tab(
+                    selected = entry == tab,
+                    onClick = { onTab(entry) },
+                    text = { Text(stringResource(entry.labelRes), maxLines = 1) },
+                )
+            }
+        }
+        if (tab == LibraryTab.PLAYLISTS) {
+            playlists()
+        } else {
+            if (state.askAccess) access()
+            when (state.files) {
+                FilesView.LISTS -> lists(tab)
+                FilesView.EMPTY -> empty()
+                FilesView.SCANNING -> Scanning()
+                FilesView.NOTHING -> Unit
+            }
+        }
+    }
+}
+
+/** Списки файловой вкладки [tab]; у «Плейлистов» свой экран — [PlaylistsTab]. */
+@Composable
+private fun FileLists(
+    tab: LibraryTab,
+    state: LibraryUiState,
     onTrack: (LibraryTrack, TrackAction) -> Unit,
     onFolderTrack: (LibraryTrack, TrackAction) -> Unit,
     onOpenAlbum: (Album) -> Unit,
     onOpenArtist: (String) -> Unit,
-    onOpenPlaylist: (Playlist) -> Unit,
-    onOpenAutoPlaylist: (AutoPlaylist) -> Unit,
     onOpenFolder: (String) -> Unit,
     onFolderUp: () -> Unit,
-    onPickFolder: () -> Unit,
-    onDismissPrompt: (OnboardingStep) -> Unit,
 ) {
-    ScanStatus(state.scan)
-    if (state.isEmpty) {
-        EmptyLibrary(state.scannedFolders, state.prompt, onPickFolder, onDismissPrompt)
-        return
-    }
-    if (state.tracks.isEmpty()) {
-        // Списки ещё не прочитаны — ничего; прочитаны, но скан не закончен — он и ищет.
-        if (state.loaded) Scanning()
-        return
-    }
-    // Пять вкладок в ширину телефона не влезают — ряд прокручивается, подпись в одну строку.
-    PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 0.dp) {
-        LibraryTab.entries.forEach { entry ->
-            Tab(
-                selected = entry == tab,
-                onClick = { onTab(entry) },
-                text = { Text(stringResource(entry.labelRes), maxLines = 1) },
-            )
-        }
-    }
     when (tab) {
         LibraryTab.TRACKS -> TracksTab(state.tracks, onAction = onTrack)
         LibraryTab.ALBUMS -> AlbumsTab(state.albums, onOpen = onOpenAlbum)
         LibraryTab.ARTISTS -> ArtistsTab(state.artists, onOpen = onOpenArtist)
-        LibraryTab.PLAYLISTS -> PlaylistsTab(onOpenAuto = onOpenAutoPlaylist, onOpenPlaylist = onOpenPlaylist)
         LibraryTab.FOLDERS -> FoldersTab(state.folder, onOpenFolder, onUp = onFolderUp, onAction = onFolderTrack)
+        LibraryTab.PLAYLISTS -> Unit
     }
 }
 

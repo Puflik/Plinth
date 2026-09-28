@@ -315,6 +315,67 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `file tabs ask for access only after a refusal`() {
+        val loaded = LibraryUiState(PermissionState.NotRequested, ScanProgress.Idle, loaded = true)
+
+        assertThat(loaded.askAccess).isFalse()
+        assertThat(loaded.copy(permission = PermissionState.Denied).askAccess).isTrue()
+        assertThat(loaded.copy(permission = PermissionState.PermanentlyDenied).askAccess).isTrue()
+        assertThat(loaded.copy(permission = PermissionState.Granted).askAccess).isFalse()
+    }
+
+    @Test
+    fun `without access and files the file tabs have only the request`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            viewModel.onPermission(PermissionState.Denied)
+
+            assertThat(viewModel.uiState.value.askAccess).isTrue()
+            assertThat(viewModel.uiState.value.files).isEqualTo(FilesView.NOTHING)
+            assertThat(viewModel.uiState.value.isEmpty).isFalse()
+        }
+
+    @Test
+    fun `revoked access keeps the lists already in the library`() =
+        runTest(UnconfinedTestDispatcher()) {
+            repository.upsert(listOf(bohemian, anthem))
+            backgroundScope.launch { viewModel.uiState.collect {} }
+
+            viewModel.onPermission(PermissionState.PermanentlyDenied)
+
+            assertThat(viewModel.uiState.value.askAccess).isTrue()
+            assertThat(viewModel.uiState.value.files).isEqualTo(FilesView.LISTS)
+            assertThat(viewModel.uiState.value.tracks).containsExactly(anthem, bohemian).inOrder()
+            assertThat(viewModel.uiState.value.albums).hasSize(2)
+            assertThat(scan.starts).isEqualTo(0)
+        }
+
+    @Test
+    fun `with access the file tabs show the scan, then the lists or the empty library`() =
+        runTest(UnconfinedTestDispatcher()) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            viewModel.onPermission(PermissionState.Granted)
+
+            scan.progress.value = ScanProgress.Running(written = 0, total = 0)
+            assertThat(viewModel.uiState.value.files).isEqualTo(FilesView.SCANNING)
+
+            scan.progress.value = ScanProgress.Done(found = 0)
+            assertThat(viewModel.uiState.value.files).isEqualTo(FilesView.EMPTY)
+
+            repository.upsert(listOf(anthem))
+            assertThat(viewModel.uiState.value.files).isEqualTo(FilesView.LISTS)
+            assertThat(viewModel.uiState.value.askAccess).isFalse()
+        }
+
+    @Test
+    fun `nothing shows before the lists are read`() {
+        val unread = LibraryUiState(PermissionState.Granted, ScanProgress.Running(written = 0, total = 0))
+
+        assertThat(unread.files).isEqualTo(FilesView.NOTHING)
+    }
+
+    @Test
     fun `folders skipped in the wizard come back in the empty library only`() =
         runTest(UnconfinedTestDispatcher()) {
             onboarding.record.value = OnboardingRecord(finished = true, skipped = setOf(OnboardingStep.FOLDERS))

@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Typing fast in the search field no longer loses letters or moves the
   cursor away from the end of the text.
+- Without access to music the library keeps all its tabs: Liked, Recent and
+  playlists with Internet Archive tracks are there and play, and the file
+  tabs ask for access in a card above their lists. If access was turned off
+  later, the library stays in view; its files play again once access is
+  back. An empty library shows where to look for music inside the file tabs,
+  so playlists stay in reach.
 
 ## [0.2.0] - 2026-09-28
 

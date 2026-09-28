@@ -17,6 +17,7 @@ import io.github.puflik.plinth.audio.media3.ExoPlayerFactory
 import io.github.puflik.plinth.audio.media3.Media3Engine
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.UnavailableRescan
+import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.queue.FileQueueStore
 import io.github.puflik.plinth.queue.QueueStore
 import kotlinx.coroutines.CoroutineDispatcher
@@ -59,10 +60,12 @@ object AudioModule {
     @Provides
     @Singleton
     fun provideUnavailableRescan(
+        @ApplicationContext context: Context,
         playback: PlaybackController,
         scan: LibraryScan,
         @ApplicationScope scope: CoroutineScope,
-    ): UnavailableRescan = UnavailableRescan(playback.errors, scan, scope)
+    ): UnavailableRescan =
+        UnavailableRescan(playback.errors, scan, scope, canRead = { MediaPermission.isGranted(context) })
 }
 
 /** Как плеер представляется провайдеру — так же, как ядро (`HttpClient`). */

@@ -21,7 +21,7 @@
     <string name="library_permission_title">Access to your music</string>
     <string name="library_permission_rationale">Plinth reads the music on this device to build your library. The music never leaves the device.</string>
     <string name="library_permission_allow">Allow access</string>
-    <string name="library_permission_denied">Access to music is turned off. Turn it on in the app settings to see your library.</string>
+    <string name="library_permission_denied">Access to music is turned off, so files on this device can’t be found or played. You can turn it on in the app settings.</string>
     <string name="library_permission_open_settings">Open settings</string>
     <string name="library_permission_ask_again">Ask again</string>
     <string name="library_scanning">Scanning your music…</string>

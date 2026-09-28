@@ -55,7 +55,28 @@ class UnavailableRescanTest {
             assertThat(scan.starts).isEqualTo(0)
         }
 
-    private fun TestScope.rescan() = UnavailableRescan(errors, scan, backgroundScope)
+    /**
+     * Н4: без доступа к музыке файл не открывается как недоступный, а скан
+     * заведомо откажет — и библиотека сказала бы «не удалось просканировать»
+     * рядом с просьбой о доступе. Скан за запуск остаётся тому, что случится с доступом.
+     */
+    @Test
+    fun `no rescan without access to music`() =
+        runTest(UnconfinedTestDispatcher()) {
+            rescan().start()
+
+            access = false
+            errors.emit(AppError.PlaybackStopped(gone))
+            assertThat(scan.starts).isEqualTo(0)
+
+            access = true
+            errors.emit(AppError.PlaybackStopped(gone))
+            assertThat(scan.starts).isEqualTo(1)
+        }
+
+    private var access = true
+
+    private fun TestScope.rescan() = UnavailableRescan(errors, scan, backgroundScope, canRead = { access })
 
     private class CountingScan : LibraryScan {
         override val progress = MutableStateFlow<ScanProgress>(ScanProgress.Idle)

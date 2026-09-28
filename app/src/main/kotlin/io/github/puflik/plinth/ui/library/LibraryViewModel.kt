@@ -68,6 +68,41 @@ data class LibraryUiState(
                 loaded &&
                 tracks.isEmpty() &&
                 (scan is ScanProgress.Done || scan == ScanProgress.Failed)
+
+    /**
+     * Над файловыми вкладками — просьба о доступе (Н4): после отказа. Пока
+     * не спрашивали, на экране системный диалог, и просить незачем.
+     */
+    val askAccess: Boolean
+        get() = permission == PermissionState.Denied || permission == PermissionState.PermanentlyDenied
+
+    /**
+     * Что на файловых вкладках. Списки видны и без доступа: после отзыва
+     * библиотека в базе цела, файлы из неё просто не играют.
+     */
+    val files: FilesView
+        get() =
+            when {
+                tracks.isNotEmpty() -> FilesView.LISTS
+                isEmpty -> FilesView.EMPTY
+                permission == PermissionState.Granted && loaded -> FilesView.SCANNING
+                else -> FilesView.NOTHING
+            }
+}
+
+/** Содержимое файловых вкладок — «Треков», «Альбомов», «Исполнителей» и «Папок». */
+enum class FilesView {
+    /** Списки фонотеки. */
+    LISTS,
+
+    /** Пустая библиотека: проводник и «что дальше» (F2). */
+    EMPTY,
+
+    /** Списки прочитаны пустыми, а скан ещё идёт — «ищу музыку». */
+    SCANNING,
+
+    /** Ни списков, ни скана: ещё не прочитаны или нет доступа. */
+    NOTHING,
 }
 
 /**
