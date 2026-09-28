@@ -5197,3 +5197,51 @@ D4b1 — данные для вкладки «Плейлисты», D4b2 — э�
   сетями», проверить совет «выключите и включите»; затем удалить
   `keystore.properties`. Потом — About (текст предложен в чате: описание и
   темы), Н3, Н4, lint `NewApi` — отдельными чатами.
+
+### Android lint в CI — сделано
+
+2026-09-28, ворктри `C:\claude\Plinth-lint`, ветка `lint` (от `c6e0c6d`).
+Задача из F: Н1 (`URLDecoder.decode(String, Charset)` — API 33 при
+`minSdk` 26) lint `NewApi` видел, но в CI lint не запускался.
+
+- **Замер до правок** — `lintGithubDebug lintFdroidDebug` (AGP 9.4.1, своего
+  `lint {}` нет, умолчания: ошибки роняют сборку, предупреждения — нет):
+  40 ошибок, предупреждений 21 (`github`) и 19 (`fdroid`). `NewApi` — ни
+  одной (Н1 исправлен в F). Ошибки:
+  - 39 `UnsafeOptInUsageError` — нестабильный API Media3 (`@UnstableApi`)
+    без `@OptIn`: `QueueCommandsPlayer` (наследник `ForwardingPlayer`),
+    `OnlineResolver` (`ResolvingDataSource.Resolver`), `PlaybackService`
+    (`DefaultMediaNotificationProvider`, `onPlaybackResumption`),
+    `ExoPlayerFactory.create`;
+  - 1 `LocalContextGetResourceValueCall` — `PlaylistPicker`: строка тоста
+    через `LocalContext.current.getString`.
+- **Исправлено точечно:** `@OptIn(UnstableApi::class)`
+  (`androidx.annotation.OptIn`) на трёх классах и на
+  `ExoPlayerFactory.create`; в `PlaylistPicker` строка — из
+  `LocalResources.current`, контекст остался для `Toast`. После — 0 ошибок,
+  22 предупреждения на каждый flavor (`GradleDependency` сверяет версии с
+  Maven по сети — их число от прогона к прогону 1–4).
+- **Baseline не понадобился:** ошибок после правок ноль, предупреждения
+  по умолчанию сборку не роняют. `lint {}` в `app/build.gradle.kts` не
+  добавлен — умолчаний AGP хватает.
+- **CI** (`.github/workflows/ci.yml`, задача `check`): шаг «Android lint,
+  both flavors» — `./gradlew lintGithubDebug lintFdroidDebug`, после
+  detekt, до unit-тестов. У flavor свои исходники (`src/github`,
+  `src/fdroid`) — проверяются оба. HTML-отчёты lint ложатся в
+  `app/build/reports/`, их уже забирает «Upload reports».
+- **Мутация:** Н1 возвращён (`URLDecoder.decode(encoded, Charsets.UTF_8)`
+  в `TreeLabel`) — `lintGithubDebug` падает: `NewApi`, «Call requires API
+  level 33 … (current min is 26)». Правка откачена.
+- **Оставшиеся предупреждения** (не чинились, сборку не роняют; чинить ли —
+  решение автора): `UseKtx` 7 (`String.toUri`), `GradleDependency`
+  (core-ktx 1.19.1, work 2.12.0), `UnusedResources` 2 (`player_title`,
+  `library_scan_progress`), `ModifierParameter` 2, `LocalContextResourcesRead`
+  (`ErrorNotices`), `InlinedApi` (`READ_MEDIA_AUDIO`, API 33),
+  `SwitchIntDef`, `RedundantLabel`, `ExportedService`, `ObsoleteSdkInt`
+  (`mipmap-anydpi-v26`), `Untranslatable` (`app_name` debug, ru).
+- **Проверено локально:** ktlintCheck, detekt, lint обоих flavor —
+  зелёные; сборка обоих flavor и APK инструментальных тестов. JVM-тесты —
+  580/584 на каждом flavor: 4 падения — те же `DataStore{Folder,Sort,
+  Onboarding}SettingsTest` («Unable to rename …preferences_pb.tmp» во
+  `%TEMP%`, окружение Windows — см. «Plinth debug» выше); на чистом
+  `main` (stash) — те же 4. Эмуляторы не трогались.

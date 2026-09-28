@@ -2,8 +2,10 @@ package io.github.puflik.plinth.audio.media3
 
 import android.content.Context
 import android.os.Looper
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -45,6 +47,7 @@ class ExoPlayerFactory(
 ) {
     private val context = context.applicationContext
 
+    @OptIn(UnstableApi::class)
     fun create(looper: Looper): ExoPlayer {
         val http = DefaultHttpDataSource.Factory().setUserAgent(userAgent)
         val data = ResolvingDataSource.Factory(DefaultDataSource.Factory(context, http), OnlineResolver(streams))

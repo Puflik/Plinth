@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,8 +71,9 @@ fun PlaylistPicker(
     val playlists by viewModel.playlists.collectAsState()
     var naming by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val added = { name: String ->
-        Toast.makeText(context, context.getString(R.string.playlist_added, name), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, resources.getString(R.string.playlist_added, name), Toast.LENGTH_SHORT).show()
         onDismiss()
     }
     if (naming) {

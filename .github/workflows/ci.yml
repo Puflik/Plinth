@@ -86,6 +86,13 @@ jobs:
       - name: detekt
         run: ./gradlew detekt
 
+      # Android lint: ошибки (NewApi и прочие) роняют сборку — так бы поймалась
+      # находка Н1 приёмки v0.2, вызов API 33 при minSdk 26. Предупреждения
+      # не роняют, они в отчёте (Upload reports). У flavor свои исходники —
+      # проверяются оба.
+      - name: Android lint, both flavors
+        run: ./gradlew lintGithubDebug lintFdroidDebug
+
       - name: Unit tests, both flavors
         run: ./gradlew testGithubDebugUnitTest testFdroidDebugUnitTest
 

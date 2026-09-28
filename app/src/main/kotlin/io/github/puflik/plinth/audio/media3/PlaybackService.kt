@@ -1,6 +1,8 @@
 package io.github.puflik.plinth.audio.media3
 
 import android.app.PendingIntent
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
@@ -31,6 +33,7 @@ import javax.inject.Inject
  * Плеер служба не освобождает: он живёт столько же, сколько процесс.
  */
 @AndroidEntryPoint
+@OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var player: ExoPlayer

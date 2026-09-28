@@ -1,7 +1,9 @@
 package io.github.puflik.plinth.audio.media3
 
 import android.net.Uri
+import androidx.annotation.OptIn
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
@@ -25,6 +27,7 @@ import io.github.puflik.plinth.audio.engine.StreamResolver
  *
  * Зовётся из потоков загрузки — отсюда замок.
  */
+@OptIn(UnstableApi::class)
 internal class OnlineResolver(
     private val streams: StreamResolver,
 ) : ResolvingDataSource.Resolver {

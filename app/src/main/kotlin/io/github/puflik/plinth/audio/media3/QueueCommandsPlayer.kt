@@ -1,7 +1,9 @@
 package io.github.puflik.plinth.audio.media3
 
+import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
 import java.util.IdentityHashMap
@@ -20,6 +22,7 @@ import java.util.IdentityHashMap
  * есть — с командами ExoPlayer. Поэтому слушатели получают событие уже с
  * командами очереди.
  */
+@OptIn(UnstableApi::class)
 class QueueCommandsPlayer(
     player: Player,
     private val onNext: () -> Unit,
