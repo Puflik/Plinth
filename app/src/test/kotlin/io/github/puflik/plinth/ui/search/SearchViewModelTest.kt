@@ -62,8 +62,9 @@ class SearchViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** Что набранное видно в поле сразу, проверяет `SearchFieldTest` (Н3): текст держит поле. */
     @Test
-    fun `typed text shows at once, results only after a pause`() =
+    fun `results come only after a pause in typing`() =
         runTest(dispatcher) {
             fake.upsert(listOf(yesterday, bohemian))
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -76,7 +77,6 @@ class SearchViewModelTest {
             advanceTimeBy(SearchViewModel.DEBOUNCE_MS - 1)
             runCurrent()
 
-            assertThat(viewModel.uiState.value.query).isEqualTo("beat")
             assertThat(viewModel.uiState.value.results).isEmpty()
             assertThat(library.searches).isEmpty()
 

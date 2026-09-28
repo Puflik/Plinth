@@ -29,15 +29,14 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /**
- * Что видит экран поиска.
+ * Что видит экран поиска под полем. Текста поля здесь нет: поле держит его
+ * само (Н3).
  *
- * @property query набранный текст — сразу, без задержки поиска.
  * @property searched результаты относятся к непустому запросу: пустой список
  *   значит «ничего не нашлось», а не «ещё не искали».
  * @property online секции провайдеров под библиотекой (E3).
  */
 data class SearchUiState(
-    val query: String = "",
     val results: List<LibraryTrack> = emptyList(),
     val searched: Boolean = false,
     val online: OnlineResults = OnlineResults.None,
@@ -87,7 +86,7 @@ class SearchViewModel
                 .flatMapLatest { text ->
                     if (text.isEmpty()) flowOf(NOTHING) else library.search(text).map { Found(it, searched = true) }
                 }
-                // Набранный текст виден сразу, ещё до первого поиска.
+                // Экран готов сразу, ещё до первого поиска.
                 .onStart { emit(NOTHING) }
 
         private val inNetwork: Flow<OnlineResults> =
@@ -105,10 +104,11 @@ class SearchViewModel
                 }.onStart { emit(OnlineResults.None) }
 
         val uiState: StateFlow<SearchUiState> =
-            combine(query, found, inNetwork) { query, found, online ->
-                SearchUiState(query, found.results, found.searched, online)
+            combine(found, inNetwork) { found, online ->
+                SearchUiState(found.results, found.searched, online)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SearchUiState())
 
+        /** Текст поля — как набран; обратно в поле он не возвращается (Н3). */
         fun onQuery(text: String) {
             query.value = text
         }
@@ -118,8 +118,7 @@ class SearchViewModel
             track: LibraryTrack,
             action: TrackAction,
         ) {
-            val state = uiState.value
-            actions.act(action, QueueContext.Search(state.query.trim()), state.results, track)
+            actions.act(action, QueueContext.Search(query.value.trim()), uiState.value.results, track)
         }
 
         private data class Found(

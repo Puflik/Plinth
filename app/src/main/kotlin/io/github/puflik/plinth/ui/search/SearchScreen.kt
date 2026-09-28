@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -19,8 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -58,6 +62,10 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    // Текст и курсор поля живут здесь, а в ViewModel текст только уходит (Н3):
+    // круг через её Flow отставал от быстрого ввода и стирал буквы.
+    val query = rememberTextFieldState()
+    LaunchedEffect(query) { snapshotFlow { query.text.toString() }.collect(viewModel::onQuery) }
     val feedback = rememberTrackActionFeedback(onOpenPlayer)
     val onTrack = { track: LibraryTrack, action: TrackAction ->
         viewModel.onTrack(track, action)
@@ -65,11 +73,10 @@ fun SearchScreen(
     }
     Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
-            value = state.query,
-            onValueChange = viewModel::onQuery,
+            state = query,
             placeholder = { Text(stringResource(R.string.search_hint)) },
             leadingIcon = { Icon(painterResource(R.drawable.ic_nav_search), contentDescription = null) },
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
             modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
         when {

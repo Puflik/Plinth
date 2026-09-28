@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or an album says there is no network, Plinth explains that the firmware
   may be blocking it and opens Phone Master's network settings.
 
+### Fixed
+
+- Typing fast in the search field no longer loses letters or moves the
+  cursor away from the end of the text.
+
 ## [0.2.0] - 2026-09-28
 
 The second wave, "Core and first source": the library and your likes,

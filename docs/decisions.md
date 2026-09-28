@@ -5245,3 +5245,50 @@ D4b1 — данные для вкладки «Плейлисты», D4b2 — э�
   Onboarding}SettingsTest` («Unable to rename …preferences_pb.tmp» во
   `%TEMP%`, окружение Windows — см. «Plinth debug» выше); на чистом
   `main` (stash) — те же 4. Эмуляторы не трогались.
+
+### Н3: поле поиска при быстром вводе — сделано
+
+2026-09-28, ворктри `C:\claude\Plinth-n3`, ветка `n3` (от `c6e0c6d`).
+
+- **Причина.** `OutlinedTextField` брал `value` из `uiState` —
+  `combine(query, found, inNetwork).stateIn(…)`. Буква уходила в
+  `MutableStateFlow`, а в поле возвращалась через `combine` и
+  `collectAsState` на следующем кадре. Если поле перекомпоновывалось
+  раньше, оно получало старый текст: буква стиралась, курсор уезжал к
+  началу (`TextFieldValue` обрезает выделение под старый текст).
+- **Исправление.** Текст и курсор держит само поле: `rememberTextFieldState()`
+  в `SearchScreen`, `OutlinedTextField(state = …)` с
+  `TextFieldLineLimits.SingleLine`. В ViewModel текст только уходит:
+  `snapshotFlow { query.text.toString() }` → `onQuery`, обратно в поле он не
+  возвращается. Из `SearchUiState` убран `query` — поле его больше не
+  читает, а оставленное свойство звало бы вернуть круг. Контекст очереди
+  (`QueueContext.Search`) берётся из `query` ViewModel, как и раньше
+  (набранный текст, `trim`). Текст сохраняется `rememberSaveable` внутри
+  `rememberTextFieldState`: после смерти процесса поле восстановит его, а
+  `LaunchedEffect` отдаст новой ViewModel — поиск повторится.
+- **Падающий тест — `SearchFieldTest`** (инструментальный, `ui/search`).
+  ViewModel с фейками из `sharedTest`, на время ввода её корутины
+  придерживает подменный `Dispatchers.Main` (`HoldingMain`): круг через Flow
+  не замыкается — как при вводе быстрее кадра. Буквы `beat` по одной; после
+  каждой — текст поля и курсор в конце. До исправления: набрано «b», в поле
+  `''`. После — зелёный, и когда ViewModel отпущена, находится трек.
+  **Ловушка:** заморозить весь `Dispatchers.Main` нельзя — на нём опрос
+  простоя ui-test (`IdlingResourceRegistry.pollScope`), тест виснет на
+  `setContent` с `ComposeNotIdleException`. Поэтому придерживаются только
+  корутины, чей `Job` — потомок `viewModelScope`.
+- **Проверено:**
+  - `SearchFieldTest` на Plinth_API_30: красный на старом коде, зелёный на
+    новом; все UI-тесты пакета `ui` — 8/8;
+  - вручную на API 30: `adb shell input text untagged` и `-tone` →
+    `untagged-tone`, курсор в конце, трек найден; текст цел после смены
+    вкладки, поворота и «Не сохранять действия» (новая ViewModel повторила
+    поиск). Настройка «Не сохранять действия» возвращена;
+  - JVM оба flavor — 584, из них 4 известных падения DataStore на Windows
+    (окружение); `SearchViewModelTest` 8/8 — тест «typed text shows at once»
+    стал «results come only after a pause in typing»: что текст виден сразу,
+    теперь проверяет `SearchFieldTest`; ktlintFormat → ktlintCheck, detekt.
+- **Не тронуто:** диалог имени плейлиста держит текст локально
+  (`TextFieldValue` в `rememberSaveable`) — Н3 там нет. Отладочная сборка на
+  API 30 поставлена `install -r` поверх (данные приёмки целы), тестовый APK
+  остался рядом.
+- `CHANGELOG.md` — `[Unreleased]`, «Fixed».
