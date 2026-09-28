@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Отладочная сборка стоит рядом с выпуском: в лаунчере, в списках VPN и
+     брандмауэра HiOS два одинаковых «Plinth» не различить (приёмка 0.2.0, Н7). -->
+<resources>
+    <string name="app_name" translatable="false">Plinth debug</string>
+</resources>

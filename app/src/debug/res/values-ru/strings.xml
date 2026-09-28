@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Без этого файла на русском телефоне победит app_name из main/values-ru. -->
+<resources>
+    <string name="app_name">Plinth debug</string>
+</resources>
