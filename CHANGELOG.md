@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The second wave, "Core and first source" (to be released as 0.2.0): the
-library and your likes, playlists and history move into a core written in
-Rust, with a journal that survives a reinstall, and Internet Archive becomes
-the first online source.
+## [0.2.0] - 2026-09-28
+
+The second wave, "Core and first source": the library and your likes,
+playlists and history move into a core written in Rust, with a journal that
+survives a reinstall, and Internet Archive becomes the first online source.
 
 ### Added
 
@@ -71,6 +72,9 @@ the first online source.
   database and the settings stay on the device.
 - New permissions: internet (online sources) and network state (to tell a
   metered network from Wi-Fi).
+- After updating from 0.1, Android asks for access to music once more: the
+  new core reads files by their paths, and granting that resets the earlier
+  answer. Your queue and settings stay as they were.
 - The permission screen now says the music never leaves the device.
 - The APK grows from 2.9 MB to 16.3 MB: the core is built for four ABIs
   (`docs/testing/apk-size.md`).
@@ -174,6 +178,7 @@ an early pre-release — online sources, playlists and sync come in later waves.
 - CI builds and tests both flavors (`github`, `fdroid`); architecture decision
   records in `docs/adr/`, a contributing guide in `CONTRIBUTING.md`.
 
-[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Puflik/Plinth/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Puflik/Plinth/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Puflik/Plinth/releases/tag/v0.1.0

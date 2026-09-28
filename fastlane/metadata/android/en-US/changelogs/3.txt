@@ -1,0 +1,1 @@
+Second wave, "Core and first source": likes, playlists with M3U/PLS import, listening history, and a copy of them in a folder you choose that comes back after a reinstall. Internet Archive search and playback (can be turned off). Artist sort names from tags. The library is read by the app's own scanner. Early pre-release.
