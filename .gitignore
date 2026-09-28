@@ -48,13 +48,11 @@ secrets.properties
 
 # --- Graphify knowledge graph (локальный, пересобирается) ---
 graphify-out/
+.graphifyignore
+tools/graphify_update.py
 
-# --- Claude Code: проектные настройки коммитятся, личные — нет ---
-.claude/*
-!.claude/settings.json
-!.claude/hooks/
-.claude/settings.local.json
-
-# Скиллы — копии из плагина ecc (MIT, (c) Affaan Mustafa) без текста лицензии.
-# В AGPL-репозиторий их не кладём: каждый ставит себе сам.
-.claude/skills/
+# --- Claude Code: инструменты автора, проекту и участникам не нужны ---
+# Настройки, хуки и CLAUDE.md живут только на диске; в новый ворктри их
+# копируют руками. Скиллы из плагина ecc (MIT) сюда тоже не попадают.
+.claude/
+CLAUDE.md
