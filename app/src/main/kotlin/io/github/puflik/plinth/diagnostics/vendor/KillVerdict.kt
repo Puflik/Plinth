@@ -1,5 +1,7 @@
 package io.github.puflik.plinth.diagnostics.vendor
 
+import android.app.ApplicationExitInfo
+
 /** Почему процесс закончился в прошлый раз — по `ApplicationExitInfo`, крупно (G2.1). */
 enum class ExitReason {
     /** Остановил человек: «Остановить» в настройках, диспетчер задач. */
@@ -16,6 +18,33 @@ enum class ExitReason {
 
     /** Android 10 и старше причину не называет. */
     UNKNOWN,
+    ;
+
+    companion object {
+        /**
+         * Причина по `ApplicationExitInfo.reason` и `description`. HiOS смахивание из
+         * недавних отдаёт как `REASON_OTHER` с `description=manual_swipUpClean`
+         * (Т1 приёмки v0.1.1) — остановил человек, совет про батарею тут не поможет.
+         */
+        fun of(
+            reason: Int,
+            description: String?,
+        ): ExitReason {
+            val swiped = description.orEmpty().contains(SWIPE_CLEAN, ignoreCase = true)
+            return when (reason) {
+                ApplicationExitInfo.REASON_USER_REQUESTED, ApplicationExitInfo.REASON_USER_STOPPED -> USER
+                ApplicationExitInfo.REASON_CRASH,
+                ApplicationExitInfo.REASON_CRASH_NATIVE,
+                ApplicationExitInfo.REASON_ANR,
+                -> CRASH
+                ApplicationExitInfo.REASON_PACKAGE_UPDATED, ApplicationExitInfo.REASON_PERMISSION_CHANGE -> UPDATE
+                ApplicationExitInfo.REASON_OTHER -> if (swiped) USER else SYSTEM
+                else -> SYSTEM
+            }
+        }
+
+        private const val SWIPE_CLEAN = "swipUpClean"
+    }
 }
 
 /**

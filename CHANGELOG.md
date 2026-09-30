@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later, the library stays in view; its files play again once access is
   back. An empty library shows where to look for music inside the file tabs,
   so playlists stay in reach.
+- On TECNO, Infinix and itel phones, swiping Plinth away from recent apps
+  while music plays no longer brings up "Why music stops" on the next
+  start: you stopped it, not the firmware.
 
 ## [0.2.0] - 2026-09-28
 

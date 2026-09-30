@@ -1,7 +1,6 @@
 package io.github.puflik.plinth.diagnostics.vendor
 
 import android.app.ActivityManager
-import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
 import io.github.puflik.plinth.diagnostics.CrashStore
@@ -34,18 +33,8 @@ class ServiceKillDetector(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ExitReason.UNKNOWN
         val manager = context.getSystemService(ActivityManager::class.java)
         val last = manager.getHistoricalProcessExitReasons(context.packageName, 0, 1).firstOrNull()
-        return last?.reason?.let(::exitReason) ?: ExitReason.UNKNOWN
+        return last?.let { ExitReason.of(it.reason, it.description) } ?: ExitReason.UNKNOWN
     }
-
-    private fun exitReason(reason: Int): ExitReason =
-        when (reason) {
-            ApplicationExitInfo.REASON_USER_REQUESTED, ApplicationExitInfo.REASON_USER_STOPPED -> ExitReason.USER
-            ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR ->
-                ExitReason.CRASH
-            ApplicationExitInfo.REASON_PACKAGE_UPDATED, ApplicationExitInfo.REASON_PERMISSION_CHANGE ->
-                ExitReason.UPDATE
-            else -> ExitReason.SYSTEM
-        }
 
     private companion object {
         const val TAG = "Vendor"
