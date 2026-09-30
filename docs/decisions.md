@@ -5415,3 +5415,21 @@ v0.2 — ответы автора»): без разрешения «Библи�
     файла в `tools/graphify_update.py`; переизвлечь `v0.1-checklist.md`
     (связь дублей); подсказка субагентам искать тест по имени класса.
   - Задачи — `tasks.md`, Г2.1–Г2.9.
+- **Г2.5–Г2.8 сделаны в тот же день.** Т1: `ExitReason.of(reason, description)`
+  — чистая функция, `REASON_OTHER` с `manual_swipUpClean` — `USER`
+  (`ExitReasonTest`, 5). Т2: `Vendor.TRANSSION` (TECNO, Infinix, itel) в
+  справке «Why music stops» — экран автозапуска Phone Master
+  `com.cyin.himgr.autostart.AutoStartActivity` (адрес из общих списков, на
+  телефоне не проверен; нет — общие экраны Android), страница
+  dontkillmyapp.com/tecno; `FirmwareNetworkBlock` берёт группу из `Vendor`.
+  №12: выбор «что и с какой секунды» — `QueueKeeper.resumePoint()`, тесты
+  «медиакнопка раньше восстановления» и «продолжать нечего»; мутация без
+  `restored()` ловится. №5: тест уже был
+  (`touching_the_notification_opens_the_app`) — аудит его не увидел, grep шёл
+  по имени метода. Проверки: JVM обоих flavor 595, падают только 4 теста
+  DataStore (окружение Windows, как и раньше), ktlint, detekt, lint.
+  Инструментальные после правки `PlaybackService` не гонялись — эмулятор не
+  поднимался.
+- **Окружение:** JBR по пути из README (`Android Studio\jbr`) сломан, Studio
+  переехала в `Android Studio1`; Gradle запускался с
+  `C:\Program Files\Android\openjdk\jdk-21.0.8`.

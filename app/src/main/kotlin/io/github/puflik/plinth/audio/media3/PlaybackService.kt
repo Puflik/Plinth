@@ -82,13 +82,13 @@ class PlaybackService : MediaSessionService() {
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val resumed = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             scope.launch {
-                keeper.restored()
-                val item = playback.queue.value.current
-                if (item == null) {
+                val point = keeper.resumePoint()
+                if (point == null) {
                     resumed.setException(UnsupportedOperationException("nothing saved to resume"))
                 } else {
+                    val item = point.item
                     val media = MediaItemMapper.map(item.source, TrackInfo(item.title, item.artist, item.album))
-                    val position = playback.progress.value.position.inWholeMilliseconds
+                    val position = point.position.inWholeMilliseconds
                     resumed.set(MediaSession.MediaItemsWithStartPosition(listOf(media), 0, position))
                 }
             }

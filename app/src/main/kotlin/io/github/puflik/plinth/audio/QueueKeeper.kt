@@ -2,6 +2,7 @@ package io.github.puflik.plinth.audio
 
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.di.ApplicationScope
+import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.QueueStore
 import io.github.puflik.plinth.startup.PlayHistory
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -52,6 +54,17 @@ class QueueKeeper
         /** Ждёт, пока сохранённое прочитано и очередь, если была, восстановлена. */
         suspend fun restored() {
             played.filterNotNull().first()
+        }
+
+        /**
+         * Что играть, если процесс поднят медиакнопкой (ревью №12): текущий трек
+         * очереди с его секундой — после восстановления, иначе очередь ещё пуста.
+         * `null` — продолжать нечего.
+         */
+        suspend fun resumePoint(): ResumePoint? {
+            restored()
+            val item = playback.queue.value.current ?: return null
+            return ResumePoint(item, playback.progress.value.position)
         }
 
         fun start() {
@@ -117,3 +130,9 @@ class QueueKeeper
             val PLAYED_EVERY = 1.minutes
         }
     }
+
+/** Откуда продолжить игру: трек очереди и секунда в нём. */
+data class ResumePoint(
+    val item: QueueItem,
+    val position: Duration,
+)

@@ -11,6 +11,7 @@ import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.QueueStore
 import io.github.puflik.plinth.queue.SavedQueue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -52,6 +53,30 @@ class QueueKeeperTest {
             assertThat(engine.lastParams?.startPosition).isEqualTo(42.seconds)
             assertThat(controller.state.value).isEqualTo(PlaybackState.Paused)
             assertThat(store.saved).isEqualTo(SavedQueue(saved, 42.seconds))
+        }
+
+    @Test
+    fun `a media button with no service resumes the saved track on its second`() =
+        runTest(UnconfinedTestDispatcher()) {
+            store.saved = SavedQueue(saved, 42.seconds)
+            val (_, keeper) = keeper()
+            // Процесс поднят медиакнопкой (ревью №12): сессия спрашивает раньше, чем очередь прочитана.
+            val point = async { keeper.resumePoint() }
+            assertThat(point.isCompleted).isFalse()
+
+            keeper.start()
+
+            assertThat(point.await()).isEqualTo(ResumePoint(tracks[1], 42.seconds))
+        }
+
+    @Test
+    fun `nothing saved leaves nothing to resume`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val (_, keeper) = keeper()
+
+            keeper.start()
+
+            assertThat(keeper.resumePoint()).isNull()
         }
 
     @Test
