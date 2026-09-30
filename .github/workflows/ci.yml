@@ -99,6 +99,19 @@ jobs:
       - name: Assemble both flavors
         run: ./gradlew assembleGithubDebug assembleFdroidDebug
 
+      # Бюджет размера (docs/BUILD.md, docs/testing/apk-size.md): релизный APK
+      # со всеми ABI — не больше 30 МБ. Без ключа release собирается
+      # неподписанным — размер от подписи почти не меняется.
+      - name: Release APK within the size budget
+        run: |
+          ./gradlew assembleGithubRelease
+          budget=30000000
+          for apk in app/build/outputs/apk/github/release/*.apk; do
+            size=$(stat -c %s "$apk")
+            echo "$apk: $size bytes, budget $budget"
+            test "$size" -le "$budget" || { echo "::error::$apk is over the size budget"; exit 1; }
+          done
+
       # Эмулятора в CI нет, но APK инструментальных тестов собрать можно:
       # так ловятся ошибки, которые видит только DEX, — например, пробелы
       # в именах тестов, недопустимые до API 30.

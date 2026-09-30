@@ -5433,3 +5433,7 @@ v0.2 — ответы автора»): без разрешения «Библи�
 - **Окружение:** JBR по пути из README (`Android Studio\jbr`) сломан, Studio
   переехала в `Android Studio1`; Gradle запускался с
   `C:\Program Files\Android\openjdk\jdk-21.0.8`.
+- **Г2.9:** в CI шаг «Release APK within the size budget» —
+  `assembleGithubRelease` (без ключа неподписанный) и проверка размера против
+  бюджета 30 МБ из `docs/BUILD.md` (сейчас 16,3 МБ, 54 %). Порог не новый —
+  тот, что уже был записан; R8 добавляет CI несколько минут.
