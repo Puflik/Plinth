@@ -30,6 +30,9 @@ class VendorGuardTest {
         assertThat(Vendor.of("OPPO")).isEqualTo(Vendor.OPPO)
         assertThat(Vendor.of("realme")).isEqualTo(Vendor.OPPO)
         assertThat(Vendor.of("OnePlus")).isEqualTo(Vendor.OPPO)
+        assertThat(Vendor.of("TECNO")).isEqualTo(Vendor.TRANSSION)
+        assertThat(Vendor.of("INFINIX")).isEqualTo(Vendor.TRANSSION)
+        assertThat(Vendor.of("itel")).isEqualTo(Vendor.TRANSSION)
         assertThat(Vendor.of("Google")).isEqualTo(Vendor.OTHER)
     }
 

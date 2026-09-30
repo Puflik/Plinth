@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On TECNO, Infinix and itel phones, when the phone is online but search
   or an album says there is no network, Plinth explains that the firmware
   may be blocking it and opens Phone Master's network settings.
+- "Why music stops" knows TECNO, Infinix and itel phones: it asks to turn on
+  autostart for Plinth and opens Phone Master for it. Without autostart the
+  firmware freezes Plinth after a long pause, and the first press of a
+  headset button is lost.
 
 ### Fixed
 

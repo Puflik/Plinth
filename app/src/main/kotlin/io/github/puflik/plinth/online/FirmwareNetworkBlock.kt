@@ -1,6 +1,7 @@
 package io.github.puflik.plinth.online
 
 import io.github.puflik.plinth.diagnostics.vendor.SettingsTarget
+import io.github.puflik.plinth.diagnostics.vendor.Vendor
 
 /**
  * Н7 (приёмка 0.2.0): прошивки Transsion — HiOS у TECNO, XOS у Infinix,
@@ -11,8 +12,6 @@ import io.github.puflik.plinth.diagnostics.vendor.SettingsTarget
  * показать, где это разрешить.
  */
 object FirmwareNetworkBlock {
-    private val TRANSSION = setOf("tecno", "infinix", "itel")
-
     /** «Управление сетями» Phone Master: переключатели «Данные» и «Wi-Fi» у каждого приложения. */
     val SETTINGS = SettingsTarget("com.transsion.phonemaster", "com.transsion.networkcontrol.view.NetWorkRuleActivity")
 
@@ -20,5 +19,5 @@ object FirmwareNetworkBlock {
     fun suspected(
         manufacturer: String,
         networkValidated: Boolean,
-    ): Boolean = networkValidated && manufacturer.trim().lowercase() in TRANSSION
+    ): Boolean = networkValidated && Vendor.of(manufacturer) == Vendor.TRANSSION
 }

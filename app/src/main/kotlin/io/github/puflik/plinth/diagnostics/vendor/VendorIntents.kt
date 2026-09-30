@@ -50,6 +50,8 @@ object VendorIntents {
                     ),
                     SettingsTarget("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"),
                 )
+            Vendor.TRANSSION ->
+                listOf(SettingsTarget("com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity"))
             Vendor.OTHER -> emptyList()
         }
 
