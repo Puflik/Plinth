@@ -63,13 +63,22 @@ impl Database {
     }
 
     fn album_rows(&self, filter: &str, params: impl Params, order: &str) -> Result<Vec<AlbumRow>, CoreError> {
+        // Видимые треки считаются один раз (`MATERIALIZED`), обложка — первый
+        // трек альбома по порядку, одним проходом. Подзапрос на каждый альбом
+        // перечитывал выборку заново: 81 с на 10 тыс. треков (ревью v0.2).
         let sql = format!(
-            "WITH visible AS ({VISIBLE} {ON_DEVICE})
+            "WITH visible AS MATERIALIZED ({VISIBLE} {ON_DEVICE}),
+                  cover AS (SELECT album, uri FROM (
+                              SELECT w.album, w.uri,
+                                     row_number() OVER (PARTITION BY w.album
+                                         ORDER BY w.disc IS NOT NULL, w.disc, w.number IS NULL, w.number,
+                                                  w.title_sort, w.track) AS place
+                              FROM visible w WHERE w.album IS NOT NULL)
+                            WHERE place = 1)
              SELECT a.id, a.title, nullif(a.artist_credit, '') AS artist_credit, count(*) AS track_count,
-                    (SELECT w.uri FROM visible w WHERE w.album = a.id
-                     ORDER BY w.disc IS NOT NULL, w.disc, w.number IS NULL, w.number, w.title_sort, w.track
-                     LIMIT 1) AS cover_uri
+                    c.uri AS cover_uri
              FROM album a JOIN visible vt ON vt.album = a.id
+                          LEFT JOIN cover c ON c.album = a.id
              {filter}
              GROUP BY a.id
              ORDER BY {order}"
