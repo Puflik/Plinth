@@ -1,0 +1,118 @@
+// Замер SQL плейлистов, исполнителей и открытия базы (ревью v0.2, добор Р1.9, находка 13). Не часть сборки: файл .txt.
+// Как запускать: положить как core/library/tests/zz_bench2.rs в копии тега v0.2.0, затем из core/:
+//   BENCH_N=50000 cargo test --release -p plinth-library --test zz_bench2 -- --nocapture
+// Профиль release — из core/Cargo.toml. Удалить после замера.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::print_stdout)]
+use std::path::PathBuf;
+use std::time::Instant;
+
+use plinth_library::db::query::TrackSort;
+use plinth_library::db::{Database, IntegrityCheck};
+use plinth_library::model::{Playlist, PlaylistEntry, PlaylistKind};
+use plinth_library::scan::{FoundFile, ScannedFile, Tags, write};
+use plinth_types::{DeviceId, EntityId, Format, PlaylistEntryId, PlaylistId, Position, Timestamp, TrackId};
+
+fn playlist(db: &Database, name: &str, tracks: &[TrackId]) -> PlaylistId {
+    let p = Playlist { id: PlaylistId::new(), name: name.to_owned(), kind: PlaylistKind::Manual, created_at: Timestamp::from_millis(1) };
+    db.save_playlist(&p).unwrap();
+    db.in_transaction(|db| {
+        let mut pos = Position::first();
+        for (i, t) in tracks.iter().enumerate() {
+            if i > 0 { pos = Position::after(&pos); }
+            db.put_entry(&PlaylistEntry { id: PlaylistEntryId::new(), playlist: p.id, track: *t, position: pos.clone(), added_at: Timestamp::from_millis(2) })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    p.id
+}
+
+#[test]
+fn bench_playlists() {
+    let dir: PathBuf = std::env::temp_dir().join(format!("plinth-bench-{}", DeviceId::new()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = Database::open(&dir.join("library.db"), IntegrityCheck::Scheduled).unwrap().db;
+    let now = Timestamp::from_millis(1_700_000_000_000);
+    let n: usize = std::env::var("BENCH_N").ok().and_then(|v| v.parse().ok()).unwrap_or(50_000);
+    let (albums, artists) = (n / 20, n / 100);
+    let files: Vec<ScannedFile> = (0..n)
+        .map(|i| ScannedFile {
+            file: FoundFile {
+                uri: format!("/storage/emulated/0/Music/Artist {}/Album {}/{:05} Track {} word{}.mp3", i % artists, i % albums, i, i, i % 97),
+                folder: format!("Music/Artist {}/Album {}/", i % artists, i % albums),
+                format: Format::Mp3,
+                modified_at: Timestamp::from_millis(1_700_000_000_000 + i as i64),
+                size: 4_000_000,
+            },
+            known: None,
+            tags: Tags {
+                title: Some(format!("Track {i} word{}", i % 97)),
+                artist: Some(format!("Artist {}", i % artists)),
+                artists: vec![format!("Artist {}", i % artists)],
+                album: Some(format!("Album {}", i % albums)),
+                track: Some((i % 20) as u16 + 1),
+                ..Tags::default()
+            },
+            readable: true,
+        })
+        .collect();
+    for batch in files.chunks(200) {
+        db.in_transaction(|db| write(db, batch, now)).unwrap();
+    }
+    let ids: Vec<TrackId> = db.track_list(TrackSort::Title, None).unwrap().into_iter().map(|r| r.id).collect();
+    println!("BENCH n={n} tracks={}", ids.len());
+
+    // 40 «фоновых» плейлистов по 500 записей (20 тыс. записей), один большой, один маленький.
+    for k in 0..40 {
+        let slice: Vec<TrackId> = (0..500).map(|j| ids[(k * 997 + j * 31) % ids.len()]).collect();
+        playlist(&db, &format!("bg {k}"), &slice);
+    }
+    let big: Vec<TrackId> = (0..5000).map(|j| ids[(j * 7) % ids.len()]).collect();
+    let big_id = playlist(&db, "big", &big);
+    let small: Vec<TrackId> = (0..50).map(|j| ids[(j * 101) % ids.len()]).collect();
+    let small_id = playlist(&db, "small", &small);
+    let empty_id = playlist(&db, "empty", &[]);
+
+    for (name, id) in [("small 50", small_id), ("big 5000", big_id), ("empty", empty_id)] {
+        for round in 0..3 {
+            let t = Instant::now();
+            let rows = db.playlist_tracks(id).unwrap();
+            println!("BENCH playlist_tracks {name} round {round}: {} ms, {} rows", t.elapsed().as_millis(), rows.len());
+        }
+    }
+    for round in 0..3 {
+        let t = Instant::now();
+        let rows = db.artist_tracks("Artist 7").unwrap();
+        println!("BENCH artist_tracks 'Artist 7' round {round}: {} ms, {} rows", t.elapsed().as_millis(), rows.len());
+    }
+    let t = Instant::now();
+    let rows = db.artist_tracks("nobody").unwrap();
+    println!("BENCH artist_tracks 'nobody': {} ms, {} rows", t.elapsed().as_millis(), rows.len());
+    let t = Instant::now();
+    let rows = db.playlists().unwrap();
+    println!("BENCH playlists(): {} ms, {} rows", t.elapsed().as_millis(), rows.len());
+
+    {
+        let conn = rusqlite::Connection::open(dir.join("library.db")).unwrap();
+        let sql = "EXPLAIN QUERY PLAN SELECT t.id, e.id AS entry
+            FROM track t
+            JOIN version v ON v.id = (SELECT id FROM version WHERE track = t.id ORDER BY kind <> 'original', id LIMIT 1)
+            JOIN source s ON s.id = (SELECT id FROM source WHERE version = v.id AND availability = 'available' ORDER BY local_uri IS NULL, id LIMIT 1)
+            JOIN playlist_entry e ON e.track = t.id
+            LEFT JOIN scan_file f ON f.source = s.id LEFT JOIN album a ON a.id = v.album LEFT JOIN track_user u ON u.track = t.id
+            WHERE e.playlist = ?1 ORDER BY e.position, e.id";
+        let mut st = conn.prepare(sql).unwrap();
+        let rows = st.query_map([small_id.as_bytes()], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(3)?))).unwrap();
+        for r in rows { let (id, parent, d) = r.unwrap(); println!("PLAN {id} <- {parent}: {d}"); }
+    }
+    drop(db);
+    let size = std::fs::metadata(dir.join("library.db")).unwrap().len();
+    println!("BENCH db size: {} KiB", size / 1024);
+    for (name, check) in [("Skip", IntegrityCheck::Skip), ("Now", IntegrityCheck::Now), ("Skip again", IntegrityCheck::Skip)] {
+        let t = Instant::now();
+        let opened = Database::open(&dir.join("library.db"), check).unwrap();
+        println!("BENCH open 50k {name}: {} ms", t.elapsed().as_millis());
+        drop(opened);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
