@@ -94,7 +94,7 @@ impl Core {
     /// Каталог изменился (скан, тестовое наполнение): треки журнала, которых
     /// в нём нет, узнаются по паспортам. Не вышло — скан уже записан, в лог.
     pub(crate) fn relink_catalog(&self) {
-        if let Err(error) = self.with(|state| relink(&state.journal, &state.db)) {
+        if let Err(error) = self.with(|state| relink(&mut state.journal, &state.db)) {
             log::error!("mirror: relink after a catalog change failed: {error}");
         }
     }

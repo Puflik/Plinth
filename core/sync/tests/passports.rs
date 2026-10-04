@@ -8,7 +8,7 @@ mod common;
 
 use common::{Scratch, Song, memory_db, play, playlist, scan, track_at};
 use plinth_library::db::Database;
-use plinth_library::model::{PlaylistEntry, Track, TrackPassport};
+use plinth_library::model::{PlaylistEntry, Rating, Track, TrackPassport};
 use plinth_sync::journal::{Journal, Op, catch_up, describe_missing, record_and_project, relink};
 use plinth_types::{DeviceId, PlaylistEntryId, Position, Timestamp, TrackId};
 
@@ -172,7 +172,7 @@ fn a_rescanned_library_takes_its_ids_from_the_journal() {
     restore(&mut journal, &db, &old);
     assert!(liked_titles(&db).is_empty(), "до перепривязки лайк висит на старом ID");
 
-    assert_eq!(relink(&journal, &db).unwrap(), 2);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 2);
 
     assert_eq!((track_at(&db, KINO), track_at(&db, QUEEN)), (old.kino, old.queen));
     assert_eq!(liked_titles(&db), ["Кукушка"]);
@@ -180,7 +180,7 @@ fn a_rescanned_library_takes_its_ids_from_the_journal() {
     let tracks: Vec<TrackId> = db.entries(road.id).unwrap().into_iter().map(|e| e.track).collect();
     assert_eq!(tracks, [old.queen]);
     assert_eq!(db.user_data(old.kino).unwrap().play_count, 1);
-    assert_eq!(relink(&journal, &db).unwrap(), 0, "второй раз перепривязывать нечего");
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0, "второй раз перепривязывать нечего");
 }
 
 /// Сначала восстановление, потом скан: перепривязка после скана.
@@ -191,10 +191,10 @@ fn a_restore_before_the_scan_relinks_after_it() {
     let db = memory_db();
     let mut journal = journal(&dir);
     restore(&mut journal, &db, &old);
-    assert_eq!(relink(&journal, &db).unwrap(), 0, "каталог ещё пуст");
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0, "каталог ещё пуст");
 
     scan(&db, &[QUEEN, KINO]);
-    relink(&journal, &db).unwrap();
+    relink(&mut journal, &db).unwrap();
 
     assert_eq!(liked_titles(&db), ["Кукушка"]);
     assert_eq!(track_at(&db, QUEEN), old.queen);
@@ -220,7 +220,7 @@ fn text_is_compared_normalized() {
     journal.record_all(&[Op::Describe(passport), Op::Like { track: old_id }]).unwrap();
     catch_up(&journal, &db).unwrap();
 
-    assert_eq!(relink(&journal, &db).unwrap(), 1);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
 
     assert_eq!(track_at(&db, KINO), old_id);
 }
@@ -254,30 +254,49 @@ fn album_and_duration_pick_the_right_file() {
         .unwrap();
     catch_up(&journal, &db).unwrap();
 
-    assert_eq!(relink(&journal, &db).unwrap(), 1);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
 
     assert_eq!(track_at(&db, QUEEN_LIVE), live);
     assert_ne!(track_at(&db, QUEEN), other_cut);
 }
 
-/// Трек, на который новая установка успела поставить свои данные, не
-/// перехватывается: его данные остались бы без трека.
+/// Новая установка успела поставить свои данные на трек до перепривязки
+/// (оценка, прослушивание): трек всё равно берёт ID из журнала, а данные
+/// обеих установок складываются на него. Оценка новой установки новее и
+/// побеждает; плейлист и прослушивания старой не пропадают (ревью v0.2, №1).
 #[test]
-fn a_track_with_data_of_this_installation_is_not_taken() {
-    let old = old_installation();
+fn a_track_with_data_of_this_installation_takes_the_journal_id_and_keeps_both() {
+    let mut old = old_installation();
+    let road = old.journal.state().playlists[0].clone();
+    old.journal.record(&Op::Rate { track: old.kino, rating: Some(Rating::new(5).unwrap()) }).unwrap();
+    let mut second = entry_of(&road, old.kino);
+    second.position = Position::after(&Position::first());
+    old.journal.record(&Op::AddEntry(second)).unwrap();
     let dir = Scratch::new();
     let db = memory_db();
     scan(&db, &[KINO, QUEEN]);
     let mut journal = journal(&dir);
     let fresh_kino = track_at(&db, KINO);
-    record_and_project(&mut journal, &db, &Op::Like { track: fresh_kino }).unwrap();
+    record_and_project(&mut journal, &db, &Op::Rate { track: fresh_kino, rating: Some(Rating::new(3).unwrap()) })
+        .unwrap();
+    record_and_project(&mut journal, &db, &Op::Play(play(fresh_kino, 1_790_100_000_000, 200, Some(398)))).unwrap();
     restore(&mut journal, &db, &old);
 
-    assert_eq!(relink(&journal, &db).unwrap(), 1);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 2);
 
-    assert_eq!(track_at(&db, KINO), fresh_kino);
+    assert_eq!(track_at(&db, KINO), old.kino);
     assert_eq!(track_at(&db, QUEEN), old.queen);
+    let user = db.user_data(old.kino).unwrap();
+    assert!(user.liked);
+    assert_eq!(user.rating, Some(Rating::new(3).unwrap()));
+    assert_eq!(user.play_count, 2);
+    let entries = db.entries(road.id).unwrap();
+    assert_eq!(entries.iter().filter(|entry| entry.track == old.kino).count(), 1);
+    assert_eq!(entries.iter().filter(|entry| entry.track == old.queen).count(), 1);
     assert_eq!(liked_titles(&db), ["Кукушка"]);
+    // Повтор ничего не меняет: ни дублей прослушиваний, ни возврата снятого.
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0);
+    assert_eq!(db.user_data(old.kino).unwrap().play_count, 2);
 }
 
 fn oh_doctor() -> plinth_library::model::OnlineTrack {
@@ -321,7 +340,7 @@ fn an_online_track_comes_back_without_a_scan() {
 
     journal.merge(&old_journal.updates_since(&journal.state_vector()).unwrap()).unwrap();
     catch_up(&journal, &db).unwrap();
-    relink(&journal, &db).unwrap();
+    relink(&mut journal, &db).unwrap();
 
     assert_eq!(liked_titles(&db), ["OH DOCTOR"]);
     assert_eq!(db.online_sources(track).unwrap(), oh_doctor().sources);
@@ -345,7 +364,7 @@ fn an_online_track_added_again_takes_the_journal_id() {
 
     journal.merge(&old_journal.updates_since(&journal.state_vector()).unwrap()).unwrap();
     catch_up(&journal, &db).unwrap();
-    relink(&journal, &db).unwrap();
+    relink(&mut journal, &db).unwrap();
 
     assert_ne!(fresh, track);
     assert!(db.track(fresh).unwrap().is_none());

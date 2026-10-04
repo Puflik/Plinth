@@ -82,7 +82,7 @@ impl Core {
         // База пересобрана без каталога (порча, журнал из Auto Backup): сетевые
         // треки журнала заводятся по паспортам сразу — без разрешения на музыку
         // скана, который их перепривязал бы, не будет. Файлы узнает скан.
-        if rebuilt && let Err(error) = relink(&journal, &opened.db) {
+        if rebuilt && let Err(error) = relink(&mut journal, &opened.db) {
             log::error!("core: relink after a rebuild failed: {error}");
         }
         let report = StartupReport {

@@ -123,10 +123,10 @@ fn a_corrupted_library_is_back_on_its_tracks_after_the_rescan() {
 
     corrupt_db(&dir);
     let db = Database::open(&dir.db(), IntegrityCheck::Now).unwrap().db;
-    let journal = Journal::open(&dir.journal(), device).unwrap();
+    let mut journal = Journal::open(&dir.journal(), device).unwrap();
     assert_eq!(catch_up(&journal, &db).unwrap(), CatchUp::Rebuilt);
     scan(&db, &[DREAMS, PIANO]);
-    relink(&journal, &db).unwrap();
+    relink(&mut journal, &db).unwrap();
 
     assert_eq!((track_at(&db, PIANO), track_at(&db, DREAMS)), (piano, dreams));
     let liked: Vec<String> = db.liked_tracks().unwrap().into_iter().map(|row| row.title).collect();

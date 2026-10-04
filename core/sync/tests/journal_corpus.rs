@@ -62,14 +62,14 @@ fn a_journal_from_the_backup_of_every_release_comes_back() {
     for (release, _) in RELEASES {
         let dir = Scratch::new();
         copy_dir(&fixture(release).join("journal"), &dir.journal());
-        let journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+        let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
         let db = memory_db();
 
         catch_up(&journal, &db).unwrap();
-        relink(&journal, &db).unwrap();
+        relink(&mut journal, &db).unwrap();
         assert_eq!(liked_titles(&db), ["OH DOCTOR"], "{release}: an online track needs no scan");
         scan(&db, &[QUEEN, KINO]);
-        relink(&journal, &db).unwrap();
+        relink(&mut journal, &db).unwrap();
 
         assert_came_back(&db, release);
     }
