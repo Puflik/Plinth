@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # work/** — ветки исполнителей (docs/work/README.md): ревью Opus видит CI.
+    branches: [main, 'work/**']
   pull_request:
   workflow_dispatch:
 
