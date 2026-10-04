@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use plinth_types::{CoreError, Timestamp};
 
+use crate::http::http_status;
+
 /// Здоровье провайдера (E1.2, plan.md 6.4). Его считает реестр по исходам
 /// вызовов, сам провайдер о себе не докладывает: ошибка → `Degraded`,
 /// [`HealthPolicy::down_after`] подряд → `Down` на [`HealthPolicy::down_for`].
@@ -50,24 +52,40 @@ impl Health {
     }
 
     pub fn after_failure(self, policy: HealthPolicy, now: Timestamp) -> Self {
+        self.after_failure_for(policy, now, policy.down_for)
+    }
+
+    fn after_failure_for(self, policy: HealthPolicy, now: Timestamp, down_for: Duration) -> Self {
         let failures = self.failures().saturating_add(1);
         if failures >= policy.down_after {
-            Self::Down { failures, until: now + policy.down_for }
+            Self::Down { failures, until: now + down_for }
         } else {
             Self::Degraded { failures }
         }
     }
 
     /// Исход вызова для здоровья. `Unavailable` — провайдер ответил «такого
-    /// нет»: он жив, пропал элемент. Остальное — сеть, непонятный ответ,
+    /// нет»: он жив, пропал элемент. Ответ 4xx (кроме 429) — наш запрос не
+    /// годится, провайдер ни при чём: здоровье не меняется. Нет соединения —
+    /// может быть и у телефона, и у провайдера: счёт идёт, но бан короткий
+    /// (`down_for` / 20), чтобы сеть, вернувшаяся после трёх набранных без неё
+    /// запросов, не ждала пять минут. Остальное — 5xx, 429, непонятный ответ,
     /// ошибка в коде провайдера — его отказ.
     pub fn after(self, outcome: Result<(), &CoreError>, policy: HealthPolicy, now: Timestamp) -> Self {
         match outcome {
             Ok(()) | Err(CoreError::Unavailable { .. }) => self.after_success(),
+            Err(error @ CoreError::Network { .. }) => match http_status(error) {
+                Some(status) if status != 429 && (400..500).contains(&status) => self,
+                Some(_) => self.after_failure(policy, now),
+                None => self.after_failure_for(policy, now, policy.down_for / CONNECTION_HOLD_DIVISOR),
+            },
             Err(_) => self.after_failure(policy, now),
         }
     }
 }
+
+/// Во сколько раз бан за «нет соединения» короче бана за отказ сервера.
+const CONNECTION_HOLD_DIVISOR: u32 = 20;
 
 #[cfg(test)]
 mod tests {
@@ -123,9 +141,11 @@ mod tests {
         let gone = CoreError::unavailable("item is gone");
 
         assert_eq!(degraded.after(Err(&gone), POLICY, at(0)), Health::Ok);
-        for failure in
-            [CoreError::network("timeout"), CoreError::parse("html instead of json"), CoreError::internal("bug")]
-        {
+        for failure in [
+            CoreError::network("http 503"),
+            CoreError::parse("html instead of json"),
+            CoreError::internal("bug"),
+        ] {
             assert_eq!(degraded.after(Err(&failure), POLICY, at(0)), Health::Down { failures: 3, until: at(60) });
         }
         assert_eq!(degraded.after(Ok(()), POLICY, at(0)), Health::Ok);
@@ -134,5 +154,32 @@ mod tests {
     #[test]
     fn default_policy_is_three_failures_five_minutes() {
         assert_eq!(HealthPolicy::default(), HealthPolicy { down_after: 3, down_for: Duration::from_secs(300) });
+    }
+
+    #[test]
+    fn a_rejected_request_is_not_the_providers_failure() {
+        let mut health = Health::Ok;
+        for _ in 0..5 {
+            health = health.after(Err(&CoreError::network("http 414")), POLICY, at(0));
+        }
+        assert_eq!(health, Health::Ok);
+    }
+
+    #[test]
+    fn no_connection_holds_the_provider_down_only_briefly() {
+        let mut health = Health::Ok;
+        for _ in 0..3 {
+            health = health.after(Err(&CoreError::network("UnknownHostException")), POLICY, at(0));
+        }
+        assert_eq!(health, Health::Down { failures: 3, until: at(3) });
+    }
+
+    #[test]
+    fn server_failures_hold_the_provider_down_for_the_full_time() {
+        let mut health = Health::Ok;
+        for status in ["http 503", "http 429", "http 500"] {
+            health = health.after(Err(&CoreError::network(status)), POLICY, at(0));
+        }
+        assert_eq!(health, Health::Down { failures: 3, until: at(60) });
     }
 }

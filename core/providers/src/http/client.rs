@@ -79,9 +79,9 @@ impl HttpClient {
                     return Err(CoreError::unavailable(format!("http {}", response.status)));
                 }
                 Ok(response) if response.status == 429 || (500..600).contains(&response.status) => {
-                    last = CoreError::network(format!("http {}", response.status));
+                    last = status_error(response.status);
                 }
-                Ok(response) => return Err(CoreError::network(format!("http {}", response.status))),
+                Ok(response) => return Err(status_error(response.status)),
                 Err(error @ CoreError::Network { .. }) => last = error,
                 Err(error) => return Err(error),
             }
@@ -118,6 +118,21 @@ impl HttpClient {
         } else {
             Ok(body)
         }
+    }
+}
+
+/// Ответ с неудачным статусом — `Network` с текстом «http NNN». Здоровье
+/// провайдера по этому тексту отличает отказ сервера от сбоя соединения.
+fn status_error(status: u16) -> CoreError {
+    CoreError::network(format!("http {status}"))
+}
+
+/// Статус, если ошибка — ответ сервера (`status_error`); `None` — соединения
+/// не вышло вовсе (нет сети, DNS, таймаут).
+pub(crate) fn http_status(error: &CoreError) -> Option<u16> {
+    match error {
+        CoreError::Network { message } => message.strip_prefix("http ")?.parse().ok(),
+        _ => None,
     }
 }
 

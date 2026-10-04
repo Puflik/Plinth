@@ -101,9 +101,15 @@ impl Registry {
         ordered.sort_by_key(|&(down, rank, index, _)| (down, rank, index));
         let mut last = CoreError::unavailable("no source to stream");
         for (_, _, index, provider) in ordered {
-            match self.observe(provider.as_ref(), now, provider.stream_url(&candidates[index].1)) {
+            // Адрес потока строится без сети: удача ничего не говорит о живости
+            // провайдера и не снимает бан, неудача — говорит.
+            match provider.stream_url(&candidates[index].1) {
                 Ok(stream) => return Ok((index, stream)),
-                Err(error) => last = error,
+                Err(error) => {
+                    if let Err(observed) = self.observe::<StreamRequest>(provider.as_ref(), now, Err(error)) {
+                        last = observed;
+                    }
+                }
             }
         }
         Err(last)
@@ -346,6 +352,20 @@ mod tests {
 
         assert_eq!(chosen, 1);
         assert_eq!(flaky.requests(), requests_before);
+    }
+
+    #[test]
+    fn building_a_stream_address_does_not_lift_a_ban() {
+        let fake = sample("fake.test");
+        fake.fail_with(Some(CoreError::network("http 503")));
+        let registry = registry(&[Arc::clone(&fake)]);
+        registry.search(&query("fake"), at(0));
+        registry.search(&query("fake"), at(1));
+        fake.fail_with(None);
+
+        registry.stream(&[(id("fake.test"), external("single-42.mp3"))], at(2)).unwrap();
+
+        assert!(matches!(registry.health(&id("fake.test")), Some(Health::Down { .. })));
     }
 
     #[test]
