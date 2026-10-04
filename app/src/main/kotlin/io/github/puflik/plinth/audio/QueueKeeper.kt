@@ -1,5 +1,6 @@
 package io.github.puflik.plinth.audio
 
+import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.di.ApplicationScope
 import io.github.puflik.plinth.queue.QueueItem
@@ -13,9 +14,11 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -67,15 +70,28 @@ class QueueKeeper
             return ResumePoint(item, playback.progress.value.position)
         }
 
+        /**
+         * Последняя секунда, о которой движок сказал что-то настоящее. Ошибка
+         * воспроизведения обнуляет прогресс ([PlaybackProgress.NONE]), но это
+         * не «0:00»: без сети восстановленный трек падает через три секунды, и
+         * 40-я минута не должна стать нулём (ревью v0.2, №8).
+         */
+        @Volatile private var lastKnown = Duration.ZERO
+
         fun start() {
             scope.launch {
                 val saved = store.load()
-                saved?.let { playback.restore(it.queue, it.position) }
+                saved?.let {
+                    playback.restore(it.queue, it.position)
+                    lastKnown = it.position
+                }
                 played.value = Played(saved?.playedAt)
                 // Сохранять — только после восстановления: иначе пустая очередь затёрла бы сохранённую.
                 launch { saveQueues() }
                 launch {
                     playback.progress
+                        .filter { it != PlaybackProgress.NONE }
+                        .onEach { lastKnown = it.position }
                         .map { it.position.inWholeSeconds }
                         .distinctUntilChanged()
                         .collect { store.savePosition(it.seconds) }
@@ -95,7 +111,9 @@ class QueueKeeper
             playback.queue.drop(1).collect { queue ->
                 store.saveQueue(queue)
                 if (queue.playing == playing) {
-                    store.savePosition(playback.progress.value.position.inWholeSeconds.seconds)
+                    val now = playback.progress.value
+                    val position = if (now == PlaybackProgress.NONE) lastKnown else now.position
+                    store.savePosition(position.inWholeSeconds.seconds)
                 }
                 playing = queue.playing
             }

@@ -26,6 +26,20 @@ class PlaybackControllerTest {
     private val tracks = (0 until 3).map { item("track-$it") }
     private val manual = item("manual")
 
+    /** «Назад» с единственного трека, добавленного вручную, не стирает очередь (ревью v0.2, №16). */
+    @Test
+    fun `previous on a lone manual track restarts it and keeps the queue`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = controller()
+            controller.perform(QueueAction.ADD_TO_QUEUE, manual)
+            controller.seekTo(1.seconds)
+
+            controller.previous()
+
+            assertThat(controller.queue.value.current).isEqualTo(manual)
+            assertThat(controller.state.value).isEqualTo(PlaybackState.Playing)
+        }
+
     @Test
     fun `played context starts at the chosen track at once`() =
         runTest(UnconfinedTestDispatcher()) {

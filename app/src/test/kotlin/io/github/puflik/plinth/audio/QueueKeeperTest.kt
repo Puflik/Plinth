@@ -3,6 +3,7 @@ package io.github.puflik.plinth.audio
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
+import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueAction
@@ -136,6 +137,24 @@ class QueueKeeperTest {
 
             assertThat(store.saved?.queue).isEqualTo(controller.queue.value)
             assertThat(store.saved?.position).isEqualTo(150.seconds)
+        }
+
+    @Test
+    fun `a failed playback does not wipe the saved second`() =
+        runTest(UnconfinedTestDispatcher()) {
+            store.saved = SavedQueue(saved, 40.minutes)
+            val (controller, keeper) = keeper()
+            keeper.start()
+
+            // Нет сети: движок падает на восстановленном треке, прогресс обнуляется (ревью v0.2, №8).
+            engine.failWith(PlaybackError.Network())
+            assertThat(store.saved?.position).isEqualTo(40.minutes)
+
+            // Правка очереди в этом состоянии тоже не сбрасывает секунду.
+            controller.toggleShuffle()
+            controller.cycleRepeat()
+            assertThat(store.saved?.queue).isEqualTo(controller.queue.value)
+            assertThat(store.saved?.position).isEqualTo(40.minutes)
         }
 
     @Test

@@ -22,9 +22,13 @@ object DeviceDecoders {
 
     fun missing(): Set<AudioFormat> = cached
 
-    /** По MIME-типам декодеров — форматы без декодера. PCM (WAV, AIFF) и прочее не в счёт: их играет сам Media3. */
+    /**
+     * По MIME-типам декодеров — форматы без декодера, плюс AIFF: в Media3 нет
+     * его экстрактора, на любом Android трек с ним не играет (ревью v0.2, №12).
+     * WAV и прочее не в счёт: их играет сам Media3.
+     */
     internal fun missingAmong(decoders: Set<String>): Set<AudioFormat> =
-        MIME_TYPES.filterValues { it !in decoders }.keys
+        MIME_TYPES.filterValues { it !in decoders }.keys + AudioFormat.AIFF
 
     private val MIME_TYPES =
         mapOf(

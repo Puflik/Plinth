@@ -204,7 +204,12 @@ private fun PlaylistNotice.text(context: Context): String =
     when (this) {
         is PlaylistNotice.Imported -> context.getString(R.string.playlist_imported, added, notFound)
         PlaylistNotice.ImportFailed -> context.getString(R.string.playlist_import_failed)
-        is PlaylistNotice.Exported -> context.getString(R.string.playlist_exported, name)
+        is PlaylistNotice.Exported ->
+            if (skipped == 0) {
+                context.getString(R.string.playlist_exported, name)
+            } else {
+                context.getString(R.string.playlist_exported_partial, name, skipped)
+            }
         PlaylistNotice.ExportFailed -> context.getString(R.string.playlist_export_failed)
     }
 

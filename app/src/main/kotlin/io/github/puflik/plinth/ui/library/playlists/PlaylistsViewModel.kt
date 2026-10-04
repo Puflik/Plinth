@@ -10,6 +10,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -73,8 +74,17 @@ class PlaylistsViewModel
             uri: String,
         ) {
             viewModelScope.launch {
-                val written = repository.export(playlist.id)?.let { files.write(uri, it) } == true
-                noticeChannel.send(if (written) PlaylistNotice.Exported(playlist.name) else PlaylistNotice.ExportFailed)
+                val text = repository.export(playlist.id)
+                val written = text?.let { files.write(uri, it) } == true
+                // M3U хранит только файлы: треки провайдеров в него не попадают, и об этом надо сказать (ревью v0.2, №15).
+                val skipped =
+                    text?.let { m3u ->
+                        val kept = m3u.lines().count { it.isNotBlank() && !it.startsWith("#") }
+                        (repository.tracks(playlist.id).first().size - kept).coerceAtLeast(0)
+                    } ?: 0
+                noticeChannel.send(
+                    if (written) PlaylistNotice.Exported(playlist.name, skipped) else PlaylistNotice.ExportFailed,
+                )
             }
         }
 
@@ -96,6 +106,7 @@ sealed interface PlaylistNotice {
 
     data class Exported(
         val name: String,
+        val skipped: Int = 0,
     ) : PlaylistNotice
 
     data object ExportFailed : PlaylistNotice

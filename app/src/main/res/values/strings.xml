@@ -202,6 +202,7 @@
     <string name="playlist_import_failed">Couldn’t read the playlist file</string>
     <string name="playlist_export">Export</string>
     <string name="playlist_exported">“%1$s” saved</string>
+    <string name="playlist_exported_partial">“%1$s” saved without online tracks (a playlist file holds files only): %2$d</string>
     <string name="playlist_export_failed">Couldn’t save the playlist</string>
     <string name="track_add_to_playlist">Add to playlist…</string>
     <string name="action_cancel">Cancel</string>
