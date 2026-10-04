@@ -1,0 +1,78 @@
+// Замер выборок библиотеки (ревью v0.2, находки 10 и 12). Не часть сборки: файл .txt.
+// Как запускать: положить как core/library/tests/zz_bench.rs, затем из core/:
+//   BENCH_N=10000 cargo test --release -p plinth-library --test zz_bench -- --nocapture
+// N/100 артистов, N/20 альбомов; на N >= 50000 album_list на теге v0.2.0 не заканчивается.
+// Профиль release — из core/Cargo.toml. Удалить после замера.
+// Временный замер для ревью (копия вне репозитория): 50 тыс. треков.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::print_stdout)]
+use std::path::PathBuf;
+use std::time::Instant;
+
+use plinth_library::db::query::{AlbumSort, TrackSort};
+use plinth_library::db::{Database, IntegrityCheck};
+use plinth_library::scan::{FoundFile, ScannedFile, Tags, write};
+use plinth_types::{DeviceId, Format, Timestamp};
+
+#[test]
+fn bench_50k() {
+    let dir: PathBuf = std::env::temp_dir().join(format!("plinth-bench-{}", DeviceId::new()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let opened = Database::open(&dir.join("library.db"), IntegrityCheck::Scheduled).unwrap();
+    let db = opened.db;
+    let now = Timestamp::from_millis(1_700_000_000_000);
+    let n: usize = std::env::var("BENCH_N").ok().and_then(|v| v.parse().ok()).unwrap_or(50_000);
+    let (albums, artists) = (n / 20, n / 100);
+    let files: Vec<ScannedFile> = (0..n)
+        .map(|i| ScannedFile {
+            file: FoundFile {
+                uri: format!("/storage/emulated/0/Music/Artist {}/Album {}/{:05} Track {} word{}.mp3", i % artists, i % albums, i, i, i % 97),
+                folder: format!("Music/Artist {}/Album {}/", i % artists, i % albums),
+                format: Format::Mp3,
+                modified_at: Timestamp::from_millis(1_700_000_000_000 + i as i64),
+                size: 4_000_000,
+            },
+            known: None,
+            tags: Tags {
+                title: Some(format!("Track {i} word{}", i % 97)),
+                artist: Some(format!("Artist {}", i % artists)),
+                artists: vec![format!("Artist {}", i % artists)],
+                album: Some(format!("Album {}", i % albums)),
+                track: Some((i % 20) as u16 + 1),
+                ..Tags::default()
+            },
+            readable: true,
+        })
+        .collect();
+    let t = Instant::now();
+    for batch in files.chunks(200) {
+        db.in_transaction(|db| write(db, batch, now)).unwrap();
+    }
+    println!("BENCH n={n} write in batches of 200: {} ms", t.elapsed().as_millis());
+
+    for (name, search) in [("list no search", None), ("search 'track 4'", Some("track 4")), ("search 'word7 artist 3'", Some("word7 artist 3")), ("search 'zzz' (no hits)", Some("zzz"))] {
+        let t = Instant::now();
+        let rows = db.track_list(TrackSort::Title, search).unwrap();
+        println!("BENCH track_list {name}: {} ms, {} rows", t.elapsed().as_millis(), rows.len());
+    }
+
+    {
+        let conn = rusqlite::Connection::open(dir.join("library.db")).unwrap();
+        let sql = "EXPLAIN QUERY PLAN WITH visible AS (SELECT t.id AS track, v.album AS album, v.disc AS disc, v.number AS number, t.title_sort AS title_sort, s.local_uri AS uri
+            FROM track t
+            JOIN version v ON v.id = (SELECT id FROM version WHERE track = t.id ORDER BY kind <> 'original', id LIMIT 1)
+            JOIN source s ON s.id = (SELECT id FROM source WHERE version = v.id AND availability = 'available' AND local_uri IS NOT NULL ORDER BY id LIMIT 1))
+            SELECT a.id, a.title, count(*) AS track_count,
+                   (SELECT w.uri FROM visible w WHERE w.album = a.id ORDER BY w.disc IS NOT NULL, w.disc, w.number IS NULL, w.number, w.title_sort, w.track LIMIT 1) AS cover_uri
+            FROM album a JOIN visible vt ON vt.album = a.id GROUP BY a.id ORDER BY a.title_sort";
+        let mut st = conn.prepare(sql).unwrap();
+        let rows = st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(3)?))).unwrap();
+        for r in rows { let (id, parent, d) = r.unwrap(); println!("PLAN {id} <- {parent}: {d}"); }
+    }
+    let t = Instant::now();
+    let a = db.album_list(AlbumSort::Title).unwrap();
+    println!("BENCH n={n} album_list: {} ms, {} rows", t.elapsed().as_millis(), a.len());
+    let t = Instant::now();
+    let r = db.artist_list().unwrap();
+    println!("BENCH artist_list: {} ms, {} rows", t.elapsed().as_millis(), r.len());
+    let _ = std::fs::remove_dir_all(&dir);
+}
