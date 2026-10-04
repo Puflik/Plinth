@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-04
+
+A fix release after the review of the second wave: nothing you saved is lost
+when a reinstall is restored, the Albums tab opens quickly on a big library,
+and a backup folder that stopped working is no longer silent.
+
 ### Added
 
 - On TECNO, Infinix and itel phones, when the phone is online but search
@@ -19,6 +25,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restoring after a reinstall keeps the data of both installations. If you
+  liked, rated or played a track before the new scan finished, its old
+  rating, plays and playlist places used to be left behind with an id that
+  no track had; now they are merged onto the track (your newer rating wins).
+- The Albums tab no longer takes minutes on a big library: it used to read
+  the whole library once per album (81 s for 10 000 tracks).
+- Searching with no network no longer switches Internet Archive off for five
+  minutes. A rejected request does not count against the source, and with no
+  connection it is paused for 15 seconds only.
+- An error while a track is restored (no network at launch) no longer
+  resets the saved position to the start.
+- AIFF files of Internet Archive are no longer picked as the best variant:
+  the player cannot read them, and the track used to be skipped with an MP3
+  right next to it.
+- "Previous" on a lone track added by hand restarts it instead of emptying
+  the queue while the sound keeps playing.
+- Exporting a playlist to M3U says how many online tracks the file left out.
+- A backup folder that cannot be written is no longer silent. Settings show
+  the time of the last copy, or in red that the copy is not being written;
+  a folder picked in the system dialog is tried before it is remembered.
 - Typing fast in the search field no longer loses letters or moves the
   cursor away from the end of the text.
 - Without access to music the library keeps all its tabs: Liked, Recent and
@@ -202,7 +228,8 @@ an early pre-release — online sources, playlists and sync come in later waves.
 - CI builds and tests both flavors (`github`, `fdroid`); architecture decision
   records in `docs/adr/`, a contributing guide in `CONTRIBUTING.md`.
 
-[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Puflik/Plinth/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Puflik/Plinth/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Puflik/Plinth/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Puflik/Plinth/releases/tag/v0.1.0

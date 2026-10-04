@@ -6,8 +6,8 @@ mod header;
 mod transport;
 mod url;
 
-pub use client::{HttpClient, HttpPolicy};
 pub(crate) use client::http_status;
+pub use client::{HttpClient, HttpPolicy};
 pub(crate) use header::{is_header_name, is_header_value};
 pub use transport::{HttpRequest, HttpResponse, HttpTransport};
 pub use url::encode_component;

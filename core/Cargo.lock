@@ -645,7 +645,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "plinth-ffi"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "log",
  "plinth-library",
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "plinth-library"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "lofty",
  "log",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "plinth-providers"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "log",
  "plinth-providers",
@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "plinth-sync"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "crc32fast",
  "log",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "plinth-types"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "fractional_index",
  "thiserror",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "uniffi",
 ]

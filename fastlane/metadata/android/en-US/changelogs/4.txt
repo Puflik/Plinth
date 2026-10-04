@@ -1,0 +1,1 @@
+Fix release after the review of the second wave: restoring after a reinstall keeps the data of both installations, the Albums tab opens fast on a big library, searching without a network no longer switches Internet Archive off for five minutes, a saved position survives a playback error, and a backup folder that stopped working is no longer silent.

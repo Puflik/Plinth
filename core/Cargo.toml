@@ -13,7 +13,7 @@ members = ["types", "library", "sync", "providers", "ffi", "uniffi-bindgen"]
 
 [workspace.package]
 # Версия ядра идёт вместе с версией приложения, в котором ядро появилось.
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.98"
 publish = false

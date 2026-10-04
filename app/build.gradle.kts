@@ -36,8 +36,8 @@ android {
         applicationId = "io.github.puflik.plinth"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.2.0"
+        versionCode = 4
+        versionName = "0.2.1"
 
         // A2.4: четыре ABI — под них собирается Rust-ядро (плагин plinth.rust
         // берёт список отсюда). Фильтр отсекает и лишнее из зависимостей: JNA

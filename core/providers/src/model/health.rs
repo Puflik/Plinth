@@ -141,11 +141,9 @@ mod tests {
         let gone = CoreError::unavailable("item is gone");
 
         assert_eq!(degraded.after(Err(&gone), POLICY, at(0)), Health::Ok);
-        for failure in [
-            CoreError::network("http 503"),
-            CoreError::parse("html instead of json"),
-            CoreError::internal("bug"),
-        ] {
+        for failure in
+            [CoreError::network("http 503"), CoreError::parse("html instead of json"), CoreError::internal("bug")]
+        {
             assert_eq!(degraded.after(Err(&failure), POLICY, at(0)), Health::Down { failures: 3, until: at(60) });
         }
         assert_eq!(degraded.after(Ok(()), POLICY, at(0)), Health::Ok);
