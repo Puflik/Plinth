@@ -26,12 +26,16 @@ import kotlin.time.Instant
  * @property found в папке данные прошлой установки — вопрос «Восстановить?».
  * @property busy идёт чтение папки или восстановление.
  * @property outcome итог последнего действия — для сообщения; показали — [BackupViewModel.onOutcomeShown].
+ * @property copyFailing папка копии отказывает в записи: выбрана, но копия не пишется.
+ * @property lastCopyAt когда копия записана в последний раз в этом запуске; не писалась — `null`.
  */
 data class BackupUiState(
     val folder: String? = null,
     val found: FoundData? = null,
     val busy: Boolean = false,
     val outcome: BackupOutcome? = null,
+    val copyFailing: Boolean = false,
+    val lastCopyAt: Instant? = null,
 )
 
 /** Что нашлось в папке: «N лайков, M плейлистов, от даты». */
@@ -46,6 +50,9 @@ enum class BackupOutcome {
 
     /** Система не дала доступ к папке — её не запомнили. */
     NO_ACCESS,
+
+    /** Читать из папки можно, а писать нельзя — её не запомнили. */
+    NOT_WRITABLE,
 
     /** Ядро не смогло прочесть или влить копии. */
     FAILED,
@@ -74,22 +81,29 @@ class BackupViewModel
         private var offered: List<MirrorFile> = emptyList()
 
         val uiState: StateFlow<BackupUiState> =
-            combine(settings.folder, screen) { tree, state -> state.copy(folder = tree?.let(TreeLabel::of)) }
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), BackupUiState())
+            combine(settings.folder, screen, writer.status) { tree, state, status ->
+                state.copy(
+                    folder = tree?.let(TreeLabel::of),
+                    copyFailing = tree != null && status.failing,
+                    lastCopyAt = status.lastWrittenAt,
+                )
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), BackupUiState())
 
         /** Человек выбрал папку [tree] системным диалогом. */
         fun onFolderPicked(tree: String) {
             viewModelScope.launch {
                 screen.update { it.copy(busy = true, found = null, outcome = null) }
                 if (!folder.adopt(tree)) return@launch done(BackupOutcome.NO_ACCESS)
-                settings.setFolder(tree)
                 val files = folder.read(tree) ?: return@launch done(BackupOutcome.NO_ACCESS)
+                // Папка, куда писать нельзя, не запоминается: иначе она выглядит принятой,
+                // а копии нет (ревью v0.2, №3).
+                if (!writer.writeTo(tree)) return@launch done(BackupOutcome.NOT_WRITABLE)
+                settings.setFolder(tree)
                 val found = mirror.inspect(files)
                 if (found?.news == true) {
                     offered = files
                     screen.update { it.copy(found = FoundData(found.likes, found.playlists, found.writtenAt)) }
                 }
-                writer.writeNow()
                 done(outcome = if (found == null) BackupOutcome.FAILED else null)
             }
         }

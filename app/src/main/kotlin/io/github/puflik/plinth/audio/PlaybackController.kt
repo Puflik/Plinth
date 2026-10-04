@@ -138,7 +138,8 @@ class PlaybackController
             val current = queue.value
             if (current.current == null) return
             val back = current.previous()
-            // Назад некуда (ручной трек без контекста): очередь не заменяется пустой, играет тот же трек (ревью v0.2, №16).
+            // Назад некуда (ручной трек без контекста): очередь не заменяется пустой,
+            // играет тот же трек (ревью v0.2, №16).
             if (progress.value.position > RESTART_THRESHOLD || back == current || back.current == null) {
                 restart()
             } else {

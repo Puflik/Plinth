@@ -76,7 +76,8 @@ class PlaylistsViewModel
             viewModelScope.launch {
                 val text = repository.export(playlist.id)
                 val written = text?.let { files.write(uri, it) } == true
-                // M3U хранит только файлы: треки провайдеров в него не попадают, и об этом надо сказать (ревью v0.2, №15).
+                // M3U хранит только файлы: треки провайдеров в него не попадают,
+                // и об этом надо сказать (ревью v0.2, №15).
                 val skipped =
                     text?.let { m3u ->
                         val kept = m3u.lines().count { it.isNotBlank() && !it.startsWith("#") }

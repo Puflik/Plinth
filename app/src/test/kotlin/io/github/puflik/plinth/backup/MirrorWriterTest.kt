@@ -41,6 +41,26 @@ class MirrorWriterTest {
             ).contains("like")
         }
 
+    /** Папка, куда писать нельзя, видна человеку, а не только логу (ревью v0.2, №3). */
+    @Test
+    fun `a refused write is reported until the next one succeeds`() =
+        runTest {
+            val writer = writer().also { it.start() }
+            runCurrent()
+            folder.failNextWrite = true
+            mirror.like(SONG)
+            advanceTimeBy(6.seconds)
+
+            assertThat(writer.status.value.failing).isTrue()
+            assertThat(writer.status.value.lastWrittenAt).isNull()
+
+            mirror.like(OTHER)
+            advanceTimeBy(6.seconds)
+
+            assertThat(writer.status.value.failing).isFalse()
+            assertThat(writer.status.value.lastWrittenAt).isNotNull()
+        }
+
     @Test
     fun `nothing is written while nothing changes`() =
         runTest {

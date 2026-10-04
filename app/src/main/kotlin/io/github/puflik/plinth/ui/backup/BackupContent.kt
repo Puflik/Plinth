@@ -48,6 +48,7 @@ fun BackupStep(viewModel: BackupViewModel = hiltViewModel()) {
         Text(text = stringResource(R.string.backup_text), style = MaterialTheme.typography.bodyMedium)
         state.folder?.let {
             Text(stringResource(R.string.backup_folder, it), style = MaterialTheme.typography.bodyMedium)
+            CopyStatus(state)
         }
         OutlinedButton(onClick = pick, enabled = !state.busy) {
             Text(stringResource(if (state.folder == null) R.string.backup_choose else R.string.backup_change))
@@ -70,13 +71,16 @@ internal fun LazyListScope.backupSection(
             headlineContent = { Text(stringResource(R.string.backup_settings_title)) },
             supportingContent = {
                 val folder = state.folder
-                Text(
-                    if (folder != null) {
-                        stringResource(R.string.backup_folder, folder)
-                    } else {
-                        stringResource(R.string.backup_none)
-                    },
-                )
+                Column {
+                    Text(
+                        if (folder != null) {
+                            stringResource(R.string.backup_folder, folder)
+                        } else {
+                            stringResource(R.string.backup_none)
+                        },
+                    )
+                    if (folder != null) CopyStatus(state)
+                }
             },
             trailingContent = {
                 OutlinedButton(onClick = onPick, enabled = !state.busy) {
@@ -111,6 +115,7 @@ fun BackupPrompts(
         when (state.outcome) {
             BackupOutcome.RESTORED -> R.string.backup_restored
             BackupOutcome.NO_ACCESS -> R.string.backup_no_access
+            BackupOutcome.NOT_WRITABLE -> R.string.backup_not_writable
             BackupOutcome.FAILED -> R.string.backup_failed
             null -> null
         }
@@ -120,6 +125,26 @@ fun BackupPrompts(
             viewModel.onOutcomeShown()
         }
     }
+}
+
+/** Отказ папки — красным, иначе — когда копия записана в последний раз; ещё не писалась — ничего. */
+@Composable
+private fun CopyStatus(state: BackupUiState) {
+    if (state.copyFailing) {
+        Text(
+            text = stringResource(R.string.backup_failing),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        return
+    }
+    val last = state.lastCopyAt ?: return
+    val locale = LocalConfiguration.current.locales[0]
+    val time =
+        DateFormat
+            .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale)
+            .format(Date(last.toEpochMilliseconds()))
+    Text(text = stringResource(R.string.backup_last, time), style = MaterialTheme.typography.bodyMedium)
 }
 
 /**

@@ -230,6 +230,9 @@
     <string name="backup_text">Plinth keeps your likes, playlists and listening history in a folder on this phone. If you reinstall the app, choose the same folder and everything comes back.</string>
     <string name="backup_settings_title">Data backup</string>
     <string name="backup_folder">Folder: %1$s</string>
+    <string name="backup_not_writable">Plinth cannot write to this folder. Choose another.</string>
+    <string name="backup_failing">The copy is not being written: the folder is gone or refuses writes. Choose the folder again.</string>
+    <string name="backup_last">Last copy: %1$s</string>
     <string name="backup_none">No folder chosen: after a reinstall your likes and playlists won’t come back.</string>
     <string name="backup_choose">Choose folder</string>
     <string name="backup_change">Change folder</string>

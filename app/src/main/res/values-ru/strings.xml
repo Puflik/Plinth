@@ -247,6 +247,9 @@
     <string name="backup_text">Plinth сохранит лайки, плейлисты и историю прослушиваний в папку на телефоне. Если переустановите приложение, выберите ту же папку — и всё вернётся.</string>
     <string name="backup_settings_title">Копия данных</string>
     <string name="backup_folder">Папка: %1$s</string>
+    <string name="backup_not_writable">Plinth не может писать в эту папку. Выберите другую.</string>
+    <string name="backup_failing">Копия не пишется: папки нет или она не принимает запись. Выберите папку заново.</string>
+    <string name="backup_last">Последняя копия: %1$s</string>
     <string name="backup_none">Папка не выбрана: после переустановки лайки и плейлисты не вернутся.</string>
     <string name="backup_choose">Выбрать папку</string>
     <string name="backup_change">Сменить папку</string>

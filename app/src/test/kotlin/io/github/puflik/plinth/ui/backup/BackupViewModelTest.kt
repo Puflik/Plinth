@@ -60,6 +60,22 @@ class BackupViewModelTest {
             assertThat(state.found).isNull()
         }
 
+    /** Папка, куда писать нельзя, не выглядит принятой (ревью v0.2, №3). */
+    @Test
+    fun `a folder that cannot be written is not kept and says so`() =
+        runTest(main) {
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            folder.failNextWrite = true
+
+            viewModel.onFolderPicked(TREE)
+
+            assertThat(settings.folder.first()).isNull()
+            val state = viewModel.uiState.value
+            assertThat(state.outcome).isEqualTo(BackupOutcome.NOT_WRITABLE)
+            assertThat(state.folder).isNull()
+            assertThat(state.found).isNull()
+        }
+
     @Test
     fun `data of a previous installation is offered with its counts`() =
         runTest(main) {
