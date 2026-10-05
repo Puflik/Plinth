@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with your data untouched, until the next try.
 - An update takes one copy of the database instead of one per schema step,
   so the three copies kept are those of the last three updates.
+- Every twentieth launch no longer waits for a full check of the library
+  database before the first screen: on a big library the check took most of
+  the start-up time. It now runs in the background once Plinth is open, and
+  damage it finds is repaired on the next launch — likes and playlists come
+  back from the journal, tracks with the scan.
 
 ## [0.2.1] - 2026-10-04
 

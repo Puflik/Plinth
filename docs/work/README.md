@@ -12,10 +12,11 @@
 2. **Opus: ветка, ворктри, тесты.**
    ```text
    git worktree add C:\claude\Plinth-<id> -b work/<id> main
-   Copy-Item C:\claude\Plinth\CLAUDE.md, C:\claude\Plinth\.claude C:\claude\Plinth-<id> -Recurse
+   Copy-Item C:\claude\Plinth\CLAUDE.md, C:\claude\Plinth\.claude, C:\claude\Plinth\local.properties C:\claude\Plinth-<id> -Recurse
    ```
-   `CLAUDE.md` и `.claude/` (хуки) в git не входят — без копии чат в ворктри
-   останется без правил и хуков. Память проекта привязана к пути
+   `CLAUDE.md`, `.claude/` (хуки) и `local.properties` (путь к Android SDK) в
+   git не входят — без копии чат в ворктри останется без правил и хуков, а
+   Gradle не найдёт SDK. Память проекта привязана к пути
    `C:\claude\Plinth` и в ворктри не подхватится: нужное из неё — ниже, в
    «Что исполнитель знает без памяти».
    В ворктри — тесты в **отдельных файлах** (Rust: `core/<крейт>/tests/<id>_*.rs`
@@ -30,16 +31,19 @@
 4. **Opus: ревью.** Промпт ниже. Не прошло — замечания дописываются в файл
    задачи («Ревью, круг N»), тот же исполнитель продолжает.
 5. **Opus: слияние.** Перебазирование `work/<id>` на `main`, перемотка `main`
-   (история линейная, как была), пуш. Потом CHANGELOG, `tasks.md`,
-   `docs/decisions.md`; удаление ветки (локально и в origin) и ворктри —
-   сборки в ворктри весят гигабайты.
+   (история линейная, как была), пуш. Перебазирование меняет хеши — в файл
+   задачи, `tasks.md` и `docs/decisions.md` идут хеши из `main`. Потом
+   CHANGELOG, `tasks.md`, `docs/decisions.md`; удаление ветки (локально и в
+   origin) и ворктри — сборки в ворктри весят гигабайты.
 
 ## Что исполнитель знает без памяти
 
 - **Gradle** — из PowerShell с `$env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"`;
   JBR Android Studio по старому пути сломан, системная `java` — 1.8. Задачи —
   с вариантом: `testGithubDebugUnitTest`, `testFdroidDebugUnitTest`,
-  `ktlintCheck`, `detekt`, `lintGithubDebug`.
+  `ktlintCheck`, `detekt`, `lintGithubDebug`. SDK Gradle берёт из
+  `local.properties` (Opus копирует его в ворктри); нет файла —
+  `$env:ANDROID_HOME = "C:\Users\User\AppData\Local\Android\Sdk"`.
 - **Rust** — из `core/`: `cargo test`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo fmt --all -- --check` (на Windows шумит «Incorrect newline style» по
   чужим файлам — смотреть только настоящие `Diff in`).
