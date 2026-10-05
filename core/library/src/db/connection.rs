@@ -1,26 +1,30 @@
 //! Открытие базы (B2.1, B2.3): `PRAGMA`, схема, счётчик запусков,
-//! проверка целостности и замена повреждённого файла.
+//! проверка целостности и замена файла, который не открылся.
 
 use std::path::Path;
 
 use plinth_types::CoreError;
 use rusqlite::{Connection, OptionalExtension};
 
-use super::integrity::{is_corruption, problems, quarantine};
+use super::integrity::{is_corruption, is_environmental, problems, quarantine};
 use super::migrations::{MIGRATIONS, MigrationError, migrate};
 use super::sql::Storage;
 use super::{Database, IntegrityCheck, Opened, Recovery};
 
 impl Database {
     /// Открывает базу по пути, создавая её при необходимости. Испорченный
-    /// файл откладывается в сторону и заменяется пустой базой — об этом
-    /// говорит [`Opened::recovery`]. База из более новой версии
-    /// приложения — ошибка: откат версии не поддерживается (B3).
+    /// файл, как и файл, на котором миграция не прошла, откладывается в
+    /// сторону целиком и заменяется пустой базой — об этом говорит
+    /// [`Opened::recovery`]. Ошибка — база из более новой версии приложения
+    /// (откат версии не поддерживается, B3), сбой среды (место, права,
+    /// блокировка) — файл тогда не тронут, и следующий запуск повторит — и
+    /// провал миграции на базе, созданной этим же открытием.
     pub fn open(path: &Path, check: IntegrityCheck) -> Result<Opened, CoreError> {
         match Self::open_checked(path, check) {
             Ok(db) => Ok(Opened { db, recovery: None }),
             // Соединение уже закрыто: `open_checked` вернулся.
-            Err(Failure::Corrupt(reason)) => Self::replace(path, reason),
+            Err(Failure::Corrupt(reason)) => Self::replace(path, "corrupt", reason),
+            Err(Failure::Unmigratable(reason)) => Self::replace(path, "migration-failed", reason),
             Err(Failure::Other(error)) => Err(error),
         }
     }
@@ -93,8 +97,10 @@ impl Database {
         )
     }
 
-    fn replace(path: &Path, reason: String) -> Result<Opened, CoreError> {
-        let quarantined = quarantine(path)?;
+    /// Откладывает файл (`label` — `corrupt` или `migration-failed`) и создаёт
+    /// базу заново. Второго откладывания нет: не открылась и новая — ошибка.
+    fn replace(path: &Path, label: &str, reason: String) -> Result<Opened, CoreError> {
+        let quarantined = quarantine(path, label)?;
         let db = Self::open_file(path).map_err(Failure::into_error)?;
         db.count_launch().storage()?;
         Ok(Opened { db, recovery: Some(Recovery { quarantined, reason }) })
@@ -102,7 +108,10 @@ impl Database {
 }
 
 enum Failure {
+    /// Файл испорчен.
     Corrupt(String),
+    /// Файл цел, но миграция на его данных не прошла (и не из-за среды).
+    Unmigratable(String),
     Other(CoreError),
 }
 
@@ -122,15 +131,20 @@ impl From<MigrationError> for Failure {
             MigrationError::Newer { found, known } => Self::Other(CoreError::storage(format!(
                 "database schema {found} is newer than this app ({known}); downgrade is not supported"
             ))),
-            // Порча, найденная миграцией, — та же порча: файл заменяется.
-            MigrationError::Failed { error, .. } | MigrationError::Sqlite(error) if is_corruption(&error) => {
-                Self::Corrupt(error.to_string())
+            // Порча, найденная миграцией или копией, — та же порча: файл заменяется.
+            MigrationError::Failed { error, .. } if is_corruption(&error) => Self::Corrupt(error.to_string()),
+            MigrationError::Failed { version, name, error, existed } => {
+                let reason = format!("migration {version} ({name}) failed: {error}");
+                // Сбой среды файл не винит: новая база упёрлась бы в то же, а
+                // отложенный файл держал бы его. Базу, созданную этим открытием,
+                // откладывать нечем — ошибка миграции и есть ошибка.
+                if existed && !is_environmental(&error) {
+                    Self::Unmigratable(reason)
+                } else {
+                    Self::Other(CoreError::storage(reason))
+                }
             }
-            MigrationError::Failed { version, name, error } => {
-                Self::Other(CoreError::storage(format!("migration {version} ({name}) failed: {error}")))
-            }
-            MigrationError::Sqlite(error) => Self::from(error),
-            MigrationError::Backup(error) => Self::Other(error),
+            MigrationError::Sqlite(error) | MigrationError::Backup(error) => Self::from(error),
         }
     }
 }
@@ -138,7 +152,7 @@ impl From<MigrationError> for Failure {
 impl Failure {
     fn into_error(self) -> CoreError {
         match self {
-            Self::Corrupt(reason) => CoreError::storage(reason),
+            Self::Corrupt(reason) | Self::Unmigratable(reason) => CoreError::storage(reason),
             Self::Other(error) => error,
         }
     }

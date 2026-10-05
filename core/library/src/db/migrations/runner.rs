@@ -2,11 +2,11 @@
 
 use std::path::Path;
 
-use plinth_types::CoreError;
 use rusqlite::Connection;
 
 use super::Migration;
-use crate::db::backup::backup;
+use crate::db::backup::{BackupError, backup};
+use crate::db::integrity::is_corruption;
 
 #[derive(Debug)]
 pub(crate) enum MigrationError {
@@ -16,18 +16,24 @@ pub(crate) enum MigrationError {
         known: i32,
     },
     /// Миграция упала и откатилась; база осталась на предыдущей версии.
+    /// `existed` — база была до этого открытия (`current > 0` в начале `migrate`).
     Failed {
         version: i32,
         name: &'static str,
         error: rusqlite::Error,
+        existed: bool,
     },
-    Backup(CoreError),
+    /// Только порча: иные сбои копии из `migrate` не выходят.
+    Backup(rusqlite::Error),
     Sqlite(rusqlite::Error),
 }
 
 /// Доводит базу до последней миграции из `migrations`; возвращает
-/// применённые версии. `file` — путь к базе: перед каждой миграцией базы,
-/// которая уже была до этого открытия, с неё снимается копия (`db/backup.rs`).
+/// применённые версии. `file` — путь к базе: перед первой ожидающей
+/// миграцией базы, которая уже была до этого открытия, с неё снимается одна
+/// копия (`db/backup.rs`). Копия, не снявшаяся из-за среды (место, путь,
+/// ввод-вывод), миграции не останавливает; порча, найденная копией, —
+/// [`MigrationError::Backup`].
 pub(crate) fn migrate(
     conn: &mut Connection,
     migrations: &[Migration],
@@ -40,15 +46,20 @@ pub(crate) fn migrate(
         return Err(MigrationError::Newer { found: current, known });
     }
     let pending: Vec<&Migration> = migrations.iter().filter(|m| m.version > current).collect();
-    // Копия нужна базе, которая была до этого открытия: новой терять нечего,
-    // и между её первыми миграциями копии не снимаются.
+    // Копия нужна базе, которая была до этого открытия: новой терять нечего.
+    // Одна на всё обновление: промежуточные версии выводятся из неё теми же
+    // миграциями, а по копии на шаг вытеснили бы законченные прошлых обновлений.
     let existed = current > 0;
+    if existed
+        && !pending.is_empty()
+        && let Some(path) = file
+    {
+        back_up(conn, path, current)?;
+    }
     let mut applied = Vec::new();
     for migration in pending {
-        if let Some(path) = file.filter(|_| existed) {
-            backup(conn, path, current).map_err(MigrationError::Backup)?;
-        }
-        let failed = |error| MigrationError::Failed { version: migration.version, name: migration.name, error };
+        let failed =
+            |error| MigrationError::Failed { version: migration.version, name: migration.name, error, existed };
         // Транзакция откатывается при выходе из области без commit — и при ошибке, и при панике.
         let tx = conn.transaction().map_err(MigrationError::Sqlite)?;
         (migration.apply)(&tx).map_err(failed)?;
@@ -58,6 +69,20 @@ pub(crate) fn migrate(
         applied.push(current);
     }
     Ok(applied)
+}
+
+/// Порча — ошибка: файл заменят, а копия с испорченной базы ничего не стоит.
+/// Любой другой сбой копии — предупреждение, миграции идут без неё; в лог —
+/// шаг и код, не текст ошибки: в нём полный путь (§17.3).
+fn back_up(conn: &Connection, path: &Path, from: i32) -> Result<(), MigrationError> {
+    match backup(conn, path, from) {
+        Ok(_) => Ok(()),
+        Err(BackupError::Sqlite(error)) if is_corruption(&error) => Err(MigrationError::Backup(error)),
+        Err(error) => {
+            log::warn!("migrations: no backup of schema v{from}, migrating without it: {}", error.describe());
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

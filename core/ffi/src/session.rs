@@ -49,11 +49,14 @@ pub(crate) struct State {
 impl Core {
     /// Открывает ядро в каталоге `data_dir`, создавая его при первом запуске.
     ///
-    /// Испорченная база откладывается в сторону и создаётся заново,
-    /// отставшая от журнала — пересобирается из него; что из этого было,
-    /// говорит [`Core::startup_report`]. Ошибка — каталог уже открыт
-    /// (`Unavailable`), журнал повреждён или новее приложения, база новее
-    /// приложения, не удалась миграция (`Storage`).
+    /// Испорченная база, как и база, на которой не прошла миграция,
+    /// откладывается в сторону и создаётся заново, отставшая от журнала —
+    /// пересобирается из него; что из этого было, говорит
+    /// [`Core::startup_report`]. Ошибка — каталог уже открыт (`Unavailable`),
+    /// журнал повреждён или новее приложения, база новее приложения, сбой
+    /// среды при копии или миграции (место, права, блокировка: файлы не
+    /// тронуты, следующий запуск повторит), миграция не прошла на только что
+    /// созданной базе (`Storage`).
     #[uniffi::constructor]
     pub fn open(data_dir: String) -> Result<Arc<Self>, CoreError> {
         panic::guard(|| Self::open_at(Path::new(&data_dir)).map(Arc::new))
@@ -71,7 +74,10 @@ impl Core {
         let device = device(dir)?;
         let opened = Database::open(&dir.join(DATABASE), IntegrityCheck::Scheduled)?;
         if let Some(recovery) = &opened.recovery {
-            log::warn!("core: the database was damaged and is kept aside: {}", recovery.reason);
+            log::warn!(
+                "core: the database was damaged or could not be migrated and is kept aside: {}",
+                recovery.reason
+            );
         }
         let mut journal = Journal::open(&dir.join(JOURNAL), device)?;
         let rebuilt = catch_up(&journal, &opened.db)? == CatchUp::Rebuilt;
