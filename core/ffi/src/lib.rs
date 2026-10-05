@@ -13,6 +13,8 @@
 mod api;
 mod logging;
 mod panic;
+#[cfg(test)]
+mod r1_5_tests;
 mod session;
 #[cfg(test)]
 mod testing;

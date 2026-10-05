@@ -7,6 +7,8 @@ mod connection;
 mod integrity;
 mod migrations;
 pub mod query;
+#[cfg(test)]
+mod r1_5_tests;
 pub mod repo;
 mod sql;
 
