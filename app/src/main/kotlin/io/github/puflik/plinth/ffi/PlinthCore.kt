@@ -75,6 +75,18 @@ class PlinthCore(
     @Throws(CoreFailure::class)
     fun open(): StartupReport = mapped { opened.value.startupReport().toApp() }
 
+    /**
+     * Плановая проверка целостности базы — раз в 20 запусков, — которую
+     * открытие не делает: её зовут в фоне после [open]. Идёт на своём
+     * соединении, замков ядра не берёт — остальные вызовы не ждут. Не очередь
+     * этого запуска или уже проверено — [CoreIntegrity.NOT_DUE], файл не
+     * читается. Порча — [CoreIntegrity.DAMAGED]: ядро работает дальше, а
+     * следующее открытие откладывает базу и собирает её заново. Отказ —
+     * исключением, но не в [errors], как у [open].
+     */
+    @Throws(CoreFailure::class)
+    fun checkIntegrity(): CoreIntegrity = mapped { opened.value.checkIntegrity().toApp() }
+
     /** Намеренная паника в ядре — для проверки, что она приходит исключением. */
     @Throws(CoreFailure::class)
     fun panicForTest(message: String) {

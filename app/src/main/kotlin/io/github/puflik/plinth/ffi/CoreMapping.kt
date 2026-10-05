@@ -7,6 +7,7 @@ import io.github.puflik.plinth.ffi.generated.AlbumRow as RustAlbumRow
 import io.github.puflik.plinth.ffi.generated.AlbumSort as RustAlbumSort
 import io.github.puflik.plinth.ffi.generated.ArtistRow as RustArtistRow
 import io.github.puflik.plinth.ffi.generated.Artwork as RustArtwork
+import io.github.puflik.plinth.ffi.generated.IntegrityOutcome as RustIntegrityOutcome
 import io.github.puflik.plinth.ffi.generated.NewPlay as RustNewPlay
 import io.github.puflik.plinth.ffi.generated.OutputDevice as RustOutputDevice
 import io.github.puflik.plinth.ffi.generated.PlayEvent as RustPlayEvent
@@ -95,6 +96,13 @@ internal fun NewPlay.toRust() =
     )
 
 internal fun RustStartupReport.toApp() = StartupReport(databaseRecovered, restoredFromJournal)
+
+internal fun RustIntegrityOutcome.toApp() =
+    when (this) {
+        RustIntegrityOutcome.NOT_DUE -> CoreIntegrity.NOT_DUE
+        RustIntegrityOutcome.HEALTHY -> CoreIntegrity.HEALTHY
+        RustIntegrityOutcome.DAMAGED -> CoreIntegrity.DAMAGED
+    }
 
 internal fun CoreTrackSort.toRust() =
     when (this) {
