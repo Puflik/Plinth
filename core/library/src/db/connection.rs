@@ -2,31 +2,66 @@
 //! проверка целостности и замена файла, который не открылся.
 
 use std::path::Path;
+use std::time::Duration;
 
 use plinth_types::CoreError;
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
-use super::integrity::{is_corruption, is_environmental, problems, quarantine};
+use super::integrity::{describe, is_corruption, is_environmental, leave_mark, problems, quarantine, take_mark};
 use super::migrations::{MIGRATIONS, MigrationError, migrate};
 use super::sql::Storage;
-use super::{Database, IntegrityCheck, Opened, Recovery};
+use super::{Checked, Database, IntegrityCheck, Opened, Recovery};
 
 impl Database {
     /// Открывает базу по пути, создавая её при необходимости. Испорченный
     /// файл, как и файл, на котором миграция не прошла, откладывается в
     /// сторону целиком и заменяется пустой базой — об этом говорит
-    /// [`Opened::recovery`]. Ошибка — база из более новой версии приложения
-    /// (откат версии не поддерживается, B3), сбой среды (место, права,
-    /// блокировка) — файл тогда не тронут, и следующий запуск повторит — и
-    /// провал миграции на базе, созданной этим же открытием.
+    /// [`Opened::recovery`]. Порчу находит и метка `<база>.damaged`, которую
+    /// оставила [`Database::check_file`] в прошлый запуск: её читают первой, при
+    /// любом [`IntegrityCheck`], и снимают. Полную проверку открытие делает
+    /// только с [`IntegrityCheck::Now`]; плановую лишь отмечает —
+    /// [`Opened::integrity_due`]. Ошибка — база из более новой версии
+    /// приложения (откат версии не поддерживается, B3), сбой среды (место,
+    /// права, блокировка) — файл тогда не тронут, и следующий запуск повторит —
+    /// и провал миграции на базе, созданной этим же открытием.
     pub fn open(path: &Path, check: IntegrityCheck) -> Result<Opened, CoreError> {
+        if let Some(reason) = take_mark(path) {
+            return Self::replace(path, "corrupt", reason);
+        }
         match Self::open_checked(path, check) {
-            Ok(db) => Ok(Opened { db, recovery: None }),
+            Ok((db, integrity_due)) => Ok(Opened { db, recovery: None, integrity_due }),
             // Соединение уже закрыто: `open_checked` вернулся.
             Err(Failure::Corrupt(reason)) => Self::replace(path, "corrupt", reason),
             Err(Failure::Unmigratable(reason)) => Self::replace(path, "migration-failed", reason),
             Err(Failure::Other(error)) => Err(error),
         }
+    }
+
+    /// Полная проверка целостности файла на своём соединении только для
+    /// чтения — рядом с основным, замка не берёт и в базу не пишет. Для
+    /// плановой проверки после открытия ([`Opened::integrity_due`]).
+    ///
+    /// Порча — [`Checked::Damaged`] и метка `<база>.damaged` с причиной:
+    /// следующее [`Database::open`] отложит файл и создаст базу заново.
+    /// Порчей считается и ошибка чтения с кодом порчи — на испорченных страницах
+    /// `integrity_check` падает именно так. Прочее — не порча, а ошибка
+    /// (`Storage`, код SQLite без текста: в нём бывает путь): файла нет, занят,
+    /// сбой ввода-вывода; метки тогда нет. Не записалась метка — тоже ошибка.
+    pub fn check_file(path: &Path) -> Result<Checked, CoreError> {
+        let check_error = |error: rusqlite::Error| CoreError::storage(format!("integrity check: {}", describe(&error)));
+        let conn =
+            Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
+                .map_err(check_error)?;
+        conn.busy_timeout(Duration::from_secs(5)).map_err(check_error)?;
+        let reason = match problems(&conn) {
+            Ok(found) if found.is_empty() => return Ok(Checked::Healthy),
+            Ok(found) => found.join("; "),
+            Err(error) if is_corruption(&error) => error.to_string(),
+            Err(error) => return Err(check_error(error)),
+        };
+        drop(conn);
+        leave_mark(path, &reason)?;
+        Ok(Checked::Damaged { reason })
     }
 
     /// База в памяти — для тестов.
@@ -59,17 +94,20 @@ impl Database {
     }
 
     /// Порча может всплыть на любом шаге — при чтении схемы, счётчика или
-    /// в самой проверке: любая такая ошибка ведёт к замене файла.
-    fn open_checked(path: &Path, check: IntegrityCheck) -> Result<Self, Failure> {
+    /// в самой проверке: любая такая ошибка ведёт к замене файла. Проверка на
+    /// открытии — только у `Now`; плановую открытие лишь отмечает: второй
+    /// элемент ответа — пришла ли очередь проверки рядом.
+    fn open_checked(path: &Path, check: IntegrityCheck) -> Result<(Self, bool), Failure> {
         let db = Self::open_file(path)?;
         let launch = db.count_launch().map_err(Failure::from)?;
-        if check.due(launch) {
+        if check == IntegrityCheck::Now {
             let found = problems(&db.conn).map_err(Failure::from)?;
             if !found.is_empty() {
                 return Err(Failure::Corrupt(found.join("; ")));
             }
         }
-        Ok(db)
+        let integrity_due = check == IntegrityCheck::Scheduled && check.due(launch);
+        Ok((db, integrity_due))
     }
 
     fn open_file(path: &Path) -> Result<Self, Failure> {
@@ -103,7 +141,7 @@ impl Database {
         let quarantined = quarantine(path, label)?;
         let db = Self::open_file(path).map_err(Failure::into_error)?;
         db.count_launch().storage()?;
-        Ok(Opened { db, recovery: Some(Recovery { quarantined, reason }) })
+        Ok(Opened { db, recovery: Some(Recovery { quarantined, reason }), integrity_due: false })
     }
 }
 

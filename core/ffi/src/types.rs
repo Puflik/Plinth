@@ -166,13 +166,24 @@ pub struct SyncedSettings {
 
 /// Что ядро сделало при открытии. `database_recovered` — база была
 /// испорчена или миграция на ней не прошла: файл отложен в сторону, база
-/// создана заново; `restored_from_journal` — лайки, плейлисты и история
-/// собраны из журнала заново (база пропала, заменена, отстала). Каталог
-/// после этого вернёт скан.
+/// создана заново; порчу могла найти и проверка прошлого запуска
+/// (`Core::check_integrity`). `restored_from_journal` — лайки, плейлисты и
+/// история собраны из журнала заново (база пропала, заменена, отстала).
+/// Каталог после этого вернёт скан.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
 pub struct StartupReport {
     pub database_recovered: bool,
     pub restored_from_journal: bool,
+}
+
+/// Итог `Core::check_integrity`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum IntegrityOutcome {
+    /// Не этот запуск (проверка — раз в 20) или уже проверено.
+    NotDue,
+    Healthy,
+    /// Нашлась порча: следующее открытие отложит базу и соберёт её заново.
+    Damaged,
 }
 
 /// Запись плейлиста в его порядке. Позиция — дело ядра: Kotlin работает с

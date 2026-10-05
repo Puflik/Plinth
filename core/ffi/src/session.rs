@@ -11,16 +11,17 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, TryLockError};
 
-use plinth_library::db::{Database, IntegrityCheck};
+use plinth_library::db::{Checked, Database, IntegrityCheck};
 use plinth_providers::Registry;
 use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, describe_missing, rebuild, record_and_project, relink};
 use plinth_types::{CoreError, DeviceId};
 
 use crate::panic;
-use crate::types::StartupReport;
+use crate::types::{IntegrityOutcome, StartupReport};
 
 pub(crate) const DATABASE: &str = "library.db";
 pub(crate) const JOURNAL: &str = "journal";
@@ -33,6 +34,11 @@ pub struct Core {
     /// Скан идёт один: два разом добавили бы одни файлы дважды.
     scan: Mutex<()>,
     report: StartupReport,
+    /// Файл базы: плановая проверка читает его на своём соединении (Р1.12).
+    database: PathBuf,
+    /// Очередь плановой проверки целостности пришла на это открытие и ещё не
+    /// пройдена: [`Core::check_integrity`] снимает флаг — проверка раз за запуск.
+    integrity_due: AtomicBool,
     /// Онлайн-источники (E3): реестр провайдеров поверх транспорта Kotlin;
     /// `None` — выключены. Отдельно от `state`: запрос в сеть не держит базу.
     online: RwLock<Option<Arc<Registry>>>,
@@ -52,7 +58,10 @@ impl Core {
     /// Испорченная база, как и база, на которой не прошла миграция,
     /// откладывается в сторону и создаётся заново, отставшая от журнала —
     /// пересобирается из него; что из этого было, говорит
-    /// [`Core::startup_report`]. Ошибка — каталог уже открыт (`Unavailable`),
+    /// [`Core::startup_report`]. Порчу находит и проверка прошлого запуска
+    /// ([`Core::check_integrity`]): она оставляет метку, и это открытие
+    /// откладывает файл. Саму плановую проверку открытие не делает — её зовут
+    /// после него. Ошибка — каталог уже открыт (`Unavailable`),
     /// журнал повреждён или новее приложения, база новее приложения, сбой
     /// среды при копии или миграции (место, права, блокировка: файлы не
     /// тронуты, следующий запуск повторит), миграция не прошла на только что
@@ -65,6 +74,29 @@ impl Core {
     pub fn startup_report(&self) -> Result<StartupReport, CoreError> {
         panic::guard(|| Ok(self.report))
     }
+
+    /// Плановая проверка целостности базы (раз в 20 запусков), которую открытие
+    /// не делает: Kotlin зовёт её в фоне после открытия. Идёт на своём
+    /// соединении только для чтения и замков ядра не берёт — остальные вызовы
+    /// не ждут. Не очередь этого запуска или уже проверено — `NotDue`, файл не
+    /// читается. Порча — `Damaged`: ядро работает дальше, а следующее открытие
+    /// откладывает базу и собирает её заново (метка рядом с файлом). Ошибка —
+    /// проверка не смогла прочесть файл или записать метку; повторять её в
+    /// этом запуске не нужно.
+    pub fn check_integrity(&self) -> Result<IntegrityOutcome, CoreError> {
+        panic::guard(|| {
+            if !self.integrity_due.swap(false, Ordering::AcqRel) {
+                return Ok(IntegrityOutcome::NotDue);
+            }
+            match Database::check_file(&self.database)? {
+                Checked::Healthy => Ok(IntegrityOutcome::Healthy),
+                Checked::Damaged { reason } => {
+                    log::warn!("core: damage found; the database is replaced on the next open: {reason}");
+                    Ok(IntegrityOutcome::Damaged)
+                }
+            }
+        })
+    }
 }
 
 impl Core {
@@ -72,7 +104,8 @@ impl Core {
         fs::create_dir_all(dir).map_err(|e| io_error("create data dir", &e))?;
         let lock = lock(dir)?;
         let device = device(dir)?;
-        let opened = Database::open(&dir.join(DATABASE), IntegrityCheck::Scheduled)?;
+        let database = dir.join(DATABASE);
+        let opened = Database::open(&database, IntegrityCheck::Scheduled)?;
         if let Some(recovery) = &opened.recovery {
             log::warn!(
                 "core: the database was damaged or could not be migrated and is kept aside: {}",
@@ -101,6 +134,8 @@ impl Core {
             state: Mutex::new(State { db: opened.db, journal }),
             scan: Mutex::new(()),
             report,
+            database,
+            integrity_due: AtomicBool::new(opened.integrity_due),
             online: RwLock::new(None),
             _lock: lock,
         })

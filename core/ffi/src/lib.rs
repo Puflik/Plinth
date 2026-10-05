@@ -27,7 +27,7 @@ use std::sync::Arc;
 pub use logging::{CoreLogLevel, CoreLogRecord, CoreLogger};
 use plinth_types::CoreError;
 pub use session::Core;
-pub use types::{NewPlay, PlaylistItem, StartupReport};
+pub use types::{IntegrityOutcome, NewPlay, PlaylistItem, StartupReport};
 
 uniffi::setup_scaffolding!();
 
