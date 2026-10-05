@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A library update that fails no longer keeps Plinth from opening. If the
+  database cannot be brought to the new version, it is set aside whole next
+  to a fresh one: likes, ratings, playlists and history come back from the
+  journal, the library from a scan. A database found damaged while it is
+  copied before an update is set aside the same way, and a copy that cannot
+  be written (no space left) no longer stops the update. Only a lack of
+  space or a locked file during the update itself still stops the launch,
+  with your data untouched, until the next try.
+- An update takes one copy of the database instead of one per schema step,
+  so the three copies kept are those of the last three updates.
+
 ## [0.2.1] - 2026-10-04
 
 A fix release after the review of the second wave: nothing you saved is lost
