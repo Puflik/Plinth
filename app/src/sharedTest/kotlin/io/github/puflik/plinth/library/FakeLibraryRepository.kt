@@ -1,5 +1,6 @@
 package io.github.puflik.plinth.library
 
+import io.github.puflik.plinth.ffi.CoreOpening
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
@@ -158,6 +159,17 @@ class FakeLibraryRepository(
         }
 
     override suspend fun sortKeys(names: List<String>): List<String> = names.map(keys::of)
+
+    /** Открыта ли фонотека (Р1.4); тест ставит сам. Списки фейк отдаёт и закрытым. */
+    override val opening = MutableStateFlow(CoreOpening.OPEN)
+
+    /** Сколько раз фонотеку просили открыть снова. */
+    var reopens = 0
+        private set
+
+    override suspend fun reopen() {
+        reopens++
+    }
 
     private fun albumsOf(
         tracks: List<LibraryTrack>,

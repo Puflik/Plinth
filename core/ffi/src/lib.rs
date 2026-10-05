@@ -16,6 +16,8 @@ mod panic;
 #[cfg(test)]
 mod r1_12_tests;
 #[cfg(test)]
+mod r1_4_tests;
+#[cfg(test)]
 mod r1_5_tests;
 mod session;
 #[cfg(test)]
