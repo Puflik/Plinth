@@ -14,8 +14,11 @@ mod passport;
 mod projection;
 mod rebuild;
 mod relink;
+mod start_over;
 mod store;
 
+use std::any::Any;
+use std::panic::AssertUnwindSafe;
 use std::path::Path;
 
 use plinth_library::db::JournalMark;
@@ -33,6 +36,7 @@ pub use passport::describe_missing;
 pub use projection::{CatchUp, catch_up, record_and_project, record_and_project_all};
 pub use rebuild::rebuild;
 pub use relink::relink;
+pub use start_over::{damaged_snapshot, start_over};
 use store::Store;
 
 pub struct Journal {
@@ -50,15 +54,21 @@ impl Journal {
     /// две реплики не получат один идентификатор, даже если журнал
     /// восстановлен из копии на другом телефоне. Постоянный автор — в
     /// метаданных операции.
+    ///
+    /// Снимок, который не читается, — ошибка (`Storage`), файлы не тронуты;
+    /// паникой её не заменить: на мусоре с верной суммой `yrs` паникует, и
+    /// паника тоже ошибка («journal: unreadable snapshot: panicked: …»). Что
+    /// с таким снимком делать, решает вызывающий: [`damaged_snapshot`],
+    /// [`start_over`].
     pub fn open(dir: &Path, device: DeviceId) -> Result<Self, CoreError> {
         let (store, loaded) = Store::open(dir)?;
         let doc = Doc::new();
         let roots = Roots::new(&doc);
+        if !loaded.snapshot.is_empty() {
+            apply_snapshot(&doc, &loaded.snapshot).map_err(|reason| unreadable("snapshot", &reason))?;
+        }
         {
             let mut txn = doc.transact_mut();
-            if !loaded.snapshot.is_empty() {
-                apply_v2(&mut txn, &loaded.snapshot)?;
-            }
             for (index, frame) in loaded.frames.iter().enumerate() {
                 // Сумма кадра сошлась, значит, байты те, что записаны: не
                 // разбирается — ошибка кода, не диска. Кадр пропускается.
@@ -197,6 +207,26 @@ pub(crate) fn check_snapshot(snapshot: &[u8]) -> Result<(), CoreError> {
 
 fn snapshot(doc: &Doc) -> Vec<u8> {
     doc.transact().encode_state_as_update_v2(&StateVector::default())
+}
+
+/// Разбирает снимок и применяет к `doc`; ошибка — причина текстом. Разбор —
+/// до транзакции, а паника `yrs` на байтах, которые он не читает, — та же
+/// ошибка: текст паники в причине, потому что хук паники ядра под `guard` её
+/// не пишет в лог.
+fn apply_snapshot(doc: &Doc, snapshot: &[u8]) -> Result<(), String> {
+    let applied = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let update = Update::decode_v2(snapshot).map_err(|e| e.to_string())?;
+        doc.transact_mut().apply_update(update).map_err(|e| e.to_string())
+    }));
+    applied.unwrap_or_else(|payload| Err(format!("panicked: {}", panic_text(payload.as_ref()))))
+}
+
+fn panic_text(payload: &(dyn Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("unknown panic")
 }
 
 fn apply_v2(txn: &mut TransactionMut, snapshot: &[u8]) -> Result<(), CoreError> {

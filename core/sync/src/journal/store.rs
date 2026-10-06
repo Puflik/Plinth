@@ -19,6 +19,11 @@
 //! Номер операции (`seq`) растёт на единицу с каждой правкой документа. С
 //! идентификатором журнала он образует метку, по которой проекция знает,
 //! какое состояние журнала она отражает (C3).
+//!
+//! Снимок, который не читается, `Store` не трогает: открытие — ошибка. Его
+//! откладывает рядом как `snapshot.damaged-<мс>` и заменяет новым журналом
+//! `start_over` (Р1.4); для него здесь `inspect_snapshot`, `keep_snapshot_aside`
+//! и `replace_snapshot`.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -209,12 +214,27 @@ fn header(kind: u8, header: &Header) -> Vec<u8> {
     bytes
 }
 
-fn parse_header(bytes: &[u8], kind: u8) -> Result<Header, CoreError> {
+/// Файл не читается: испорчен или записан более новой версией приложения.
+enum Unreadable {
+    Damaged(&'static str),
+    Newer(u8),
+}
+
+impl Unreadable {
+    fn into_error(self) -> CoreError {
+        match self {
+            Self::Damaged(what) => damaged(what),
+            Self::Newer(format) => damaged(&format!("journal format {format} is newer than this app ({FORMAT})")),
+        }
+    }
+}
+
+fn check_header(bytes: &[u8], kind: u8) -> Result<Header, Unreadable> {
     if bytes.len() < HEADER_LEN || bytes[..4] != MAGIC || bytes[5] != kind {
-        return Err(damaged("not a journal file"));
+        return Err(Unreadable::Damaged("not a journal file"));
     }
     if bytes[4] > FORMAT {
-        return Err(damaged(&format!("journal format {} is newer than this app ({FORMAT})", bytes[4])));
+        return Err(Unreadable::Newer(bytes[4]));
     }
     let mut journal = [0_u8; 8];
     journal.copy_from_slice(&bytes[6..14]);
@@ -223,17 +243,60 @@ fn parse_header(bytes: &[u8], kind: u8) -> Result<Header, CoreError> {
     Ok(Header { journal: i64::from_le_bytes(journal), seq: u64::from_le_bytes(seq) })
 }
 
-fn read_snapshot(bytes: &[u8]) -> Result<(Header, Vec<u8>), CoreError> {
-    let header = parse_header(bytes, SNAPSHOT_KIND)?;
+fn parse_header(bytes: &[u8], kind: u8) -> Result<Header, CoreError> {
+    check_header(bytes, kind).map_err(Unreadable::into_error)
+}
+
+fn check_snapshot(bytes: &[u8]) -> Result<(Header, Vec<u8>), Unreadable> {
+    let header = check_header(bytes, SNAPSHOT_KIND)?;
     let rest = &bytes[HEADER_LEN..];
     if rest.len() < 4 {
-        return Err(damaged("snapshot is cut short"));
+        return Err(Unreadable::Damaged("snapshot is cut short"));
     }
     let (crc, payload) = rest.split_at(4);
     if crc32fast::hash(payload).to_le_bytes() != crc {
-        return Err(damaged("snapshot is damaged"));
+        return Err(Unreadable::Damaged("snapshot is damaged"));
     }
     Ok((header, payload.to_vec()))
+}
+
+fn read_snapshot(bytes: &[u8]) -> Result<(Header, Vec<u8>), CoreError> {
+    check_snapshot(bytes).map_err(Unreadable::into_error)
+}
+
+/// Что лежит в файле `snapshot`.
+pub(crate) enum Snapshot {
+    /// Заголовок и сумма сошлись; данные документа (пусты у нового журнала).
+    /// Разберёт ли их `yrs`, здесь не проверено.
+    Readable(Vec<u8>),
+    /// Записан более новой версией приложения: не испорчен, но и не читается.
+    Newer,
+    /// Не снимок журнала, обрезан или сумма не сошлась; причина — без путей.
+    Damaged(String),
+}
+
+/// Файл `snapshot` каталога `dir`; `None` — его (или каталога) нет. Ничего не
+/// пишет и не создаёт; ошибка — файл не прочесть.
+pub(crate) fn inspect_snapshot(dir: &Path) -> Result<Option<Snapshot>, CoreError> {
+    let Some(bytes) = read_file(&dir.join(SNAPSHOT))? else { return Ok(None) };
+    Ok(Some(match check_snapshot(&bytes) {
+        Ok((_, payload)) => Snapshot::Readable(payload),
+        Err(Unreadable::Newer(_)) => Snapshot::Newer,
+        Err(Unreadable::Damaged(why)) => Snapshot::Damaged(why.to_owned()),
+    }))
+}
+
+/// Копия снимка рядом, `snapshot.damaged-<мс>`; оригинал на месте.
+pub(crate) fn keep_snapshot_aside(dir: &Path) -> Result<(), CoreError> {
+    let aside = dir.join(format!("{SNAPSHOT}.damaged-{}", Timestamp::now().as_millis()));
+    fs::copy(dir.join(SNAPSHOT), aside).map(drop).map_err(|e| io_error("keep snapshot aside", &e))
+}
+
+/// Ставит на место снимка новый журнал: новый идентификатор, номер операции
+/// `seq`, состояние `payload` (пусто — как у нового журнала). Одна замена
+/// файла: до неё на диске прежний снимок, после — новый.
+pub(crate) fn replace_snapshot(dir: &Path, seq: u64, payload: &[u8]) -> Result<(), CoreError> {
+    write_snapshot(dir, &Header { journal: new_journal_id(), seq }, payload)
 }
 
 /// Снимок пишется во временный файл и переименовывается поверх старого:
@@ -448,8 +511,8 @@ mod tests {
         assert!(kept_aside);
     }
 
-    /// Снимок — всё состояние. Испорченный не читается и не переписывается:
-    /// его заменит только восстановление из зеркала (C4).
+    /// Снимок — всё состояние. Испорченный `Store` не читает и не переписывает:
+    /// его откладывает и заменяет `start_over` (Р1.4).
     #[test]
     fn a_damaged_snapshot_is_an_error_and_stays_untouched() {
         let dir = Scratch::new();

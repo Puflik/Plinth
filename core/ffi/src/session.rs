@@ -17,7 +17,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, TryLockError};
 
 use plinth_library::db::{Checked, Database, IntegrityCheck};
 use plinth_providers::Registry;
-use plinth_sync::journal::{CatchUp, Journal, Op, catch_up, describe_missing, rebuild, record_and_project, relink};
+use plinth_sync::journal::{
+    CatchUp, Journal, Op, catch_up, damaged_snapshot, describe_missing, rebuild, record_and_project, relink, start_over,
+};
 use plinth_types::{CoreError, DeviceId};
 
 use crate::panic;
@@ -58,11 +60,13 @@ impl Core {
     /// Испорченная база, как и база, на которой не прошла миграция,
     /// откладывается в сторону и создаётся заново, отставшая от журнала —
     /// пересобирается из него; что из этого было, говорит
-    /// [`Core::startup_report`]. Порчу находит и проверка прошлого запуска
+    /// [`Core::startup_report`]. Снимок журнала, который не читается, ядро не
+    /// запирает: он откладывается копией рядом, журнал начинается заново с
+    /// пользовательским из базы, у установки новое имя. Порчу находит и проверка прошлого запуска
     /// ([`Core::check_integrity`]): она оставляет метку, и это открытие
     /// откладывает файл. Саму плановую проверку открытие не делает — её зовут
     /// после него. Ошибка — каталог уже открыт (`Unavailable`),
-    /// журнал повреждён или новее приложения, база новее приложения, сбой
+    /// журнал новее приложения или его файл не прочесть, база новее приложения, сбой
     /// среды при копии или миграции (место, права, блокировка: файлы не
     /// тронуты, следующий запуск повторит), миграция не прошла на только что
     /// созданной базе (`Storage`).
@@ -112,7 +116,7 @@ impl Core {
                 recovery.reason
             );
         }
-        let mut journal = Journal::open(&dir.join(JOURNAL), device)?;
+        let (mut journal, journal_started_over) = open_journal(dir, device, &opened.db)?;
         let rebuilt = catch_up(&journal, &opened.db)? == CatchUp::Rebuilt;
         // Журнал до C4: трекам с данными — паспорта, иначе переустановка их не узнает.
         if let Err(error) = describe_missing(&mut journal, &opened.db) {
@@ -128,6 +132,7 @@ impl Core {
             database_recovered: opened.recovery.is_some(),
             // Пустой журнал «пересобирается» и при первом запуске — это не восстановление.
             restored_from_journal: rebuilt && journal.mark().seq > 0,
+            journal_started_over,
         };
         log::info!("core opened: {report:?}, schema v{}", opened.db.schema_version()?);
         Ok(Self {
@@ -207,6 +212,28 @@ fn lock(dir: &Path) -> Result<File, CoreError> {
     }
 }
 
+/// Журнал в каталоге данных; `true` — он начат заново. Снимок, который не
+/// читается, не запирает ядро: журнал начинается с пользовательским из базы
+/// `db` (`start_over`), а у установки новое имя — иначе копия в папке,
+/// записанная до порчи, осталась бы «своей»: восстановление её пропускает, а
+/// зеркало перезаписало бы при первом уходе в фон. Новое имя — до замены
+/// снимка: обрыв между ними повторит всё, а обратный порядок оставил бы новый
+/// журнал со старым именем. Прочее — ошибка как есть: снимок новее
+/// приложения, файл не прочесть.
+fn open_journal(dir: &Path, device: DeviceId, db: &Database) -> Result<(Journal, bool), CoreError> {
+    let journal = dir.join(JOURNAL);
+    match Journal::open(&journal, device) {
+        Ok(opened) => Ok((opened, false)),
+        Err(error) => {
+            let Some(reason) = damaged_snapshot(&journal)? else { return Err(error) };
+            log::warn!("core: the journal snapshot is unreadable, the journal starts over ({reason})");
+            let device = renew_device(dir)?;
+            start_over(&journal, device, db)?;
+            Ok((Journal::open(&journal, device)?, true))
+        }
+    }
+}
+
 /// Идентификатор установки; нет его или не читается — новый.
 fn device(dir: &Path) -> Result<DeviceId, CoreError> {
     let path = dir.join(DEVICE);
@@ -218,6 +245,13 @@ fn device(dir: &Path) -> Result<DeviceId, CoreError> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(io_error("read device id", &error)),
     }
+    renew_device(dir)
+}
+
+/// Новый идентификатор установки в файле `device`: временный файл, затем
+/// переименование — в любой момент в файле целый идентификатор.
+fn renew_device(dir: &Path) -> Result<DeviceId, CoreError> {
+    let path = dir.join(DEVICE);
     let device = DeviceId::new();
     let tmp = dir.join(format!("{DEVICE}.tmp"));
     fs::write(&tmp, device.to_string())
