@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the start-up time. It now runs in the background once Plinth is open, and
   damage it finds is repaired on the next launch — likes and playlists come
   back from the journal, tracks with the scan.
+- A damaged journal file no longer locks you out of Plinth. If the file that
+  keeps your likes, playlists and history cannot be read, it is set aside and
+  started again from what the library database shows, so you keep what you
+  saw. If the database is gone as well, Plinth says so and points you to your
+  backup folder: the backup made before the damage is never overwritten.
+- When Plinth cannot open its data at all — the phone is out of space or the
+  data was written by a newer version — the app no longer stays on a blank
+  screen: the library explains what happened and offers Retry and Save log.
 
 ## [0.2.1] - 2026-10-04
 
