@@ -1,17 +1,19 @@
 package io.github.puflik.plinth.library
 
+import io.github.puflik.plinth.ffi.CoreOpening
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.library.model.Artist
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Фасад фонотеки (C3.3, D3b) — единственный путь экранов к библиотеке.
  *
  * Реализация — `CoreLibraryRepository` поверх ядра на Rust (D3); здесь нет
- * ни ядра, ни Android.
+ * ни ядра, ни Android — только его состояние [CoreOpening].
  * Требования к реализациям записаны в `LibraryRepositoryContractTest`.
  *
  * Чтение — потоками: список обновляется сам, когда скан что-то записал.
@@ -68,6 +70,20 @@ interface LibraryRepository {
      * так же, как в списках хранилища.
      */
     suspend fun sortKeys(names: List<String>): List<String>
+
+    /**
+     * Открылось ли ядро под фонотекой (Р1.4). Пока оно [CoreOpening.FAILED],
+     * списки не приходят вовсе, а экран библиотеки объясняет и предлагает
+     * [reopen].
+     */
+    val opening: StateFlow<CoreOpening>
+
+    /**
+     * Пробует открыть ядро снова — «Повторить». Удалось — [opening] становится
+     * `OPEN`, и списки приходят сами; нет — остаётся `FAILED`. Отказ наружу не
+     * выходит: экран его и так показывает.
+     */
+    suspend fun reopen()
 
     companion object {
         /** Сколько треков в «Недавнем». */

@@ -3,6 +3,7 @@ package io.github.puflik.plinth.ui.start
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.puflik.plinth.ffi.CoreOpening
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.sort.TrackSort
 import io.github.puflik.plinth.settings.StartSettings
@@ -13,7 +14,10 @@ import io.github.puflik.plinth.startup.StartRules
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Clock
@@ -45,7 +49,7 @@ class StartViewModel
                 val decision =
                     StartRules.decide(
                         setting = settings.startScreen.first(),
-                        libraryEmpty = repository.tracks(TrackSort.TITLE).first().isEmpty(),
+                        libraryEmpty = libraryEmpty(repository),
                         lastPlayed = history.lastPlayed.first(),
                         now = clock.now(),
                     )
@@ -53,6 +57,17 @@ class StartViewModel
                 mutableDecision.value = decision
             }
         }
+
+        /**
+         * Пуста ли библиотека — или ядро не открылось (Р1.4): треков не будет, и
+         * решение их не ждёт, иначе приложение стоит на фоне темы, а объяснение
+         * на экране библиотеки. Что придёт раньше; ядро ещё открывается — ждём.
+         */
+        private suspend fun libraryEmpty(repository: LibraryRepository): Boolean =
+            merge(
+                repository.tracks(TrackSort.TITLE).map { it.isEmpty() },
+                repository.opening.filter { it == CoreOpening.FAILED }.map { true },
+            ).first()
 
         /** Решение, если его ещё не применяли; дальше — `null`. */
         fun take(): StartDecision? {

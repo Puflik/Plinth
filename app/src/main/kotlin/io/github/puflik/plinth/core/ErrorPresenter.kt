@@ -20,6 +20,9 @@ import javax.inject.Singleton
  *   серый трек) — строка внизу для них лишняя.
  * - База собрана заново из журнала — один раз: пустые списки иначе
  *   напугали бы, а лайки и плейлисты на месте.
+ * - Журнал начат заново (снимок не читался) — один раз: человек должен
+ *   знать, что лайки и плейлисты пересобраны по библиотеке или что их надо
+ *   вернуть из копии в папке.
  *
  * Помнит, о каких файлах сказано, поэтому один на процесс.
  */
@@ -30,6 +33,7 @@ class ErrorPresenter
         private val told = mutableSetOf<String>()
         private var toldCoreFailed = false
         private var toldRestored = false
+        private var toldJournalStartedOver = false
 
         /** Что сказать о [error]; `null` — ничего, только лог. */
         fun present(error: AppError): ErrorNotice? =
@@ -44,6 +48,13 @@ class ErrorPresenter
                     } else {
                         toldRestored = true
                         ErrorNotice.LibraryRestored
+                    }
+                is AppError.JournalStartedOver ->
+                    if (toldJournalStartedOver) {
+                        null
+                    } else {
+                        toldJournalStartedOver = true
+                        ErrorNotice.JournalStartedOver(error.carried)
                     }
             }
 
@@ -84,4 +95,12 @@ sealed interface ErrorNotice {
 
     /** База собрана заново: лайки и плейлисты на месте, треки вернёт скан. */
     data object LibraryRestored : ErrorNotice
+
+    /**
+     * Журнал начат заново: [carried] — лайки и плейлисты пересобраны по
+     * библиотеке; иначе их надо вернуть из копии в папке.
+     */
+    data class JournalStartedOver(
+        val carried: Boolean,
+    ) : ErrorNotice
 }

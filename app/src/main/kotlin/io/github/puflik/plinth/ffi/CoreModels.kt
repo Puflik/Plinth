@@ -254,11 +254,28 @@ enum class VersionPreference {
  * прошла, и файл отложен в сторону; порчу могла найти и проверка прошлого
  * запуска ([PlinthCore.checkIntegrity]). Лайки, плейлисты и история собраны
  * заново из журнала. Каталог после этого вернёт скан.
+ *
+ * [journalStartedOver] — снимок журнала не читался: он отложен рядом копией,
+ * журнал начат заново с тем, что показывала база, а у установки новое имя
+ * (копия в папке, записанная до порчи, теперь чужая). Перенесено ли
+ * что-нибудь — по [restoredFromJournal]: `false` — вернуть данные может
+ * только копия в папке.
  */
 data class StartupReport(
     val databaseRecovered: Boolean,
     val restoredFromJournal: Boolean,
+    val journalStartedOver: Boolean = false,
 )
+
+/** Открылось ли ядро ([PlinthCore.opening], Р1.4). */
+enum class CoreOpening {
+    /** Ещё не пробовали. */
+    PENDING,
+    OPEN,
+
+    /** Последняя попытка не удалась; данные не тронуты. */
+    FAILED,
+}
 
 /** Итог плановой проверки целостности базы ([PlinthCore.checkIntegrity]). */
 enum class CoreIntegrity {

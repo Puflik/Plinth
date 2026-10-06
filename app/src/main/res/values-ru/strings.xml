@@ -37,6 +37,9 @@
     <string name="library_empty_looked_in">Где Plinth искал музыку: %1$s.</string>
     <string name="library_empty_no_folders">Пока не сканируется ни одна папка.</string>
     <string name="library_empty_pick">Выбрать папку</string>
+    <string name="library_unopened_title">Библиотека не открылась</string>
+    <string name="library_unopened_text">Лайки, плейлисты и история не удалены. Чаще всего на телефоне кончилось место или данные записала более новая версия Plinth: освободите место или обновите приложение и нажмите «Повторить». Не помогло — сохраните лог.</string>
+    <string name="library_unopened_retry">Повторить</string>
     <string name="library_prompt_folders_title">Вы пропустили выбор папок</string>
     <string name="library_prompt_folders_text">Plinth искал только здесь: %1$s — и музыки не нашёл. Покажите, где она лежит.</string>
     <string name="library_prompt_not_now">Не сейчас</string>
@@ -227,6 +230,8 @@
     <string name="error_untitled">трек без названия</string>
     <string name="error_core_failed">Что-то пошло не так</string>
     <string name="notice_library_restored">Библиотека восстановлена: лайки и плейлисты на месте, треки вернёт скан</string>
+    <string name="notice_journal_started_over">Лайки и плейлисты были повреждены — Plinth собрал их заново по библиотеке</string>
+    <string name="notice_journal_lost">Лайки и плейлисты были повреждены. Верните их из копии: Настройки → Копия данных, выберите ту же папку</string>
     <string name="error_skipped_one">Пропущен «%1$s»: %2$s</string>
     <plurals name="error_skipped_many">
         <item quantity="one">Пропущен %d трек, который не играет</item>

@@ -45,7 +45,7 @@ class UnavailableRescan(
             when (this) {
                 is AppError.TracksSkipped -> tracks
                 is AppError.PlaybackStopped -> skipped + track
-                is AppError.CoreFailed, AppError.LibraryRestored -> emptyList()
+                is AppError.CoreFailed, AppError.LibraryRestored, is AppError.JournalStartedOver -> emptyList()
             }
 
     private companion object {

@@ -6,6 +6,7 @@ import io.github.puflik.plinth.ffi.generated.CoreException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import java.io.File
 import io.github.puflik.plinth.ffi.generated.panicForTest as corePanicForTest
@@ -21,7 +22,8 @@ import io.github.puflik.plinth.ffi.generated.start as coreStart
  * Ядро живёт в [dataDir]: база, журнал пользовательских данных и
  * идентификатор установки (docs/adr/0007-journal-as-source-of-truth.md).
  * Открывается при первом обращении; не открылось — следующее обращение
- * попробует снова. Вызовы блокирующие — не из главного потока.
+ * попробует снова, а удалось ли, видно в [opening]. Вызовы блокирующие — не
+ * из главного потока.
  *
  * Отказ ядра приходит исключением [CoreFailure]. Отказ вызова API к тому же
  * уходит в [errors] — дальше `ErrorPresenter` решает, говорить ли человеку.
@@ -44,6 +46,7 @@ class PlinthCore(
 
     private val changes = MutableStateFlow(0L)
     private val userChanges = MutableStateFlow(0L)
+    private val mutableOpening = MutableStateFlow(CoreOpening.PENDING)
 
     val library = CoreLibrary(this)
     val journal = CoreJournal(this)
@@ -63,6 +66,16 @@ class PlinthCore(
      */
     val userDataChanges: StateFlow<Long> = userChanges.asStateFlow()
 
+    /**
+     * Открылось ли ядро (Р1.4): [CoreOpening.PENDING] — до первой попытки; каждая
+     * попытка — [open], [checkIntegrity] и первый вызов API — ставит
+     * [CoreOpening.OPEN] или [CoreOpening.FAILED]. Из «не открылось» в
+     * «открылось» ядро переходит, когда повтор удался, — и двигает
+     * [catalogChanges] и [userDataChanges]: списки, которые не пришли,
+     * перечитают ядро.
+     */
+    val opening: StateFlow<CoreOpening> = mutableOpening.asStateFlow()
+
     /** Запускает ядро — логгер и хук паники, — если оно ещё не запущено. */
     @Throws(CoreFailure::class)
     fun start() = mapped { started }
@@ -70,10 +83,11 @@ class PlinthCore(
     /**
      * Открывает ядро, если оно ещё не открыто, и говорит, что пришлось
      * восстанавливать. Отказ — исключением, но не в [errors]: запуск при
-     * старте — дело лога, а экраны узнают об отказе своим первым вызовом.
+     * старте — дело лога, а экраны узнают об отказе своим первым вызовом и
+     * через [opening]. Повтор после отказа — этим же вызовом.
      */
     @Throws(CoreFailure::class)
-    fun open(): StartupReport = mapped { opened.value.startupReport().toApp() }
+    fun open(): StartupReport = mapped { core().startupReport().toApp() }
 
     /**
      * Плановая проверка целостности базы — раз в 20 запусков, — которую
@@ -85,7 +99,7 @@ class PlinthCore(
      * исключением, но не в [errors], как у [open].
      */
     @Throws(CoreFailure::class)
-    fun checkIntegrity(): CoreIntegrity = mapped { opened.value.checkIntegrity().toApp() }
+    fun checkIntegrity(): CoreIntegrity = mapped { core().checkIntegrity().toApp() }
 
     /** Намеренная паника в ядре — для проверки, что она приходит исключением. */
     @Throws(CoreFailure::class)
@@ -128,17 +142,31 @@ class PlinthCore(
      * Вызов API, отказ которого — не сбой ядра, а свойство данных (файл
      * пропал после скана): исключением, но не в [errors].
      */
-    internal fun <T> quietCall(block: (Core) -> T): T = mapped { block(opened.value) }
+    internal fun <T> quietCall(block: (Core) -> T): T = mapped { block(core()) }
 
     /** Вызов API: отказ — исключением и в поток [errors]. */
     internal fun <T> call(block: (Core) -> T): T =
         try {
-            block(opened.value)
+            block(core())
         } catch (e: CoreException) {
             val failure = CoreFailure.of(e)
             errors.report(failure)
             throw failure
         }
+
+    /**
+     * Ядро, открытое при необходимости. Каждая попытка открыть оставляет след
+     * в [opening]; повтор, который удался после отказа, будит списки.
+     */
+    private fun core(): Core =
+        runCatching { opened.value }
+            .onSuccess {
+                if (mutableOpening.getAndUpdate { CoreOpening.OPEN } == CoreOpening.FAILED) {
+                    catalogChanged()
+                    userDataChanged()
+                }
+            }.onFailure { mutableOpening.value = CoreOpening.FAILED }
+            .getOrThrow()
 
     private inline fun <T> mapped(block: () -> T): T =
         try {

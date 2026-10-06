@@ -58,7 +58,7 @@ fun ErrorNotices(
                         )
                     if (result == SnackbarResult.ActionPerformed) saveLog()
                 } else {
-                    snackbar.showSnackbar(resources.text(notice))
+                    snackbar.showSnackbar(resources.text(notice), duration = duration(notice))
                 }
             }
         }
@@ -93,7 +93,13 @@ private fun Resources.text(notice: ErrorNotice): String =
             }
         ErrorNotice.CoreFailed -> getString(R.string.error_core_failed)
         ErrorNotice.LibraryRestored -> getString(R.string.notice_library_restored)
+        is ErrorNotice.JournalStartedOver ->
+            getString(if (notice.carried) R.string.notice_journal_started_over else R.string.notice_journal_lost)
     }
+
+/** О журнале, начатом заново, говорим дольше: в строке — что делать дальше. */
+private fun duration(notice: ErrorNotice) =
+    if (notice is ErrorNotice.JournalStartedOver) SnackbarDuration.Long else SnackbarDuration.Short
 
 private fun Resources.name(track: FailedTrack): String = track.title ?: getString(R.string.error_untitled)
 

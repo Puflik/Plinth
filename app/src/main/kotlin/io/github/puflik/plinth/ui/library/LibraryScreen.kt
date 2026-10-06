@@ -41,7 +41,9 @@ import io.github.puflik.plinth.ui.library.tabs.ArtistsTab
 import io.github.puflik.plinth.ui.library.tabs.FoldersTab
 import io.github.puflik.plinth.ui.library.tabs.TracksTab
 import io.github.puflik.plinth.ui.player.rememberAudioFilePicker
+import io.github.puflik.plinth.ui.settings.DiagnosticsViewModel
 import io.github.puflik.plinth.ui.settings.rememberFolderPicker
+import io.github.puflik.plinth.ui.settings.rememberLogSaver
 
 /**
  * Библиотека — стартовый экран (C4.1): вкладки треков, альбомов,
@@ -53,6 +55,9 @@ import io.github.puflik.plinth.ui.settings.rememberFolderPicker
  * объяснение нужно только после отказа. Вкладки видны и без разрешения (Н4):
  * «Любимое» и плейлисты с сетевыми треками играют и так, а просьба о доступе —
  * карточкой над файловыми вкладками.
+ *
+ * Ядро не открылось (Р1.4) — вместо вкладок «Библиотека не открылась» с
+ * «Повторить» и «Сохранить лог»: пустые списки напугали бы, а данные не тронуты.
  */
 @Composable
 fun LibraryScreen(
@@ -63,6 +68,7 @@ fun LibraryScreen(
     onOpenAutoPlaylist: (AutoPlaylist) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
+    diagnostics: DiagnosticsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     var tab by rememberSaveable { mutableStateOf(LibraryTab.TRACKS) }
@@ -94,32 +100,34 @@ fun LibraryScreen(
             onAlbumSort = viewModel::onAlbumSort,
             onOpenFile = openFile,
         )
-        LibraryContent(
-            state = state,
-            tab = tab,
-            onTab = { tab = it },
-            access = {
-                PermissionRationaleCard(
-                    permanentlyDenied = state.permission == PermissionState.PermanentlyDenied,
-                    onRequest = requestPermission,
-                    onOpenSettings = { openAppSettings(context) },
-                )
-            },
-            empty = { EmptyLibrary(state.scannedFolders, state.prompt, pickFolder, viewModel::onDismissPrompt) },
-            lists = { fileTab ->
-                FileLists(
-                    tab = fileTab,
-                    state = state,
-                    onTrack = onTrack,
-                    onFolderTrack = onFolderTrack,
-                    onOpenAlbum = onOpenAlbum,
-                    onOpenArtist = onOpenArtist,
-                    onOpenFolder = viewModel::openFolder,
-                    onFolderUp = viewModel::folderUp,
-                )
-            },
-            playlists = { PlaylistsTab(onOpenAuto = onOpenAutoPlaylist, onOpenPlaylist = onOpenPlaylist) },
-        )
+        UnopenedOr(state.unopened, viewModel::onRetry, rememberLogSaver(diagnostics)) {
+            LibraryContent(
+                state = state,
+                tab = tab,
+                onTab = { tab = it },
+                access = {
+                    PermissionRationaleCard(
+                        permanentlyDenied = state.permission == PermissionState.PermanentlyDenied,
+                        onRequest = requestPermission,
+                        onOpenSettings = { openAppSettings(context) },
+                    )
+                },
+                empty = { EmptyLibrary(state.scannedFolders, state.prompt, pickFolder, viewModel::onDismissPrompt) },
+                lists = { fileTab ->
+                    FileLists(
+                        tab = fileTab,
+                        state = state,
+                        onTrack = onTrack,
+                        onFolderTrack = onFolderTrack,
+                        onOpenAlbum = onOpenAlbum,
+                        onOpenArtist = onOpenArtist,
+                        onOpenFolder = viewModel::openFolder,
+                        onFolderUp = viewModel::folderUp,
+                    )
+                },
+                playlists = { PlaylistsTab(onOpenAuto = onOpenAutoPlaylist, onOpenPlaylist = onOpenPlaylist) },
+            )
+        }
     }
 }
 
@@ -160,7 +168,8 @@ internal fun LibraryContent(
                 FilesView.LISTS -> lists(tab)
                 FilesView.EMPTY -> empty()
                 FilesView.SCANNING -> Scanning()
-                FilesView.NOTHING -> Unit
+                // Ядро не открылось — вместо вкладок экран `LibraryUnopened`, сюда не доходит.
+                FilesView.NOTHING, FilesView.UNOPENED -> Unit
             }
         }
     }

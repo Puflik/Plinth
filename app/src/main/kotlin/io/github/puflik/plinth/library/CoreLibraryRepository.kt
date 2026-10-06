@@ -5,6 +5,7 @@ import io.github.puflik.plinth.ffi.CoreAlbum
 import io.github.puflik.plinth.ffi.CoreAlbumSort
 import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.ffi.CoreLibrary
+import io.github.puflik.plinth.ffi.CoreOpening
 import io.github.puflik.plinth.ffi.CoreTrackSort
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.library.model.Album
@@ -14,6 +15,7 @@ import io.github.puflik.plinth.library.sort.AlbumSort
 import io.github.puflik.plinth.library.sort.TrackSort
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
@@ -31,7 +33,8 @@ import kotlinx.coroutines.withContext
  * каждой пачки скана и в его конце — и по [PlinthCore.userDataChanges]: лайк
  * меняет строку трека. Вызовы ядра блокирующие и идут в [io].
  * Отказ ядра фасад сам отдаёт в `CoreErrors`; список при этом остаётся
- * прежним, а следующее изменение каталога прочитает его снова.
+ * прежним, а следующее изменение каталога прочитает его снова. Ядро не
+ * открылось — списки не приходят, пока [reopen] его не откроет.
  */
 class CoreLibraryRepository(
     private val core: PlinthCore,
@@ -76,6 +79,19 @@ class CoreLibraryRepository(
                 names
             }
         }
+
+    override val opening: StateFlow<CoreOpening> = core.opening
+
+    /** Открывает ядро снова; отказ — в лог, а экран и так показывает `FAILED`. */
+    override suspend fun reopen() {
+        withContext(io) {
+            try {
+                core.open()
+            } catch (failure: CoreFailure) {
+                AppLog.w(TAG, "library did not open again", failure)
+            }
+        }
+    }
 
     private fun <T : Any> read(query: CoreLibrary.() -> T): Flow<T> =
         combine(core.catalogChanges, core.userDataChanges) { catalog, user -> catalog to user }

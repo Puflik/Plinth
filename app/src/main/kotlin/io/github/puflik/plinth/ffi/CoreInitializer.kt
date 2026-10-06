@@ -24,7 +24,9 @@ import kotlin.time.measureTimedValue
  * сами (D3c): первый же вызов попробует открыть его снова, а отказ уйдёт в
  * [errors]. Базу, собранную заново — испорченную, с провалившейся миграцией
  * или отставшую от журнала, — [errors] тоже узнают: «Библиотека
- * восстановлена».
+ * восстановлена». Журнал, начатый заново (его снимок не читался, Р1.4), —
+ * отдельная весть вместо этой: «собраны заново по библиотеке» или «верните
+ * из копии в папке».
  */
 class CoreInitializer(
     private val core: PlinthCore,
@@ -39,7 +41,10 @@ class CoreInitializer(
                 measureTimedValue { core.open() }
             }.onSuccess { (report, opening) ->
                 AppLog.i(TAG, "core opened in ${opening.inWholeMilliseconds} ms")
-                if (report.databaseRecovered || report.restoredFromJournal) {
+                if (report.journalStartedOver) {
+                    AppLog.w(TAG, "journal started over: $report")
+                    errors.journalStartedOver(carried = report.restoredFromJournal)
+                } else if (report.databaseRecovered || report.restoredFromJournal) {
                     AppLog.w(TAG, "core restored: $report")
                     errors.libraryRestored()
                 }

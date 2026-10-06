@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.audio.engine.AudioSource
+import io.github.puflik.plinth.ffi.CoreOpening
 import io.github.puflik.plinth.library.FolderSettings
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.LibraryScan
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -41,6 +43,8 @@ import javax.inject.Inject
  *   порядке [trackSort], как на вкладке «Треки».
  * @property loaded списки уже прочитаны: пустые — значит, пусто, а не «ещё не
  *   пришли».
+ * @property unopened ядро не открылось (Р1.4): списки не придут, пока его не
+ *   откроют повтором, — экран говорит об этом вместо вкладок.
  * @property scannedFolders где ищется музыка — пустое состояние говорит, где искали.
  * @property prompt пропущенный в мастере шаг, который сейчас стоит предложить
  *   (F2, 12.4); бывает только в пустой библиотеке.
@@ -57,6 +61,7 @@ data class LibraryUiState(
     val loaded: Boolean = false,
     val scannedFolders: List<String> = emptyList(),
     val prompt: OnboardingStep? = null,
+    val unopened: Boolean = false,
 ) {
     /**
      * Пустое состояние (F2, 12.5): разрешение есть, скан закончен, а треков
@@ -83,6 +88,7 @@ data class LibraryUiState(
     val files: FilesView
         get() =
             when {
+                unopened -> FilesView.UNOPENED
                 tracks.isNotEmpty() -> FilesView.LISTS
                 isEmpty -> FilesView.EMPTY
                 permission == PermissionState.Granted && loaded -> FilesView.SCANNING
@@ -103,6 +109,9 @@ enum class FilesView {
 
     /** Ни списков, ни скана: ещё не прочитаны или нет доступа. */
     NOTHING,
+
+    /** Ядро не открылось (Р1.4): «Библиотека не открылась» с «Повторить» и «Сохранить лог». */
+    UNOPENED,
 }
 
 /**
@@ -117,6 +126,10 @@ enum class FilesView {
  *
  * Пустая библиотека предлагает выбрать папку; если папки пропустили в
  * мастере, об этом говорит возвращённый шаг ([DeferredPrompts]).
+ *
+ * Ядро не открылось ([LibraryRepository.opening]) — списки не придут вовсе:
+ * состояние собирается без них, [LibraryUiState.unopened], а [onRetry]
+ * просит открыть ядро снова.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -124,7 +137,7 @@ class LibraryViewModel
     @Inject
     constructor(
         private val scan: LibraryScan,
-        repository: LibraryRepository,
+        private val repository: LibraryRepository,
         private val playback: PlaybackController,
         private val actions: TrackActions,
         private val sorts: SortSettings,
@@ -138,14 +151,21 @@ class LibraryViewModel
         // Какую папку открыли. Показывается ближайшая уцелевшая на этом пути — см. LibraryFolder.open.
         private val folderPath = MutableStateFlow("")
 
-        private val lists: Flow<Lists> =
-            combine(
-                trackSort.flatMapLatest(repository::tracks),
-                albumSort.flatMapLatest(repository::albums),
-                repository.artists(),
-                folderPath,
-            ) { tracks, albums, artists, path ->
-                Lists(tracks, albums, artists, LibraryFolder.tree(tracks, repository::sortKeys).open(path))
+        // `null` — ядро не открылось: списки не придут, а `combine` ждёт каждый поток.
+        private val lists: Flow<Lists?> =
+            repository.opening.flatMapLatest { opening ->
+                if (opening == CoreOpening.FAILED) {
+                    flowOf(null)
+                } else {
+                    combine(
+                        trackSort.flatMapLatest(repository::tracks),
+                        albumSort.flatMapLatest(repository::albums),
+                        repository.artists(),
+                        folderPath,
+                    ) { tracks, albums, artists, path ->
+                        Lists(tracks, albums, artists, LibraryFolder.tree(tracks, repository::sortKeys).open(path))
+                    }
+                }
             }
 
         private val setup: Flow<Setup> =
@@ -167,12 +187,13 @@ class LibraryViewModel
                         scan = scan,
                         trackSort = tracks,
                         albumSort = albums,
-                        tracks = lists.tracks,
-                        albums = lists.albums,
-                        artists = lists.artists,
-                        folder = lists.folder,
-                        loaded = true,
+                        tracks = lists?.tracks.orEmpty(),
+                        albums = lists?.albums.orEmpty(),
+                        artists = lists?.artists.orEmpty(),
+                        folder = lists?.folder ?: LibraryFolder.EMPTY,
+                        loaded = lists != null,
                         scannedFolders = setup.folders,
+                        unopened = lists == null,
                     )
                 val trigger = PromptTrigger.EMPTY_LIBRARY.takeIf { state.isEmpty }
                 state.copy(prompt = trigger?.let { DeferredPrompts.due(setup.skipped, it) })
@@ -182,6 +203,11 @@ class LibraryViewModel
             val wasGranted = permission.value == PermissionState.Granted
             permission.value = state
             if (state == PermissionState.Granted && !wasGranted) scan.start()
+        }
+
+        /** «Повторить» на экране «Библиотека не открылась»: открыть ядро снова; удалось — списки придут сами. */
+        fun onRetry() {
+            viewModelScope.launch { repository.reopen() }
         }
 
         /** Порядок сохраняется и переживает перезапуск; список перестроится, когда он запишется. */

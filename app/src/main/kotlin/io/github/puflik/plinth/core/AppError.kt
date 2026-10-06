@@ -44,6 +44,16 @@ sealed interface AppError {
      * журнала, треки вернёт скан.
      */
     data object LibraryRestored : AppError
+
+    /**
+     * Снимок журнала не читался (Р1.4): ядро отложило его копией рядом и
+     * начало журнал заново с тем, что показывала база. [carried] — база
+     * что-то перенесла: лайки и плейлисты на месте; иначе их может вернуть
+     * только копия в папке.
+     */
+    data class JournalStartedOver(
+        val carried: Boolean,
+    ) : AppError
 }
 
 /** Вид ошибки ядра — категории `CoreError` в Rust (ADR 0010). */

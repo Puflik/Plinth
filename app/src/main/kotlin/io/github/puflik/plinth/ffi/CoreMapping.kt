@@ -95,7 +95,7 @@ internal fun NewPlay.toRust() =
         previousTrack = previousTrack?.value,
     )
 
-internal fun RustStartupReport.toApp() = StartupReport(databaseRecovered, restoredFromJournal)
+internal fun RustStartupReport.toApp() = StartupReport(databaseRecovered, restoredFromJournal, journalStartedOver)
 
 internal fun RustIntegrityOutcome.toApp() =
     when (this) {

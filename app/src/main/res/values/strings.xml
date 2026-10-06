@@ -35,6 +35,9 @@
     <string name="library_empty_looked_in">Plinth looked in %1$s.</string>
     <string name="library_empty_no_folders">No folders are scanned yet.</string>
     <string name="library_empty_pick">Choose a folder</string>
+    <string name="library_unopened_title">The library didn’t open</string>
+    <string name="library_unopened_text">Your likes, playlists and history are not deleted. Most often the phone is out of space or the data was written by a newer version of Plinth: free up some space or update the app, then tap Retry. If that doesn’t help, save the log.</string>
+    <string name="library_unopened_retry">Retry</string>
     <string name="library_prompt_folders_title">You skipped choosing folders</string>
     <string name="library_prompt_folders_text">Plinth looked only in %1$s and found no music. Show it where your music is.</string>
     <string name="library_prompt_not_now">Not now</string>
@@ -214,6 +217,8 @@
     <string name="error_untitled">untitled track</string>
     <string name="error_core_failed">Something went wrong</string>
     <string name="notice_library_restored">Library restored: likes and playlists are safe, tracks are coming back with the scan</string>
+    <string name="notice_journal_started_over">Likes and playlists were damaged and have been rebuilt from your library</string>
+    <string name="notice_journal_lost">Likes and playlists were damaged. Restore them from your backup: Settings → Data backup, choose the same folder</string>
     <string name="error_skipped_one">Skipped “%1$s”: %2$s</string>
     <plurals name="error_skipped_many">
         <item quantity="one">Skipped %d track that can’t be played</item>
