@@ -6,7 +6,9 @@
 //! Сравнение: нормализованные название и исполнитель совпадают; MBID, если
 //! известен у обоих, — тоже; длительность, если известна у обоих, — с
 //! точностью до двух секунд. Среди подходящих лучше тот, у кого совпал
-//! MBID, потом альбом, потом длительность.
+//! MBID, потом альбом, потом длительность. Правила — в `TrackPassport`
+//! (`key`, `likeness`, `best_match`): их же применяет скан, узнавая
+//! перенесённый файл (Р1.2).
 //!
 //! Трек, на который новая установка успела поставить свои данные до
 //! перепривязки (нажали «играть» посреди скана), тоже узнаётся: каталог берёт
@@ -14,20 +16,14 @@
 //! v0.2, №1). Иначе данные старой остались бы на ID, которого в каталоге нет.
 
 use std::collections::{BTreeSet, HashMap};
-use std::time::Duration;
 
 use plinth_library::db::Database;
 use plinth_library::model::{OnlineTrack, PlayEvent, PlaylistEntry, TrackPassport};
-use plinth_library::text::normalize;
 use plinth_types::{CoreError, PlayEventId, PlaylistEntryId, Timestamp, TrackId};
 
 use super::passport::referenced;
 use super::projection::record_and_project_all;
 use super::{Journal, JournalState, Op};
-
-/// Разница длительности одной песни в разных файлах: кодировщики по-разному
-/// считают тишину в начале и конце.
-const DURATION_TOLERANCE: Duration = Duration::from_secs(2);
 
 /// Переводит треки каталога на ID журнала по паспортам; сколько переведено.
 /// Перевод на ID журнала — одной транзакцией базы; журнал меняется только при
@@ -46,7 +42,7 @@ pub fn relink(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> 
     let mut held: HashMap<(String, String), Vec<TrackPassport>> = HashMap::new();
     for track in catalog {
         let side = if claimed.contains(&track.track) { &mut held } else { &mut free };
-        side.entry(key(&track)).or_default().push(track);
+        side.entry(track.key()).or_default().push(track);
     }
     let now = Timestamp::now();
     let mut unmatched: Vec<TrackPassport> = Vec::new();
@@ -54,8 +50,8 @@ pub fn relink(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> 
         let (mut moved, mut restored) = (0, 0);
         for passport in lost {
             let found = free
-                .get_mut(&key(passport))
-                .and_then(|candidates| best(passport, candidates).map(|index| candidates.remove(index)));
+                .get_mut(&passport.key())
+                .and_then(|candidates| passport.best_match(candidates).map(|index| candidates.remove(index)));
             if let Some(found) = found {
                 db.rekey_track(found.track, passport.track)?;
                 moved += 1;
@@ -71,10 +67,10 @@ pub fn relink(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> 
     for passport in unmatched {
         // Только трек новее потерянного ID: ID растут со временем создания,
         // и слияние идёт в одну сторону — повторный вызов не развернёт его.
-        let found = held.get_mut(&key(&passport)).and_then(|candidates| {
+        let found = held.get_mut(&passport.key()).and_then(|candidates| {
             let newer: Vec<TrackPassport> =
                 candidates.iter().filter(|candidate| candidate.track > passport.track).cloned().collect();
-            let found = best(&passport, &newer).map(|index| newer[index].clone())?;
+            let found = passport.best_match(&newer).map(|index| newer[index].clone())?;
             candidates.retain(|candidate| candidate.track != found.track);
             Some(found)
         });
@@ -146,44 +142,4 @@ fn online(passport: &TrackPassport) -> OnlineTrack {
         mbid: passport.mbid,
         sources: passport.sources.clone(),
     }
-}
-
-fn key(passport: &TrackPassport) -> (String, String) {
-    (normalize(&passport.title), normalize(&passport.artist))
-}
-
-/// Лучший из подходящих; при равенстве — первый.
-fn best(passport: &TrackPassport, candidates: &[TrackPassport]) -> Option<usize> {
-    let mut best: Option<(u8, usize)> = None;
-    for (index, candidate) in candidates.iter().enumerate() {
-        if let Some(score) = score(passport, candidate)
-            && best.is_none_or(|(top, _)| score > top)
-        {
-            best = Some((score, index));
-        }
-    }
-    best.map(|(_, index)| index)
-}
-
-/// Насколько `candidate` похож на `passport`; `None` — это другой трек.
-fn score(passport: &TrackPassport, candidate: &TrackPassport) -> Option<u8> {
-    let mut score = 0;
-    if let (Some(a), Some(b)) = (passport.mbid, candidate.mbid) {
-        if a != b {
-            return None;
-        }
-        score += 4;
-    }
-    if let (Some(a), Some(b)) = (&passport.album, &candidate.album)
-        && normalize(a) == normalize(b)
-    {
-        score += 2;
-    }
-    if let (Some(a), Some(b)) = (passport.duration, candidate.duration) {
-        if a.abs_diff(b) > DURATION_TOLERANCE {
-            return None;
-        }
-        score += 1;
-    }
-    Some(score)
 }

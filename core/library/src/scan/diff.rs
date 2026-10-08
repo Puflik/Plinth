@@ -5,6 +5,10 @@
 //! решение 16): место в плейлистах, лайк и история остаются, файл может
 //! вернуться — SD-карту вставят обратно. Файл в папке, которую не удалось
 //! прочесть, не пропал: о нём просто ничего не известно.
+//!
+//! Недоступный с прошлых сканов файл, которого по-прежнему нет, — не новость
+//! (`gone`), но он может найтись на новом месте: файл вынесли из папок
+//! библиотеки, а потом вернули (Р1.2).
 
 use std::collections::{HashMap, HashSet};
 
@@ -21,6 +25,10 @@ pub struct ScanDiff {
     pub returned: Vec<KnownFile>,
     /// Доступные файлы, которых больше нет.
     pub missing: Vec<KnownFile>,
+    /// Недоступные с прошлых сканов файлы, которых по-прежнему нет, — кроме
+    /// лежавших в папках, которые не прочлись. Не пропали сейчас, но, как
+    /// [`missing`](Self::missing), могут оказаться новым файлом на другом месте.
+    pub gone: Vec<KnownFile>,
     pub unchanged: usize,
 }
 
@@ -40,11 +48,17 @@ pub fn diff(known: &HashMap<String, KnownFile>, walk: &Walk) -> ScanDiff {
     }
     for (uri, was) in known {
         let unknown = walk.unreadable.iter().any(|dir| uri.starts_with(dir.as_str()));
-        if was.available && !unknown && !seen.contains(uri.as_str()) {
+        if unknown || seen.contains(uri.as_str()) {
+            continue;
+        }
+        if was.available {
             diff.missing.push(*was);
+        } else {
+            diff.gone.push(*was);
         }
     }
     diff.missing.sort_by_key(|file| file.source);
+    diff.gone.sort_by_key(|file| file.source);
     diff.returned.sort_by_key(|file| file.source);
     diff
 }

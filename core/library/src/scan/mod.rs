@@ -9,10 +9,16 @@
 //! Каталог пересобирается сканом; пользовательское — в журнале (ADR 0007).
 //! Поэтому пропавший файл только помечается недоступным: ID трека, на
 //! который ссылаются лайки и плейлисты, остаётся.
+//!
+//! Перенесённый файл — другой путь, а не новая песня (Р1.2): между чтением
+//! тегов и записью скан сводит новые файлы с пропавшими по паспорту (`moved`),
+//! и найденная пара пишется как новое место прежнего источника — трек, версия,
+//! источник и дата добавления те же, журнал не пишется.
 
 mod catalog;
 mod diff;
 mod folder_config;
+mod moved;
 mod progress;
 mod tags;
 mod walker;
@@ -53,7 +59,9 @@ impl DbAccess for Database {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScannedFile {
     pub file: FoundFile,
-    /// Каким каталог знал файл; `None` — новый.
+    /// Каким каталог знал файл; `None` — новый. У нового файла, в котором скан
+    /// узнал пропавший (Р1.2), — этот пропавший: запись обновит его, а не
+    /// заведёт новый трек.
     pub known: Option<KnownFile>,
     pub tags: Tags,
     /// Прочлись ли теги. Изменённый файл с битыми тегами каталог не трогает.
@@ -68,6 +76,9 @@ pub struct ScanReport {
     pub changed: u32,
     pub returned: u32,
     pub missing: u32,
+    /// Пропавшие файлы, найденные на новом месте (Р1.2): их треки остались
+    /// прежними. В `added` и `missing` они не считаются.
+    pub moved: u32,
     /// Файлы, теги которых не прочлись: новые добавлены под именем файла,
     /// изменённые остались какими были и перечитаются следующим сканом.
     pub unreadable_files: u32,
@@ -93,19 +104,21 @@ pub fn scan(
         known = db.known_local_files()?;
         Ok(())
     })?;
-    let diff = diff(&known, &walked);
-    let mut report = ScanReport {
+    let mut diff = diff(&known, &walked);
+    let Some((mut files, unreadable)) = read(&diff, reader, progress) else { return Ok(stopped) };
+    let moved = moved::relocate(db, &mut diff, &mut files)?;
+    let report = ScanReport {
         found: count(walked.files.len()),
-        added: count(diff.added.len()),
+        added: count(diff.added.len().saturating_sub(moved)),
         changed: count(diff.changed.len()),
         returned: count(diff.returned.len()),
         missing: count(diff.missing.len()),
+        moved: count(moved),
+        unreadable_files: unreadable,
         unreadable_folders: count(walked.unreadable.len()),
         missing_volumes: count(walked.missing_roots.len()),
         ..ScanReport::default()
     };
-    let Some((files, unreadable)) = read(&diff, reader, progress) else { return Ok(stopped) };
-    report.unreadable_files = unreadable;
 
     let total = count(files.len());
     for (index, batch) in files.chunks(BATCH).enumerate() {
@@ -151,8 +164,11 @@ pub fn read(diff: &ScanDiff, reader: &dyn TagReader, progress: Progress<'_>) -> 
     Some((files, unreadable))
 }
 
-/// Пишет файлы в каталог: новые — трек, версия и источник; изменённые —
-/// поверх прежних, с теми же ID. Артисты и альбом — найденные по имени или
+/// Пишет файлы в каталог: новые — трек, версия и источник; изменённые и
+/// перенесённые (новый файл, в котором скан узнал пропавший: `known` — он) —
+/// поверх прежних, с теми же ID, а у перенесённого источник получает новый
+/// путь. Артисты и альбом — найденные по имени или новые. Сводит файлы не
+/// эта функция, а [`scan`]: сюда же пишет `seed_for_test`, и его файлы всегда
 /// новые.
 pub fn write(db: &Database, files: &[ScannedFile], now: Timestamp) -> Result<(), CoreError> {
     for scanned in files {
