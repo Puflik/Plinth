@@ -1,0 +1,739 @@
+Тесты замера модели (2026-10-08): Sonnet max, план Р1.2 — docs/work/effort/r1-2-sonnet-max.md.
+Ветка песочницы trial/r1-2-sonnet (коммит 1a03a35 на dfca863) удалена при слиянии Р1.2; файлы — как были в ней.
+Сценарий S3 («копию сняли, оригинал удалили следующим сканом») — готовый тест для идентичности v0.3.
+
+
+===== core/sync/tests/r1_2_moved_files.rs =====
+
+//! Р1.2 (`docs/work/r1-2.md`, находка 2 ревью v0.2): файл перенесён или
+//! переименован — скан видит новый путь как новый трек, а старый прячет;
+//! лайки, оценки, плейлисты и история остаются на скрытом ID. Перепривязка
+//! после скана должна узнать перенесённый файл по паспорту и вернуть ему
+//! прежний ID, а скрытую запись убрать.
+//!
+//! Скан здесь настоящий, файлы настоящие. Теги лежат в самом файле
+//! (`название|исполнитель|альбом|секунды`) и едут за ним при переносе и
+//! переименовании, как настоящие.
+
+#![allow(clippy::unwrap_used, reason = "тест: упавший unwrap и есть упавший тест")]
+
+mod common;
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use common::{Scratch, play, playlist};
+use plinth_library::db::Database;
+use plinth_library::model::{AudioSpec, OnlineSource, OnlineTrack, PlaylistEntry, Rating};
+use plinth_library::scan::{ArtistSplit, FolderConfig, RawTags, ScanReport, TagReader, Tags, normalized, scan};
+use plinth_sync::journal::{Journal, Op, record_and_project, relink};
+use plinth_types::{
+    Availability, CoreError, DeviceId, Format, PlaylistEntryId, Position, ProviderId, Timestamp, TrackId,
+};
+
+const SONG: &str = "Song|Band|Debut|180";
+
+/// Читает теги из содержимого файла.
+struct Embedded;
+
+impl TagReader for Embedded {
+    fn read(&self, path: &Path) -> Result<Tags, CoreError> {
+        let text = fs::read_to_string(path).map_err(|error| CoreError::parse(error.to_string()))?;
+        let mut fields = text.split('|');
+        let mut next = || fields.next().unwrap_or_default().trim().to_owned();
+        let (title, artist, album, seconds) = (next(), next(), next(), next());
+        let raw = RawTags {
+            title: Some(title),
+            artist: vec![artist],
+            album: Some(album).filter(|album| !album.is_empty()),
+            duration: seconds.parse().ok().map(Duration::from_secs),
+            ..RawTags::default()
+        };
+        Ok(normalized(raw, &ArtistSplit::default()))
+    }
+}
+
+/// Том с музыкой во временном каталоге; стирается в `Drop`.
+struct Tree {
+    root: Scratch,
+}
+
+impl Tree {
+    fn new() -> Self {
+        Self { root: Scratch::new() }
+    }
+
+    fn path(&self, file: &str) -> PathBuf {
+        file.split('/').fold(self.root.0.clone(), |dir, segment| dir.join(segment))
+    }
+
+    /// Путь файла так, как его хранит каталог.
+    fn uri(&self, file: &str) -> String {
+        self.path(file).to_string_lossy().into_owned()
+    }
+
+    /// Кладёт файл; содержимое — его теги.
+    fn put(&self, file: &str, tags: &str) {
+        let path = self.path(file);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, tags).unwrap();
+    }
+
+    /// Переносит или переименовывает файл либо папку.
+    fn mv(&self, from: &str, to: &str) {
+        let target = self.path(to);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::rename(self.path(from), target).unwrap();
+    }
+
+    fn copy(&self, from: &str, to: &str) {
+        let target = self.path(to);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::copy(self.path(from), target).unwrap();
+    }
+
+    fn remove(&self, file: &str) {
+        fs::remove_file(self.path(file)).unwrap();
+    }
+}
+
+/// Скан томов `trees` — тем же кодом, что и в приложении.
+fn rescan(db: &Database, trees: &[&Tree]) -> ScanReport {
+    let roots: Vec<PathBuf> = trees.iter().map(|tree| tree.root.0.clone()).collect();
+    scan(db, &roots, &FolderConfig::default(), &Embedded, &mut |_| true, Timestamp::now()).unwrap()
+}
+
+fn track_at(db: &Database, tree: &Tree, file: &str) -> Option<TrackId> {
+    db.known_local_files().unwrap().get(&tree.uri(file)).map(|known| known.track)
+}
+
+fn liked_titles(db: &Database) -> Vec<String> {
+    let mut titles: Vec<String> = db.liked_tracks().unwrap().into_iter().map(|row| row.title).collect();
+    titles.sort();
+    titles
+}
+
+fn entry_of(playlist: &plinth_library::model::Playlist, track: TrackId) -> PlaylistEntry {
+    PlaylistEntry {
+        id: PlaylistEntryId::new(),
+        playlist: playlist.id,
+        track,
+        position: Position::first(),
+        added_at: Timestamp::now(),
+    }
+}
+
+fn do_op(journal: &mut Journal, db: &Database, op: Op) {
+    record_and_project(journal, db, &op).unwrap();
+}
+
+fn five() -> Option<Rating> {
+    Some(Rating::new(5).unwrap())
+}
+
+/// Находка 2 целиком: файл переехал из `Download/` в `Music/`. Лайк, оценка,
+/// плейлист и история — на треке с прежним ID, а не только лайк (как было у
+/// теста Р1.1).
+#[test]
+fn a_moved_file_keeps_its_likes_rating_playlist_and_history() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Download/Song.mp3", SONG);
+    tree.put("Download/Other.mp3", "Other|Band|Debut|200");
+    assert_eq!(rescan(&db, &[&tree]).added, 2);
+    let song = track_at(&db, &tree, "Download/Song.mp3").unwrap();
+    let other = track_at(&db, &tree, "Download/Other.mp3").unwrap();
+    let road = playlist("Road");
+    do_op(&mut journal, &db, Op::Like { track: song });
+    do_op(&mut journal, &db, Op::Rate { track: song, rating: five() });
+    do_op(&mut journal, &db, Op::CreatePlaylist(road.clone()));
+    do_op(&mut journal, &db, Op::AddEntry(entry_of(&road, song)));
+    for at in [1_790_000_000_000, 1_790_000_100_000, 1_790_000_200_000] {
+        do_op(&mut journal, &db, Op::Play(play(song, at, 150, Some(180))));
+    }
+    do_op(&mut journal, &db, Op::Like { track: other });
+
+    tree.mv("Download/Song.mp3", "Music/Song.mp3");
+    let report = rescan(&db, &[&tree]);
+
+    assert_eq!((report.added, report.missing), (1, 1), "скан видит перенос как новый файл и пропавший");
+    assert_eq!(liked_titles(&db), ["Other"], "до перепривязки данные висят на скрытом треке");
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
+
+    assert_eq!(track_at(&db, &tree, "Music/Song.mp3"), Some(song), "файл вернул себе прежний ID");
+    assert_eq!(track_at(&db, &tree, "Download/Song.mp3"), None, "скрытой записи старого пути больше нет");
+    assert_eq!(db.track_passports().unwrap().len(), 2, "в каталоге два трека, а не три");
+    assert_eq!(liked_titles(&db), ["Other", "Song"]);
+    let user = db.user_data(song).unwrap();
+    assert!(user.liked);
+    assert_eq!(user.rating, five());
+    assert_eq!(user.play_count, 3);
+    let road_tracks: Vec<TrackId> = db.playlist_tracks(road.id).unwrap().into_iter().map(|row| row.track.id).collect();
+    assert_eq!(road_tracks, [song], "в плейлисте трек снова виден");
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0, "второй раз переносить нечего");
+    let again = rescan(&db, &[&tree]);
+    assert_eq!((again.added, again.changed, again.returned, again.missing), (0, 0, 0, 0));
+}
+
+/// Папку переименовали, а один файл переименовали внутри папки: названия
+/// файлов другие, теги те же — все три трека находят свои данные.
+#[test]
+fn a_renamed_folder_and_a_renamed_file_are_followed() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Music/Old/One.mp3", "One|Band|Debut|200");
+    tree.put("Music/Old/Two.mp3", "Two|Band|Debut|210");
+    tree.put("Music/Three.mp3", "Three|Band||150");
+    rescan(&db, &[&tree]);
+    let names = ["One", "Two", "Three"];
+    let files = ["Music/Old/One.mp3", "Music/Old/Two.mp3", "Music/Three.mp3"];
+    let ids: Vec<TrackId> = files.iter().map(|file| track_at(&db, &tree, file).unwrap()).collect();
+    for id in &ids {
+        do_op(&mut journal, &db, Op::Like { track: *id });
+    }
+
+    tree.mv("Music/Old", "Music/Debut");
+    tree.mv("Music/Three.mp3", "Music/Three (remaster).mp3");
+    let report = rescan(&db, &[&tree]);
+
+    assert_eq!((report.added, report.missing), (3, 3));
+    assert_eq!(liked_titles(&db), Vec::<String>::new(), "пока перепривязки не было, лайки не видны");
+    assert_eq!(relink(&mut journal, &db).unwrap(), 3);
+
+    let moved = ["Music/Debut/One.mp3", "Music/Debut/Two.mp3", "Music/Three (remaster).mp3"];
+    for ((file, id), name) in moved.iter().zip(&ids).zip(names) {
+        assert_eq!(track_at(&db, &tree, file), Some(*id), "{name}");
+    }
+    assert_eq!(liked_titles(&db), ["One", "Three", "Two"]);
+    assert_eq!(db.track_passports().unwrap().len(), 3);
+}
+
+/// Сначала копия рядом, оригинал удалён уже следующим сканом, а копию успели
+/// послушать и оценить. Копия — тот же трек: оригинал отдаёт ей свой ID, данные
+/// обоих складываются (оценка копии новее и побеждает, как у Р1.1).
+#[test]
+fn a_copy_that_got_data_before_the_original_was_deleted_keeps_both() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Download/Song.mp3", SONG);
+    rescan(&db, &[&tree]);
+    let original = track_at(&db, &tree, "Download/Song.mp3").unwrap();
+    let road = playlist("Road");
+    do_op(&mut journal, &db, Op::Like { track: original });
+    do_op(&mut journal, &db, Op::Rate { track: original, rating: five() });
+    do_op(&mut journal, &db, Op::CreatePlaylist(road.clone()));
+    do_op(&mut journal, &db, Op::AddEntry(entry_of(&road, original)));
+    do_op(&mut journal, &db, Op::Play(play(original, 1_790_000_000_000, 150, Some(180))));
+    do_op(&mut journal, &db, Op::Play(play(original, 1_790_000_100_000, 150, Some(180))));
+
+    // Оба файла на месте — это копия, а не перенос: ничего не меняется.
+    tree.copy("Download/Song.mp3", "Music/Song.mp3");
+    assert_eq!(rescan(&db, &[&tree]).added, 1);
+    let copy = track_at(&db, &tree, "Music/Song.mp3").unwrap();
+    assert_ne!(copy, original);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0, "пока файл на месте, трек не пропал");
+    assert_eq!(liked_titles(&db), ["Song"]);
+    assert_eq!(track_at(&db, &tree, "Download/Song.mp3"), Some(original));
+
+    do_op(&mut journal, &db, Op::Rate { track: copy, rating: Some(Rating::new(3).unwrap()) });
+    do_op(&mut journal, &db, Op::Play(play(copy, 1_790_000_200_000, 150, Some(180))));
+    tree.remove("Download/Song.mp3");
+    let report = rescan(&db, &[&tree]);
+    assert_eq!((report.added, report.missing), (0, 1));
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
+
+    assert_eq!(track_at(&db, &tree, "Music/Song.mp3"), Some(original), "копия взяла ID оригинала");
+    assert_eq!(db.track(copy).unwrap(), None);
+    assert_eq!(db.track_passports().unwrap().len(), 1);
+    let user = db.user_data(original).unwrap();
+    assert!(user.liked);
+    assert_eq!(user.rating, Some(Rating::new(3).unwrap()));
+    assert_eq!(user.play_count, 3);
+    let entries = db.entries(road.id).unwrap();
+    assert_eq!(entries.iter().filter(|entry| entry.track == original).count(), 1);
+    assert_eq!(liked_titles(&db), ["Song"]);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0);
+    assert_eq!(db.user_data(original).unwrap().play_count, 3, "повтор не задваивает историю");
+}
+
+/// Обе копии имели данные, удалена более новая. Слияние идёт только в сторону
+/// старшего ID (так ID сходятся на всех устройствах, Р1.1): уцелевший трек
+/// старше пропавшего, он остаётся при своём ID, а данные пропавшей копии ждут
+/// её возвращения скрытыми. Дубликаты — задача v0.3, не этой.
+#[test]
+fn a_survivor_older_than_the_deleted_copy_keeps_its_own_id() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Download/Song.mp3", SONG);
+    rescan(&db, &[&tree]);
+    let original = track_at(&db, &tree, "Download/Song.mp3").unwrap();
+    tree.copy("Download/Song.mp3", "Music/Song.mp3");
+    rescan(&db, &[&tree]);
+    let copy = track_at(&db, &tree, "Music/Song.mp3").unwrap();
+    assert!(copy > original, "ID растут со временем создания");
+    do_op(&mut journal, &db, Op::Like { track: original });
+    do_op(&mut journal, &db, Op::Rate { track: copy, rating: five() });
+
+    tree.remove("Music/Song.mp3");
+    let report = rescan(&db, &[&tree]);
+
+    assert_eq!((report.added, report.missing), (0, 1));
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0);
+    assert_eq!(track_at(&db, &tree, "Download/Song.mp3"), Some(original));
+    assert_eq!(db.user_data(original).unwrap().rating, None, "оценка осталась на пропавшей копии");
+    assert_eq!(liked_titles(&db), ["Song"]);
+    assert_eq!(track_at(&db, &tree, "Music/Song.mp3"), Some(copy), "скрытая копия не тронута");
+}
+
+/// У песни был второй файл, давно удалённый: его скрытый трек без данных лежит
+/// в каталоге и подходит по паспорту не хуже нового. ID достаётся доступному
+/// треку, а не скрытому: иначе лайк ушёл бы на другую пропавшую запись.
+#[test]
+fn a_hidden_leftover_does_not_take_the_id_of_a_moved_file() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Download/Song.mp3", SONG);
+    tree.put("Music/Song copy.mp3", SONG);
+    rescan(&db, &[&tree]);
+    let liked = track_at(&db, &tree, "Download/Song.mp3").unwrap();
+    let leftover = track_at(&db, &tree, "Music/Song copy.mp3").unwrap();
+    do_op(&mut journal, &db, Op::Like { track: liked });
+    tree.remove("Music/Song copy.mp3");
+    rescan(&db, &[&tree]);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0, "лайкнутый файл на месте, копия данных не имела");
+
+    tree.mv("Download/Song.mp3", "Music/New/Song.mp3");
+    rescan(&db, &[&tree]);
+
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
+    assert_eq!(track_at(&db, &tree, "Music/New/Song.mp3"), Some(liked));
+    assert_eq!(liked_titles(&db), ["Song"]);
+    assert_eq!(track_at(&db, &tree, "Music/Song copy.mp3"), Some(leftover), "скрытый остаток не тронут");
+}
+
+/// Одна песня с альбома и с концерта, оба файла пропали и вернулись в одной
+/// папке под другими именами. Каждый ID достаётся файлу со своим альбомом, а
+/// не первому подошедшему: имена даны в обоих порядках, чтобы выбор «первого»
+/// не прошёл ни в одном.
+#[test]
+fn each_moved_file_takes_the_id_of_its_own_album() {
+    let studio = "Bohemian Rhapsody|Queen|A Night at the Opera|354";
+    let live = "Bohemian Rhapsody|Queen|Live at Wembley '86|355";
+    for (studio_to, live_to) in [("a.mp3", "b.mp3"), ("b.mp3", "a.mp3")] {
+        let (tree, dir) = (Tree::new(), Scratch::new());
+        let db = Database::open_in_memory().unwrap();
+        let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+        tree.put("Music/Queen/Studio.mp3", studio);
+        tree.put("Music/Queen/Live.mp3", live);
+        rescan(&db, &[&tree]);
+        let studio_id = track_at(&db, &tree, "Music/Queen/Studio.mp3").unwrap();
+        let live_id = track_at(&db, &tree, "Music/Queen/Live.mp3").unwrap();
+        do_op(&mut journal, &db, Op::Like { track: studio_id });
+        do_op(&mut journal, &db, Op::Like { track: live_id });
+
+        tree.mv("Music/Queen/Studio.mp3", &format!("Music/Archive/{studio_to}"));
+        tree.mv("Music/Queen/Live.mp3", &format!("Music/Archive/{live_to}"));
+        rescan(&db, &[&tree]);
+
+        assert_eq!(relink(&mut journal, &db).unwrap(), 2, "studio -> {studio_to}, live -> {live_to}");
+        let at = |file: &str| track_at(&db, &tree, &format!("Music/Archive/{file}"));
+        assert_eq!(at(studio_to), Some(studio_id), "studio -> {studio_to}");
+        assert_eq!(at(live_to), Some(live_id), "live -> {live_to}");
+        assert_eq!(db.track_passports().unwrap().len(), 2);
+    }
+}
+
+/// Перенос вместе с правкой альбома в тегах (так делают редакторы тегов):
+/// песня та же, трек находится, а альбом, оставшийся без треков, уходит.
+#[test]
+fn a_move_into_another_album_leaves_no_empty_album() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Music/Singles/Song.mp3", "Song|Band|Singles|180");
+    rescan(&db, &[&tree]);
+    let song = track_at(&db, &tree, "Music/Singles/Song.mp3").unwrap();
+    let singles = db.versions_of(song).unwrap()[0].album.unwrap().album;
+    do_op(&mut journal, &db, Op::Like { track: song });
+
+    tree.remove("Music/Singles/Song.mp3");
+    tree.put("Music/Debut/Song.mp3", "Song|Band|Debut|180");
+    rescan(&db, &[&tree]);
+
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
+    assert_eq!(track_at(&db, &tree, "Music/Debut/Song.mp3"), Some(song));
+    assert_eq!(db.album(singles).unwrap(), None, "альбом старого файла остался без треков");
+    let debut = db.versions_of(song).unwrap()[0].album.unwrap().album;
+    assert_ne!(debut, singles);
+    assert!(db.album(debut).unwrap().is_some());
+    assert_eq!(liked_titles(&db), ["Song"]);
+}
+
+/// Меняют SD-карту: на новой тот же файл под другим корнем, старого тома
+/// больше нет (другой UUID — другой путь).
+#[test]
+fn a_library_copied_to_a_new_card_is_followed() {
+    let (old_card, new_card, dir) = (Tree::new(), Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    old_card.put("Music/Song.mp3", SONG);
+    rescan(&db, &[&old_card]);
+    let song = track_at(&db, &old_card, "Music/Song.mp3").unwrap();
+    do_op(&mut journal, &db, Op::Like { track: song });
+    do_op(&mut journal, &db, Op::Rate { track: song, rating: five() });
+
+    new_card.put("Music/Song.mp3", SONG);
+    fs::remove_dir_all(&old_card.root.0).unwrap();
+    let report = rescan(&db, &[&old_card, &new_card]);
+
+    assert_eq!((report.missing_volumes, report.added, report.missing), (1, 1, 1));
+    assert_eq!(relink(&mut journal, &db).unwrap(), 1);
+    assert_eq!(track_at(&db, &new_card, "Music/Song.mp3"), Some(song));
+    assert_eq!(liked_titles(&db), ["Song"]);
+    assert_eq!(db.user_data(song).unwrap().rating, five());
+}
+
+/// Защита от перегиба: другая песня, другой исполнитель или другая запись
+/// (длительность дальше двух секунд) данных не наследуют. Пропавший файл
+/// остаётся скрытым треком, и когда он вернётся, данные вернутся к нему.
+#[test]
+fn a_different_song_does_not_inherit_the_data_and_a_returning_file_gets_them_back() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    tree.put("Download/Song.mp3", SONG);
+    rescan(&db, &[&tree]);
+    let song = track_at(&db, &tree, "Download/Song.mp3").unwrap();
+    do_op(&mut journal, &db, Op::Like { track: song });
+
+    // Файл убран из просматриваемых папок (не удалён): вернётся с теми же временем и размером.
+    tree.mv("Download/Song.mp3", "Aside/Song.mp3");
+    tree.put("Music/Other Song.mp3", "Other Song|Band|Debut|180");
+    tree.put("Music/Song (long).mp3", "Song|Band|Debut|240");
+    tree.put("Music/Cover.mp3", "Song|Somebody Else|Debut|180");
+    let report = rescan(&db, &[&tree]);
+
+    assert_eq!((report.added, report.missing), (3, 1));
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0);
+    assert_eq!(liked_titles(&db), Vec::<String>::new());
+    let hidden = db.known_local_files().unwrap()[&tree.uri("Download/Song.mp3")];
+    assert!(!hidden.available);
+    assert_eq!(hidden.track, song);
+
+    tree.mv("Aside/Song.mp3", "Download/Song.mp3");
+    let back = rescan(&db, &[&tree]);
+
+    assert_eq!(back.returned, 1);
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0);
+    assert_eq!(track_at(&db, &tree, "Download/Song.mp3"), Some(song));
+    assert_eq!(liked_titles(&db), ["Song"]);
+}
+
+fn oh_doctor() -> OnlineTrack {
+    OnlineTrack {
+        title: "OH DOCTOR".to_owned(),
+        artist: Some("H. Pearl".to_owned()),
+        album: Some("OH DOCTOR".to_owned()),
+        number: Some(1),
+        year: None,
+        duration: Some(Duration::from_millis(127_450)),
+        mbid: None,
+        sources: vec![OnlineSource {
+            provider: ProviderId::new("archive.org").unwrap(),
+            external_id: "78_oh/a.mp3".to_owned(),
+            audio: AudioSpec { format: Format::Mp3, bitrate: None, sample_rate_hz: None, bit_depth: None },
+        }],
+    }
+}
+
+/// Сетевой трек не «пропадает» вместе с файлом: даже если провайдер пометил
+/// его источник недоступным, файл устройства с теми же названием и
+/// исполнителем его не заменяет — у сетевого трека нет файла, который мог
+/// переехать.
+#[test]
+fn a_track_of_a_provider_is_never_replaced_by_a_file() {
+    let (tree, dir) = (Tree::new(), Scratch::new());
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    let online = db.add_online_track(&oh_doctor(), Timestamp::from_millis(1)).unwrap();
+    do_op(&mut journal, &db, Op::Like { track: online });
+    let version = db.versions_of(online).unwrap().remove(0);
+    for source in db.sources_of(version.id).unwrap() {
+        db.set_availability(source.id, Availability::Unavailable, Timestamp::from_millis(2)).unwrap();
+    }
+
+    tree.put("Music/OH DOCTOR.mp3", "OH DOCTOR|H. Pearl|OH DOCTOR|127");
+    rescan(&db, &[&tree]);
+
+    assert_eq!(relink(&mut journal, &db).unwrap(), 0);
+    assert!(db.track(online).unwrap().is_some());
+    assert_eq!(db.online_sources(online).unwrap(), oh_doctor().sources);
+    assert_ne!(track_at(&db, &tree, "Music/OH DOCTOR.mp3"), Some(online));
+}
+
+===== core/library/tests/r1_2_gone_tracks.rs =====
+
+//! Р1.2 (`docs/work/r1-2.md`): каталог умеет назвать «опустевшие» треки — те,
+//! чьи файлы все недоступны, — и отдать такому треку ID новому доступному
+//! треку. Это основа перепривязки перенесённых файлов (`core/sync`).
+//!
+//! Новый API здесь — `Database::gone_tracks` и `Database::replace_gone_track`;
+//! до их появления файл не собирается.
+
+// Весь файл — тесты; clippy.toml разрешает unwrap только внутри #[test].
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+use std::collections::BTreeSet;
+use std::time::Duration;
+
+use plinth_library::db::Database;
+use plinth_library::model::{AudioSpec, OnlineSource, OnlineTrack, Source, SourceLocation, Track};
+use plinth_library::scan::{ArtistSplit, FoundFile, RawTags, ScannedFile, normalized, write};
+use plinth_types::{Availability, CoreError, Format, ProviderId, SourceId, Timestamp, TrackId};
+
+fn db() -> Database {
+    Database::open_in_memory().unwrap()
+}
+
+/// Локальный файл `path`, записанный тем же путём, что и скан: трек, версия, источник.
+fn add(db: &Database, path: &str, title: &str) -> (TrackId, SourceId) {
+    let raw = RawTags {
+        title: Some(title.to_owned()),
+        artist: vec!["Band".to_owned()],
+        album: Some("Debut".to_owned()),
+        duration: Some(Duration::from_secs(180)),
+        ..RawTags::default()
+    };
+    let file = ScannedFile {
+        file: FoundFile {
+            uri: path.to_owned(),
+            folder: "Music/".to_owned(),
+            format: Format::Mp3,
+            modified_at: Timestamp::from_millis(1_790_000_000_000),
+            size: 1_000,
+        },
+        known: None,
+        tags: normalized(raw, &ArtistSplit::default()),
+        readable: true,
+    };
+    db.in_transaction(|db| write(db, &[file], Timestamp::from_millis(1))).unwrap();
+    let known = db.known_local_files().unwrap()[path];
+    (known.track, known.source)
+}
+
+fn hide(db: &Database, source: SourceId) {
+    db.set_availability(source, Availability::Unavailable, Timestamp::from_millis(2)).unwrap();
+}
+
+fn online() -> OnlineTrack {
+    OnlineTrack {
+        title: "OH DOCTOR".to_owned(),
+        artist: Some("H. Pearl".to_owned()),
+        album: None,
+        number: None,
+        year: None,
+        duration: None,
+        mbid: None,
+        sources: vec![OnlineSource {
+            provider: ProviderId::new("archive.org").unwrap(),
+            external_id: "78_oh/a.mp3".to_owned(),
+            audio: AudioSpec { format: Format::Mp3, bitrate: None, sample_rate_hz: None, bit_depth: None },
+        }],
+    }
+}
+
+fn local_copy(db: &Database, track: TrackId, uri: &str) {
+    let version = db.versions_of(track).unwrap().remove(0);
+    let source = Source {
+        id: SourceId::new(),
+        version: version.id,
+        location: SourceLocation::Local { uri: uri.to_owned() },
+        audio: AudioSpec { format: Format::Mp3, bitrate: None, sample_rate_hz: None, bit_depth: None },
+        availability: Availability::Available,
+        last_checked_at: None,
+    };
+    db.save_source(&source).unwrap();
+}
+
+/// Опустевший трек: у него есть файлы и все они — локальные и недоступные.
+/// Доступный файл, сетевой источник и отсутствие источников — не опустевший.
+#[test]
+fn only_a_track_whose_files_are_all_unavailable_is_gone() {
+    let db = db();
+    let (_alive, _) = add(&db, "/m/alive.mp3", "Alive");
+    let (husk, husk_source) = add(&db, "/m/husk.mp3", "Husk");
+    hide(&db, husk_source);
+    // Два файла у одной версии, пропал один: второй ещё играет.
+    let (half, half_source) = add(&db, "/m/half.mp3", "Half");
+    local_copy(&db, half, "/m/half-copy.mp3");
+    hide(&db, half_source);
+    // Трек без источников.
+    let bare = TrackId::new();
+    let bare_track = Track {
+        id: bare,
+        title: "Bare".to_owned(),
+        artist_credit: "Band".to_owned(),
+        sort_artist_credit: None,
+        artists: Vec::new(),
+        mbid_work: None,
+        added_at: Timestamp::from_millis(1),
+    };
+    db.save_track(&bare_track).unwrap();
+    // Сетевой трек, чей источник недоступен: файла, который мог переехать, у него нет.
+    let stream = db.add_online_track(&online(), Timestamp::from_millis(1)).unwrap();
+    let stream_version = db.versions_of(stream).unwrap().remove(0);
+    for source in db.sources_of(stream_version.id).unwrap() {
+        hide(&db, source.id);
+    }
+
+    assert_eq!(db.gone_tracks().unwrap(), BTreeSet::from([husk]));
+}
+
+/// Новый трек занимает место опустевшего: ID, версии, файл и артисты — его, а
+/// записей опустевшего (и его скрытого файла) в каталоге больше нет.
+#[test]
+fn a_gone_track_gives_its_id_to_the_new_one() {
+    let db = db();
+    let (husk, husk_source) = add(&db, "/old/Song.mp3", "Song");
+    hide(&db, husk_source);
+    let (fresh, fresh_source) = add(&db, "/new/Song.mp3", "Song");
+
+    db.replace_gone_track(fresh, husk).unwrap();
+
+    assert_eq!(db.track(fresh).unwrap(), None);
+    assert_eq!(db.track(husk).unwrap().unwrap().title, "Song");
+    let known = db.known_local_files().unwrap();
+    assert!(!known.contains_key("/old/Song.mp3"), "скрытая запись старого пути ушла");
+    let file = known["/new/Song.mp3"];
+    assert_eq!((file.track, file.source, file.available), (husk, fresh_source, true));
+    assert_eq!(file.modified_at, Some(Timestamp::from_millis(1_790_000_000_000)), "отметка скана едет с файлом");
+    let versions = db.versions_of(husk).unwrap();
+    assert_eq!(versions.len(), 1);
+    assert_eq!(db.sources_of(versions[0].id).unwrap().len(), 1);
+    assert_eq!(db.track_passports().unwrap().len(), 1);
+    assert!(db.gone_tracks().unwrap().is_empty());
+}
+
+/// Отказ не оставляет следов: трек, у которого есть играющий файл, не
+/// заменяется, а замена неизвестным треком или самим собой — ошибка.
+#[test]
+fn a_replacement_that_is_not_allowed_changes_nothing() {
+    let db = db();
+    let (husk, husk_source) = add(&db, "/old/Song.mp3", "Song");
+    hide(&db, husk_source);
+    let (alive, _) = add(&db, "/m/alive.mp3", "Alive");
+    let (fresh, _) = add(&db, "/new/Song.mp3", "Song");
+
+    for (from, to) in [(fresh, alive), (TrackId::new(), husk), (husk, husk), (fresh, TrackId::new())] {
+        let result = db.replace_gone_track(from, to);
+        assert!(matches!(result, Err(CoreError::Storage { .. })), "{from} -> {to}: {result:?}");
+    }
+
+    assert_eq!(db.track_passports().unwrap().len(), 3);
+    assert_eq!(db.gone_tracks().unwrap(), BTreeSet::from([husk]));
+    let known = db.known_local_files().unwrap();
+    assert_eq!(known["/old/Song.mp3"].track, husk);
+    assert_eq!(known["/m/alive.mp3"].track, alive);
+    assert_eq!(known["/new/Song.mp3"].track, fresh);
+}
+
+/// Замена входит в открытую транзакцию (перепривязка зовёт её внутри своей) и
+/// откатывается вместе с ней.
+#[test]
+fn a_replacement_belongs_to_the_open_transaction() {
+    let db = db();
+    let (husk, husk_source) = add(&db, "/old/Song.mp3", "Song");
+    hide(&db, husk_source);
+    let (fresh, _) = add(&db, "/new/Song.mp3", "Song");
+
+    let result: Result<(), CoreError> = db.in_transaction(|db| {
+        db.replace_gone_track(fresh, husk).expect("a replacement joins the open transaction");
+        assert_eq!(db.track(fresh).unwrap(), None);
+        Err(CoreError::internal("roll back"))
+    });
+
+    assert!(result.is_err());
+    assert!(db.track(fresh).unwrap().is_some());
+    assert_eq!(db.gone_tracks().unwrap(), BTreeSet::from([husk]));
+    assert_eq!(db.known_local_files().unwrap()["/new/Song.mp3"].track, fresh);
+}
+
+===== core/ffi/src/api/r1_2_tests.rs =====
+
+//! Р1.2 (`docs/work/r1-2.md`, находка 2 ревью v0.2): файл перенесён — настоящий
+//! `Core::scan` с перепривязкой сразу за ним возвращает его треку прежний ID, а
+//! вместе с ним лайк и оценку. Файлы с нечитаемыми тегами идут под именем
+//! файла: перенос без переименования узнаётся по нему.
+
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use plinth_library::model::Rating;
+use plinth_library::scan::{FolderConfig, ScanProgress};
+
+use super::scan_api::ScanListener;
+use crate::session::Core;
+use crate::testing::Scratch;
+
+struct Quiet;
+
+impl ScanListener for Quiet {
+    fn progress(&self, _progress: ScanProgress) -> bool {
+        true
+    }
+}
+
+fn path(volume: &Scratch, file: &str) -> PathBuf {
+    file.split('/').fold(volume.0.clone(), |dir, segment| dir.join(segment))
+}
+
+fn uri(volume: &Scratch, file: &str) -> String {
+    path(volume, file).to_string_lossy().into_owned()
+}
+
+fn put(volume: &Scratch, file: &str) {
+    let path = path(volume, file);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, b"audio").unwrap();
+}
+
+fn scan(core: &Core, volume: &Scratch) -> plinth_library::scan::ScanReport {
+    core.scan(vec![volume.path()], FolderConfig::default(), Arc::new(Quiet)).unwrap()
+}
+
+#[test]
+fn a_moved_file_keeps_its_like_and_rating_through_a_core_scan() {
+    let (data, music) = (Scratch::new(), Scratch::new());
+    put(&music, "Download/Song.mp3");
+    put(&music, "Download/Other.mp3");
+    let core = Core::open(data.path()).unwrap();
+    scan(&core, &music);
+    let song = core.track_at(uri(&music, "Download/Song.mp3")).unwrap().unwrap();
+    core.like(song).unwrap();
+    core.rate(song, Some(Rating::new(4).unwrap())).unwrap();
+
+    fs::create_dir_all(path(&music, "Music")).unwrap();
+    fs::rename(path(&music, "Download/Song.mp3"), path(&music, "Music/Song.mp3")).unwrap();
+    let report = scan(&core, &music);
+
+    assert_eq!((report.added, report.missing), (1, 1));
+    assert_eq!(core.track_at(uri(&music, "Music/Song.mp3")).unwrap(), Some(song));
+    assert_eq!(core.track_at(uri(&music, "Download/Song.mp3")).unwrap(), None);
+    let liked: Vec<_> = core.liked_tracks().unwrap().into_iter().map(|row| row.id).collect();
+    assert_eq!(liked, [song]);
+    assert_eq!(core.user_data(song).unwrap().rating, Some(Rating::new(4).unwrap()));
+
+    // Тот же итог после перезапуска ядра: журнал и база сходятся.
+    drop(core);
+    let core = Core::open(data.path()).unwrap();
+    let liked: Vec<_> = core.liked_tracks().unwrap().into_iter().map(|row| row.id).collect();
+    assert_eq!(liked, [song]);
+    assert_eq!(core.track_at(uri(&music, "Music/Song.mp3")).unwrap(), Some(song));
+}

@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When Plinth cannot open its data at all — the phone is out of space or the
   data was written by a newer version — the app no longer stays on a blank
   screen: the library explains what happened and offers Retry and Save log.
+- A song you move to another folder, rename (or whose folder you rename), or
+  that comes back on a card with a new volume name keeps its likes, rating,
+  playlists and history. The scan recognises the file in its new place by its
+  title, artist, album and length and keeps it as the same track, so it is
+  not added again and does not show up among recently added songs.
 
 ## [0.2.1] - 2026-10-04
 
