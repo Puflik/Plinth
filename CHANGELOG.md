@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   playlists and history. The scan recognises the file in its new place by its
   title, artist, album and length and keeps it as the same track, so it is
   not added again and does not show up among recently added songs.
+- Tags edited outside Plinth (on a computer, in a tag editor) no longer cost
+  a song its likes, rating, playlists and history after a reinstall. Plinth
+  recognises your songs after a reinstall by their title, artist, album and
+  length; it used to remember them as they were the last time you liked or
+  played them, and now every scan brings that up to date.
 
 ## [0.2.1] - 2026-10-04
 
