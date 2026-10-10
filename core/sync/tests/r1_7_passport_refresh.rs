@@ -318,3 +318,17 @@ fn an_action_after_the_refresh_changes_nothing_more() {
     assert_eq!(lib.journal.mark().seq, before.seq + 1, "паспорт уже свежий — в правке только прослушивание");
     assert_eq!(lib.db.user_data(lib.song).unwrap().play_count, 1);
 }
+
+/// Исполнитель — вторая половина ключа перепривязки (`TrackPassport::key`):
+/// поправили только его — паспорт тоже новый.
+#[test]
+fn an_artist_change_alone_is_refreshed() {
+    let mut lib = library();
+    lib.tree.retag("Music/Song.mp3", "Song|The Band|Debut|180");
+    assert_eq!(rescan(&lib.db, &lib.tree).changed, 1);
+
+    assert_eq!(describe_changed(&mut lib.journal, &lib.db).unwrap(), 1);
+
+    assert!(fresh(&lib, lib.song));
+    assert_eq!(lib.journal.passport(lib.song).unwrap().artist, "The Band");
+}
