@@ -3,11 +3,17 @@
 //! который есть пользовательские данные, журнал описывает — название,
 //! исполнитель, альбом, длительность, MBID — и по описанию узнаёт его в
 //! новом каталоге (`relink.rs`).
+//!
+//! Паспорт пишется при действии над треком ([`describe`]), дописывается
+//! трекам с данными, у которых его не было ([`describe_missing`]), и
+//! обновляется после того, как скан поправил теги каталога
+//! ([`describe_changed`]): иначе переустановка не узнала бы трек по новым
+//! тегам.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use plinth_library::db::Database;
-use plinth_library::model::BlockTarget;
+use plinth_library::model::{BlockTarget, TrackPassport};
 use plinth_types::{CoreError, TrackId};
 
 use super::projection::record_and_project_all;
@@ -43,6 +49,51 @@ pub fn describe_missing(journal: &mut Journal, db: &Database) -> Result<usize, C
         record_and_project_all(journal, db, &ops)?;
     }
     Ok(ops.len())
+}
+
+/// Приводит паспорта журнала к каталогу после того, как каталог изменился
+/// (скан поправил теги). Трекам, у которых в журнале есть данные и есть
+/// паспорт, а описание в каталоге с тех пор изменилось — название,
+/// исполнитель, альбом, длительность, MBID, — пишется новый паспорт целиком
+/// (`Database::track_passport`, с вариантами провайдера), всем разом одной
+/// правкой журнала. Сколько паспортов обновлено.
+///
+/// Трекам без паспорта он не заводится (это [`describe_missing`]), паспорт
+/// трека без данных не обновляется, трек, которого нет в каталоге, не
+/// трогается: его паспорт нужен перепривязке как есть. Каталог читается одним
+/// запросом `track_passports()` — без вариантов провайдера, поэтому сравнивается
+/// только описание (`title`, `artist`, `album`, `duration`, `mbid`), и сетевой
+/// трек не переписывается на каждом скане. Функция сравнивает журнал с
+/// каталогом и не знает, что изменил последний скан: оборванное доводит
+/// следующий вызов. Изменившихся нет — журнал не трогается.
+pub fn describe_changed(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> {
+    let state = journal.state();
+    let with_data = referenced(&state);
+    let journaled: Vec<&TrackPassport> = state.passports.iter().filter(|p| with_data.contains(&p.track)).collect();
+    if journaled.is_empty() {
+        return Ok(0);
+    }
+    let catalog: HashMap<TrackId, TrackPassport> =
+        db.track_passports()?.into_iter().map(|passport| (passport.track, passport)).collect();
+    let mut ops = Vec::new();
+    for old in journaled {
+        if let Some(current) = catalog.get(&old.track)
+            && !same_description(old, current)
+            && let Some(fresh) = db.track_passport(old.track)?
+        {
+            ops.push(Op::Describe(fresh));
+        }
+    }
+    if !ops.is_empty() {
+        record_and_project_all(journal, db, &ops)?;
+    }
+    Ok(ops.len())
+}
+
+/// Одно ли описание у паспортов: то, что правят в тегах. `track` и `sources` не
+/// сравниваются — список паспортов каталога вариантов провайдера не несёт.
+fn same_description(a: &TrackPassport, b: &TrackPassport) -> bool {
+    a.title == b.title && a.artist == b.artist && a.album == b.album && a.duration == b.duration && a.mbid == b.mbid
 }
 
 /// Треки, на которые в журнале есть данные.

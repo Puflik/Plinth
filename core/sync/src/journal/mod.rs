@@ -32,7 +32,7 @@ pub use doc::JournalState;
 use doc::Roots;
 pub use op::Op;
 pub use op_meta::{OP_SCHEMA, OpMeta};
-pub use passport::describe_missing;
+pub use passport::{describe_changed, describe_missing};
 pub use projection::{CatchUp, catch_up, record_and_project, record_and_project_all};
 pub use rebuild::rebuild;
 pub use relink::relink;

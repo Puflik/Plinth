@@ -6,7 +6,7 @@
 //! после переустановки и не попадает в Auto Backup, поэтому копия прошлой
 //! установки для новой — чужая, и новая её не перезапишет.
 
-use plinth_sync::journal::{describe_missing, relink};
+use plinth_sync::journal::{describe_changed, describe_missing, relink};
 use plinth_sync::mirror::{copy_of, inspect, restore};
 use plinth_types::{CoreError, Timestamp};
 
@@ -92,10 +92,16 @@ impl Core {
 
 impl Core {
     /// Каталог изменился (скан, тестовое наполнение): треки журнала, которых
-    /// в нём нет, узнаются по паспортам. Не вышло — скан уже записан, в лог.
+    /// в нём нет, узнаются по паспортам, а паспорта оставшихся догоняют теги
+    /// каталога (`describe_changed`) — сначала перепривязка, ей нужны паспорта
+    /// потерянных как есть. Каждый шаг не зависит от исхода другого; не вышло —
+    /// скан уже записан, в лог.
     pub(crate) fn relink_catalog(&self) {
         if let Err(error) = self.with(|state| relink(&mut state.journal, &state.db)) {
             log::error!("mirror: relink after a catalog change failed: {error}");
+        }
+        if let Err(error) = self.with(|state| describe_changed(&mut state.journal, &state.db)) {
+            log::error!("mirror: refreshing passports after a catalog change failed: {error}");
         }
     }
 }
