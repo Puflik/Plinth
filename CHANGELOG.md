@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recognises your songs after a reinstall by their title, artist, album and
   length; it used to remember them as they were the last time you liked or
   played them, and now every scan brings that up to date.
+- Restoring from the backup folder no longer brings back an older rating,
+  playlist name, track order in a playlist or setting over a newer one. When
+  the same thing was changed on two installations, the later change wins; it
+  used to be a coin toss.
 
 ## [0.2.1] - 2026-10-04
 
