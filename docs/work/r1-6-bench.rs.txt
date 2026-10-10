@@ -1,0 +1,86 @@
+// Замер Р1.6 (ревью, круг 1): пакетные правки журнала через настоящий путь —
+// `record_and_project_all`, где `describe` ищет и пишет паспорта треков.
+//
+// Запуск (из `core/`): скопировать в `sync/tests/r1_6_bench.rs`,
+//   cargo test --release -p plinth-sync --test r1_6_bench -- --nocapture
+// и удалить файл. Для сравнения с `main` — временно положить в ворктри
+// `core/sync/src/journal/*.rs` из `main` (`git show main:<путь> > <путь>`),
+// прогнать, вернуть: `git checkout -- core/sync/src`.
+//
+// Opus, 2026-10-10, ПК, release, база в памяти:
+//   ветка af5392e: 10 000 лайков одной правкой 1,10 с; импорт 5 000 треков 1,69 с;
+//                  одна оценка 2,8 мс
+//   main 19cd697:  0,37 с; 0,25 с; 2,3 мс
+
+#![allow(clippy::unwrap_used)]
+
+mod common;
+
+use std::time::{Duration, Instant};
+
+use common::Scratch;
+use plinth_library::db::Database;
+use plinth_library::model::{AudioSpec, OnlineSource, OnlineTrack, Playlist, PlaylistEntry, PlaylistKind, Rating};
+use plinth_sync::journal::{Journal, Op, record_and_project_all};
+use plinth_types::{DeviceId, Format, PlaylistEntryId, PlaylistId, Position, ProviderId, Timestamp};
+
+fn track(i: usize) -> OnlineTrack {
+    OnlineTrack {
+        title: format!("Title {i}"),
+        artist: Some(format!("Artist {}", i % 500)),
+        album: Some(format!("Album {}", i % 1000)),
+        number: Some(1),
+        year: None,
+        duration: Some(Duration::from_millis(120_000 + i as u64)),
+        mbid: None,
+        sources: vec![OnlineSource {
+            provider: ProviderId::new("archive.org").unwrap(),
+            external_id: format!("item{i}/a.mp3"),
+            audio: AudioSpec { format: Format::Mp3, bitrate: None, sample_rate_hz: None, bit_depth: None },
+        }],
+    }
+}
+
+#[test]
+fn bench() {
+    let dir = Scratch::new();
+    let db = Database::open_in_memory().unwrap();
+    let mut journal = Journal::open(&dir.journal(), DeviceId::new()).unwrap();
+    let ids: Vec<_> = (0..15_000).map(|i| db.add_online_track(&track(i), Timestamp::from_millis(1)).unwrap()).collect();
+
+    // 10 000 лайков одной правкой: 10 000 новых паспортов.
+    let likes: Vec<Op> = ids[..10_000].iter().map(|t| Op::Like { track: *t }).collect();
+    let t = Instant::now();
+    record_and_project_all(&mut journal, &db, &likes).unwrap();
+    println!("BENCH 10 000 likes in one edit: {:?}", t.elapsed());
+
+    // Импорт плейлиста: 5 000 треков без паспортов при 10 000 паспортов в журнале.
+    let playlist = Playlist {
+        id: PlaylistId::new(),
+        name: "Import".to_owned(),
+        kind: PlaylistKind::Manual,
+        created_at: Timestamp::from_millis(1),
+    };
+    let mut ops = vec![Op::CreatePlaylist(playlist.clone())];
+    let mut position = Position::first();
+    for track in &ids[10_000..15_000] {
+        position = Position::after(&position);
+        ops.push(Op::AddEntry(PlaylistEntry {
+            id: PlaylistEntryId::new(),
+            playlist: playlist.id,
+            track: *track,
+            position: position.clone(),
+            added_at: Timestamp::from_millis(2),
+        }));
+    }
+    let t = Instant::now();
+    record_and_project_all(&mut journal, &db, &ops).unwrap();
+    println!("BENCH import of 5 000 tracks: {:?}", t.elapsed());
+
+    // Одно действие при 15 000 паспортов.
+    let t = Instant::now();
+    record_and_project_all(&mut journal, &db, &[Op::Rate { track: ids[3], rating: Some(Rating::new(4).unwrap()) }])
+        .unwrap();
+    println!("BENCH one rating: {:?}", t.elapsed());
+    assert_eq!(journal.state().passports.len(), 15_000);
+}
