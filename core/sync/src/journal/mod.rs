@@ -18,6 +18,7 @@ mod start_over;
 mod store;
 
 use std::any::Any;
+use std::collections::{BTreeSet, HashMap};
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
 
@@ -122,11 +123,7 @@ impl Journal {
         let meta = OpMeta::new(self.device, at);
         let update = {
             let mut txn = self.doc.transact_mut();
-            let mut changed = false;
-            for op in ops {
-                changed |= self.roots.write(&mut txn, op, &meta)?;
-            }
-            if !changed {
+            if self.roots.write_all(&mut txn, ops, &meta)? == 0 {
                 return Ok(None);
             }
             txn.encode_update_v1()
@@ -143,6 +140,13 @@ impl Journal {
     /// Паспорт трека (C4); нет его — `None`.
     pub fn passport(&self, track: TrackId) -> Option<TrackPassport> {
         self.roots.passport(&self.doc.transact(), track)
+    }
+
+    /// Действующие паспорта треков `tracks` (C4): одним проходом по карте
+    /// паспортов, победитель — по тому же правилу, что в [`Journal::state`].
+    /// Трека без читаемого паспорта в ответе нет.
+    pub(crate) fn passports_of(&self, tracks: &BTreeSet<TrackId>) -> HashMap<TrackId, TrackPassport> {
+        self.roots.passports_of(&self.doc.transact(), tracks)
     }
 
     /// Что журнал уже знает — для обмена с другим журналом (C4, v1.5).

@@ -56,14 +56,11 @@ pub fn start_over(dir: &Path, device: DeviceId, db: &Database) -> Result<usize, 
     let ops = database_ops(db)?;
     let doc = Doc::new();
     let roots = Roots::new(&doc);
-    let mut carried = 0;
-    {
+    let carried = {
         let meta = OpMeta::now(device);
         let mut txn = doc.transact_mut();
-        for op in &ops {
-            carried += usize::from(roots.write(&mut txn, op, &meta)?);
-        }
-    }
+        roots.write_all(&mut txn, &ops, &meta)?
+    };
     let payload = if carried > 0 { snapshot(&doc) } else { Vec::new() };
 
     store::keep_snapshot_aside(dir)?;

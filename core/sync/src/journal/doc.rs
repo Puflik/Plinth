@@ -17,12 +17,15 @@
 //!   не теряется, а победителя выбирает чтение. Запись, видевшая значение,
 //!   получает время не меньше его времени + 1 мс — отстающие часы не дают старому
 //!   победить новое. Удаление стирает все слоты, которые видит; параллельная
-//!   запись, которой оно не видело, остаётся — как у множеств.
+//!   запись, которой оно не видело, остаётся — как у множеств. Слоты id в правке
+//!   ищутся пробой ключей по суффиксам установок карты (`Suffixes`): они
+//!   собираются одним проходом по карте на правку, а не на каждую операцию.
 //! - `plays`, `decisions` — только дописываются: прослушивания и решения
 //!   о склейке неизменны, их порядок в массиве ничего не значит.
 //!
 //! Значение — запись `codec.rs`: заголовок операции и поля сущности.
 
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,7 +33,7 @@ use plinth_library::model::{
     BlockEntry, BlockTarget, MergeDecision, PlayEvent, Playlist, PlaylistEntry, Rating, Setting, Subscription,
     TrackPassport,
 };
-use plinth_types::{CoreError, DeviceId, PlaylistEntryId, PlaylistId, TrackId};
+use plinth_types::{CoreError, DeviceId, PlaylistEntryId, PlaylistId, Timestamp, TrackId};
 use yrs::{Any, Array, ArrayRef, Doc, Map, MapRef, Out, ReadTxn, TransactionMut};
 
 use super::codec::{Reader, decode, encode};
@@ -90,43 +93,77 @@ impl Roots {
 
     /// Кладёт операцию в документ; `false` — она ничего не меняет. Сначала
     /// проверка, потом правка: у транзакции `yrs` нет отката.
+    #[cfg(test)]
     pub(crate) fn write(&self, txn: &mut TransactionMut, op: &Op, meta: &OpMeta) -> Result<bool, CoreError> {
+        Ok(self.write_all(txn, std::slice::from_ref(op), meta)? > 0)
+    }
+
+    /// Кладёт операции одной правки в документ; сколько из них что-то изменили.
+    /// Слоты регистров правка ищет по суффиксам установок своей карты, собранным
+    /// одним проходом по ключам при первом обращении (`Slots`), — прохода на
+    /// каждую операцию нет.
+    pub(crate) fn write_all(&self, txn: &mut TransactionMut, ops: &[Op], meta: &OpMeta) -> Result<usize, CoreError> {
+        let mut slots = Slots::default();
+        let mut changed = 0;
+        for op in ops {
+            changed += usize::from(self.write_one(txn, op, meta, &mut slots)?);
+        }
+        Ok(changed)
+    }
+
+    fn write_one(
+        &self,
+        txn: &mut TransactionMut,
+        op: &Op,
+        meta: &OpMeta,
+        slots: &mut Slots,
+    ) -> Result<bool, CoreError> {
         let changed = match op {
             Op::Like { track } => add(&self.likes, txn, track.to_string(), || encode(meta, |_| ())),
             Op::Unlike { track } => self.likes.remove(txn, &track.to_string()).is_some(),
             Op::Rate { track, rating: Some(rating) } => {
                 let key = track.to_string();
-                let seen = current(&self.ratings, txn, &key, |r| r.rating());
+                let found = open(&self.ratings, &mut slots.ratings, txn, meta.device);
+                let seen = current(found, txn, &key, |r| r.rating());
                 put_register(&self.ratings, txn, &key, meta, seen, rating, |meta| encode(meta, |w| w.rating(*rating)))
             }
-            Op::Rate { track, rating: None } => remove_slots(&self.ratings, txn, &track.to_string()),
+            Op::Rate { track, rating: None } => {
+                let found = open(&self.ratings, &mut slots.ratings, txn, meta.device);
+                remove_slots(found, txn, &track.to_string())
+            }
             Op::CreatePlaylist(playlist) => add_register(&self.playlists, txn, &playlist.id.to_string(), meta, || {
                 encode(meta, |w| w.playlist(playlist))
             }),
             Op::RenamePlaylist { playlist, name } => {
                 let key = playlist.to_string();
-                let seen = current(&self.playlists, txn, &key, |r| r.playlist(*playlist));
-                let (_, found) = seen.as_ref().ok_or_else(|| missing("playlist"))?;
-                let renamed = Playlist { name: name.clone(), ..found.clone() };
+                let found = open(&self.playlists, &mut slots.playlists, txn, meta.device);
+                let seen = current(found, txn, &key, |r| r.playlist(*playlist));
+                let (_, existing) = seen.as_ref().ok_or_else(|| missing("playlist"))?;
+                let renamed = Playlist { name: name.clone(), ..existing.clone() };
                 put_register(&self.playlists, txn, &key, meta, seen, &renamed, |meta| {
                     encode(meta, |w| w.playlist(&renamed))
                 })
             }
-            Op::DeletePlaylist { playlist } => self.delete_playlist(txn, *playlist),
+            Op::DeletePlaylist { playlist } => self.delete_playlist(txn, *playlist, meta, slots),
             Op::AddEntry(entry) => {
-                if !has_slot(&self.playlists, txn, &entry.playlist.to_string(), meta.device) {
+                let found = open(&self.playlists, &mut slots.playlists, txn, meta.device);
+                if !has_slot(found, txn, &entry.playlist.to_string()) {
                     return Err(missing("playlist"));
                 }
                 add_register(&self.entries, txn, &entry.id.to_string(), meta, || encode(meta, |w| w.entry(entry)))
             }
             Op::MoveEntry { entry, position } => {
                 let key = entry.to_string();
-                let seen = current(&self.entries, txn, &key, |r| r.entry(*entry));
-                let (_, found) = seen.as_ref().ok_or_else(|| missing("entry"))?;
-                let moved = PlaylistEntry { position: position.clone(), ..found.clone() };
+                let found = open(&self.entries, &mut slots.entries, txn, meta.device);
+                let seen = current(found, txn, &key, |r| r.entry(*entry));
+                let (_, existing) = seen.as_ref().ok_or_else(|| missing("entry"))?;
+                let moved = PlaylistEntry { position: position.clone(), ..existing.clone() };
                 put_register(&self.entries, txn, &key, meta, seen, &moved, |meta| encode(meta, |w| w.entry(&moved)))
             }
-            Op::RemoveEntry { entry } => remove_slots(&self.entries, txn, &entry.to_string()),
+            Op::RemoveEntry { entry } => {
+                let found = open(&self.entries, &mut slots.entries, txn, meta.device);
+                remove_slots(found, txn, &entry.to_string())
+            }
             Op::Play(play) => {
                 self.plays.push_back(txn, buffer(encode(meta, |w| w.play(play))));
                 true
@@ -145,14 +182,16 @@ impl Roots {
             Op::Unblock { target } => self.blocks.remove(txn, &block_key(*target)).is_some(),
             Op::Set(setting) => {
                 let key = setting_key(*setting);
-                let seen = current(&self.settings, txn, key, |r| r.setting());
+                let found = open(&self.settings, &mut slots.settings, txn, meta.device);
+                let seen = current(found, txn, key, |r| r.setting());
                 put_register(&self.settings, txn, key, meta, seen, setting, |meta| {
                     encode(meta, |w| w.setting(*setting))
                 })
             }
             Op::Describe(passport) => {
                 let key = passport.track.to_string();
-                let seen = current(&self.passports, txn, &key, |r| r.passport(passport.track));
+                let found = open(&self.passports, &mut slots.passports, txn, meta.device);
+                let seen = current(found, txn, &key, |r| r.passport(passport.track));
                 put_register(&self.passports, txn, &key, meta, seen, passport, |meta| {
                     encode(meta, |w| w.passport(passport))
                 })
@@ -163,18 +202,65 @@ impl Roots {
 
     /// Паспорт трека; нет его или он не читается — `None`.
     pub(crate) fn passport<T: ReadTxn>(&self, txn: &T, track: TrackId) -> Option<TrackPassport> {
-        current(&self.passports, txn, &track.to_string(), |r| r.passport(track)).map(|(_, passport)| passport)
+        self.passports_of(txn, &BTreeSet::from([track])).remove(&track)
+    }
+
+    /// Действующие паспорта треков `tracks` — по тому же правилу, что в
+    /// [`Roots::state`] (наибольшее `(at, установка)`, при равенстве — больший
+    /// ключ слота), — одним проходом по ключам карты паспортов. Трека без
+    /// читаемого паспорта в ответе нет.
+    pub(crate) fn passports_of<T: ReadTxn>(
+        &self,
+        txn: &T,
+        tracks: &BTreeSet<TrackId>,
+    ) -> HashMap<TrackId, TrackPassport> {
+        if tracks.is_empty() {
+            return HashMap::new();
+        }
+        let wanted: Vec<(String, TrackId)> = tracks.iter().map(|track| (track.to_string(), *track)).collect();
+        // Одно действие трогает единицы треков: сравнить ключ с ними дешевле, чем
+        // хешировать каждый ключ карты. Пачка — по хеш-таблице.
+        let hashed: HashMap<&str, TrackId> = if wanted.len() > FEW_TRACKS {
+            wanted.iter().map(|(id, track)| (id.as_str(), *track)).collect()
+        } else {
+            HashMap::new()
+        };
+        let which = |key: &str| {
+            let id = id_of(key);
+            if hashed.is_empty() {
+                wanted.iter().find(|(wanted, _)| wanted == id).map(|(_, track)| *track)
+            } else {
+                hashed.get(id).copied()
+            }
+        };
+        let mut newest: HashMap<TrackId, (&str, OpMeta, TrackPassport)> = HashMap::new();
+        for key in self.passports.keys(txn) {
+            let Some(track) = which(key) else { continue };
+            let Some(value) = self.passports.get(txn, key) else { continue };
+            let Ok((meta, passport)) = slot(&value, |r| r.passport(track)) else { continue };
+            if newest.get(&track).is_none_or(|(held, held_meta, _)| rank(key, &meta) > rank(held, held_meta)) {
+                newest.insert(track, (key, meta, passport));
+            }
+        }
+        newest.into_iter().map(|(track, (_, _, passport))| (track, passport)).collect()
     }
 
     /// Плейлист и все его записи: слоты, которые он видит.
-    fn delete_playlist(&self, txn: &mut TransactionMut, playlist: PlaylistId) -> bool {
+    fn delete_playlist(
+        &self,
+        txn: &mut TransactionMut,
+        playlist: PlaylistId,
+        meta: &OpMeta,
+        slots: &mut Slots,
+    ) -> bool {
         let doomed: Vec<String> = self
             .entries
             .iter(txn)
             .filter(|(key, value)| entry(id_of(key), value).is_ok_and(|(_, entry)| entry.playlist == playlist))
             .map(|(key, _)| key.to_owned())
             .collect();
-        let removed = remove_slots(&self.playlists, txn, &playlist.to_string());
+        let found = open(&self.playlists, &mut slots.playlists, txn, meta.device);
+        let removed = remove_slots(found, txn, &playlist.to_string());
         for key in &doomed {
             self.entries.remove(txn, key);
         }
@@ -249,14 +335,13 @@ fn put(map: &MapRef, txn: &mut TransactionMut, key: String, record: Vec<u8>) -> 
 /// Разделитель id регистра и установки в ключе слота: `<id>@<установка>`.
 const SLOT: char = '@';
 
+/// Сколько треков в запросе паспортов ещё «единицы»: ключи карты сравниваются
+/// с ними прямо, без хеш-таблицы (`Roots::passports_of`).
+const FEW_TRACKS: usize = 8;
+
 /// Id регистра — часть ключа слота до `@`; у слота журнала до Р1.6 весь ключ.
 fn id_of(key: &str) -> &str {
     key.split_once(SLOT).map_or(key, |(id, _)| id)
-}
-
-/// Слот ли регистра `id`: сам `id` (журнал до Р1.6) или `id@<установка>`.
-fn is_slot_of(key: &str, id: &str) -> bool {
-    key.strip_prefix(id).is_some_and(|rest| rest.is_empty() || rest.starts_with(SLOT))
 }
 
 /// Ключ слота регистра `id` у установки `device`.
@@ -264,37 +349,102 @@ fn own_key(id: &str, device: DeviceId) -> String {
     format!("{id}{SLOT}{device}")
 }
 
-/// Ключи всех слотов регистра `id`: проход по ключам корня, значения не читаются.
-fn slot_keys<R: ReadTxn>(map: &MapRef, txn: &R, id: &str) -> Vec<String> {
-    map.keys(txn).filter(|key| is_slot_of(key, id)).map(str::to_owned).collect()
+/// Суффиксы `@<установка>` ключей карты регистра: чьи слоты в ней лежат. Слоты
+/// регистра `id` — это ключи `id` (журнал до Р1.6) и `id@<суффикс>` для суффиксов
+/// отсюда, поэтому поиск слотов — проба нескольких ключей (установок единицы), а
+/// не проход по карте на каждую операцию.
+///
+/// Собирается одним проходом по ключам при первом обращении к карте в правке
+/// ([`Slots`]) и больше не меняется: правка пишет только в слот своей установки,
+/// её суффикс внесён заранее, а чужие слоты внутри транзакции появиться не
+/// могут. Стирание индекс не трогает — проба стёртого ключа ничего не находит, —
+/// так что индекс не отстаёт ни от вставок правки, ни от её удалений.
+struct Suffixes(HashSet<String>);
+
+impl Suffixes {
+    /// Проход по ключам карты, значения не читаются.
+    fn scan<R: ReadTxn>(map: &MapRef, txn: &R, device: DeviceId) -> Self {
+        let mut suffixes = HashSet::new();
+        // Подряд идут слоты одной-двух установок: прежний суффикс не хешируется заново.
+        let mut last = None;
+        for key in map.keys(txn) {
+            if let Some((_, suffix)) = key.split_once(SLOT)
+                && last != Some(suffix)
+            {
+                last = Some(suffix);
+                if !suffixes.contains(suffix) {
+                    suffixes.insert(suffix.to_owned());
+                }
+            }
+        }
+        suffixes.insert(device.to_string());
+        Self(suffixes)
+    }
 }
 
-/// Есть ли у регистра `id` слот — читаемый или нет. Слот журнала до Р1.6 и
-/// слот установки `device` проверяются без прохода по карте.
-fn has_slot<R: ReadTxn>(map: &MapRef, txn: &R, id: &str, device: DeviceId) -> bool {
-    map.contains_key(txn, id)
-        || map.contains_key(txn, &own_key(id, device))
-        || map.keys(txn).any(|key| is_slot_of(key, id))
+/// Суффиксы пяти карт регистров в одной правке: каждая собирается при первом
+/// обращении к своей карте.
+#[derive(Default)]
+struct Slots {
+    ratings: Option<Suffixes>,
+    playlists: Option<Suffixes>,
+    entries: Option<Suffixes>,
+    settings: Option<Suffixes>,
+    passports: Option<Suffixes>,
 }
 
-/// Из слотов — `(ключ, заголовок, значение)` — действует запись с наибольшим
-/// `(at, установка)`; равные по обоим — с большим ключом, чтобы выбор не зависел
-/// от порядка обхода карты.
-fn newest<K: Ord, T>(slots: impl Iterator<Item = (K, OpMeta, T)>) -> Option<(OpMeta, T)> {
+/// Карта регистра вместе с суффиксами её слотов в этой правке.
+#[derive(Clone, Copy)]
+struct Register<'a> {
+    map: &'a MapRef,
+    suffixes: &'a Suffixes,
+}
+
+impl Register<'_> {
+    /// Ключи, где может лежать слот регистра `id`; лежит ли там что-то, решает карта.
+    fn keys<'a>(&'a self, id: &'a str) -> impl Iterator<Item = String> + 'a {
+        std::iter::once(id.to_owned()).chain(self.suffixes.0.iter().map(move |suffix| format!("{id}{SLOT}{suffix}")))
+    }
+}
+
+/// Открывает карту регистра в правке установки `device`: суффиксы собираются
+/// при первом обращении.
+fn open<'a, R: ReadTxn>(
+    map: &'a MapRef,
+    suffixes: &'a mut Option<Suffixes>,
+    txn: &R,
+    device: DeviceId,
+) -> Register<'a> {
+    Register { map, suffixes: suffixes.get_or_insert_with(|| Suffixes::scan(map, txn, device)) }
+}
+
+/// Есть ли у регистра `id` слот — читаемый или нет.
+fn has_slot<R: ReadTxn>(register: Register<'_>, txn: &R, id: &str) -> bool {
+    register.keys(id).any(|key| register.map.contains_key(txn, &key))
+}
+
+/// Порядок слотов: время записи, потом установка, потом ключ — последнее, чтобы
+/// выбор не зависел от порядка обхода карты.
+fn rank<'a>(key: &'a str, meta: &OpMeta) -> (Timestamp, DeviceId, &'a str) {
+    (meta.at, meta.device, key)
+}
+
+/// Из слотов — `(ключ, заголовок, значение)` — действует старший по `rank`.
+fn newest<K: AsRef<str>, T>(slots: impl Iterator<Item = (K, OpMeta, T)>) -> Option<(OpMeta, T)> {
     slots
-        .max_by(|(a_key, a, _), (b_key, b, _)| (a.at, a.device, a_key).cmp(&(b.at, b.device, b_key)))
+        .max_by(|(a_key, a, _), (b_key, b, _)| rank(a_key.as_ref(), a).cmp(&rank(b_key.as_ref(), b)))
         .map(|(_, meta, item)| (meta, item))
 }
 
 /// Действующее значение регистра `id` и его заголовок; нет читаемых слотов — `None`.
 fn current<T, R: ReadTxn>(
-    map: &MapRef,
+    register: Register<'_>,
     txn: &R,
     id: &str,
     payload: impl Fn(&mut Reader<'_>) -> Result<T, CoreError>,
 ) -> Option<(OpMeta, T)> {
-    let slots = slot_keys(map, txn, id).into_iter().filter_map(|key| {
-        let value = map.get(txn, &key)?;
+    let slots = register.keys(id).filter_map(|key| {
+        let value = register.map.get(txn, &key)?;
         let (meta, item) = slot(&value, &payload).ok()?;
         Some((key, meta, item))
     });
@@ -340,12 +490,12 @@ fn add_register(
 
 /// Стирает все слоты регистра `id`, которые видит, читаемые и нет; `false` —
 /// слотов не было. Слот, которого не видело (параллельная запись), остаётся.
-fn remove_slots(map: &MapRef, txn: &mut TransactionMut, id: &str) -> bool {
-    let keys = slot_keys(map, txn, id);
-    for key in &keys {
-        map.remove(txn, key);
+fn remove_slots(register: Register<'_>, txn: &mut TransactionMut, id: &str) -> bool {
+    let mut removed = false;
+    for key in register.keys(id) {
+        removed |= register.map.remove(txn, &key).is_some();
     }
-    !keys.is_empty()
+    removed
 }
 
 /// Заголовок записи и её поля.

@@ -21,12 +21,16 @@ use super::{Journal, JournalState, Op};
 
 /// Паспорта треков каталога, которых касаются `ops`, если в журнале их нет
 /// или теги с тех пор изменились. Снятие лайка или оценки не описывает.
+/// Действующие паспорта журнала берутся для всех тронутых треков разом
+/// ([`Journal::passports_of`]): проход по карте паспортов на каждый трек сделал
+/// бы действие над сотнями треков квадратичным.
 pub(crate) fn describe(journal: &Journal, db: &Database, ops: &[Op]) -> Result<Vec<Op>, CoreError> {
     let tracks: BTreeSet<TrackId> = ops.iter().flat_map(tracks_of).collect();
+    let known = journal.passports_of(&tracks);
     let mut described = Vec::new();
     for track in tracks {
         if let Some(passport) = db.track_passport(track)?
-            && journal.passport(track).as_ref() != Some(&passport)
+            && known.get(&track) != Some(&passport)
         {
             described.push(Op::Describe(passport));
         }
