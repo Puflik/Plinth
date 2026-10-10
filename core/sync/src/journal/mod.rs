@@ -23,7 +23,7 @@ use std::path::Path;
 
 use plinth_library::db::JournalMark;
 use plinth_library::model::TrackPassport;
-use plinth_types::{CoreError, DeviceId, TrackId};
+use plinth_types::{CoreError, DeviceId, Timestamp, TrackId};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
@@ -97,14 +97,29 @@ impl Journal {
     /// тронут. Ошибка записи на диск — правка осталась в памяти, следующая
     /// запишет её вместе с собой.
     pub fn record(&mut self, op: &Op) -> Result<Option<OpMeta>, CoreError> {
-        self.record_all(std::slice::from_ref(op))
+        self.record_at(op, Timestamp::now())
+    }
+
+    /// То же, что [`Journal::record`], но с заданным временем записи.
+    pub fn record_at(&mut self, op: &Op, at: Timestamp) -> Result<Option<OpMeta>, CoreError> {
+        self.record_all_at(std::slice::from_ref(op), at)
     }
 
     /// Записывает операции одной правкой: одна транзакция документа, один
     /// кадр на диске — импорт плейлиста в сотни строк не пишет сотни кадров.
     /// `None` — ни одна ничего не меняет.
     pub fn record_all(&mut self, ops: &[Op]) -> Result<Option<OpMeta>, CoreError> {
-        let meta = OpMeta::now(self.device);
+        self.record_all_at(ops, Timestamp::now())
+    }
+
+    /// То же, что [`Journal::record_all`], но с заданным временем записи `at`.
+    /// Время решает спор записей одного ключа регистра (`doc.rs`): побеждает
+    /// большее, при равенстве — большая установка. Запись, видевшая значение
+    /// ключа, получает время не меньше его времени + 1 мс, даже если `at`
+    /// меньше: отстающие часы не дают старому значению победить новое. Возвращает
+    /// заголовок правки с переданным `at`.
+    pub fn record_all_at(&mut self, ops: &[Op], at: Timestamp) -> Result<Option<OpMeta>, CoreError> {
+        let meta = OpMeta::new(self.device, at);
         let update = {
             let mut txn = self.doc.transact_mut();
             let mut changed = false;

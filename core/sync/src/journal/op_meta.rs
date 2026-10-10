@@ -21,6 +21,11 @@ pub struct OpMeta {
 
 impl OpMeta {
     pub fn now(device: DeviceId) -> Self {
-        Self { at: Timestamp::now(), device, schema: OP_SCHEMA }
+        Self::new(device, Timestamp::now())
+    }
+
+    /// Заголовок с заданным временем — тесты и `Journal::record_at`.
+    pub fn new(device: DeviceId, at: Timestamp) -> Self {
+        Self { at, device, schema: OP_SCHEMA }
     }
 }
