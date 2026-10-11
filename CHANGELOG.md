@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   playlist name, track order in a playlist or setting over a newer one. When
   the same thing was changed on two installations, the later change wins; it
   used to be a coin toss.
+- Right after the phone starts or a memory card is inserted, the first scan no
+  longer hides your whole SD card library while the system is still checking
+  the card: its songs stay in your lists, playlists and Liked, and play once
+  the card is ready. A song the scan could not read for a moment no longer
+  drops out of your lists either. A card you really took out is still shown
+  as gone, and its songs come back when you put it back.
 
 ## [0.2.1] - 2026-10-04
 
