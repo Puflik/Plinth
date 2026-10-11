@@ -7,6 +7,8 @@ mod library_api;
 mod mirror_api;
 mod online_api;
 #[cfg(test)]
+mod r1_15_tests;
+#[cfg(test)]
 mod r1_7_tests;
 mod scan_api;
 mod test_api;
