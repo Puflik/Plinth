@@ -37,10 +37,14 @@ data class VolumeSnapshot(
 
 /** Тома, которые скан ядра обходит: основное хранилище и SD-карты (D3c). */
 fun interface StorageVolumes {
-    fun snapshot(): VolumeSnapshot
-
     /** Только готовые тома. */
-    fun roots(): List<File> = snapshot().ready
+    fun roots(): List<File>
+
+    /**
+     * Тома из одного чтения системы. Умолчание — все тома готовы, проверяемых нет:
+     * так отвечает тот, кто задаёт только [roots] (тесты подают их лямбдой).
+     */
+    fun snapshot(): VolumeSnapshot = VolumeSnapshot(roots())
 }
 
 /**
@@ -52,6 +56,8 @@ fun interface StorageVolumes {
 class AndroidStorageVolumes(
     private val context: Context,
 ) : StorageVolumes {
+    override fun roots(): List<File> = snapshot().ready
+
     override fun snapshot(): VolumeSnapshot {
         val manager = context.getSystemService(StorageManager::class.java)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
