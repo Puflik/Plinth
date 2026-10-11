@@ -51,20 +51,33 @@ class LibraryScanner(
     ): ScanResult {
         if (!canRead()) throw SecurityException("no access to music")
         val job = currentCoroutineContext().job
-        val report =
+        val (report, checking) =
             withContext(io) {
-                core.scan.scan(volumes.roots(), folders.included, folders.excluded) { progress ->
-                    when (progress.phase) {
-                        CoreScanPhase.WALKING -> onProgress(0, 0)
-                        CoreScanPhase.READING -> onProgress(progress.done, progress.total)
-                        // Запись быстрая: для человека файлы уже обработаны.
-                        CoreScanPhase.WRITING -> onProgress(progress.total, progress.total)
+                // Карту, которую система ещё проверяет, скан не обходит и не отмечает пропавшей.
+                val snapshot = volumes.snapshot()
+                val report =
+                    core.scan.scan(
+                        snapshot.ready,
+                        folders.included,
+                        folders.excluded,
+                        pending = snapshot.pending,
+                    ) { progress ->
+                        when (progress.phase) {
+                            CoreScanPhase.WALKING -> onProgress(0, 0)
+                            CoreScanPhase.READING -> onProgress(progress.done, progress.total)
+                            // Запись быстрая: для человека файлы уже обработаны.
+                            CoreScanPhase.WRITING -> onProgress(progress.total, progress.total)
+                        }
+                        job.isActive
                     }
-                    job.isActive
-                }
+                report to snapshot.pending.size
             }
-        if (report.unreadableFolders > 0 || report.missingVolumes > 0) {
-            AppLog.w(TAG, "folders unreadable: ${report.unreadableFolders}, volumes missing: ${report.missingVolumes}")
+        if (report.unreadableFolders > 0 || report.missingVolumes > 0 || checking > 0) {
+            AppLog.w(
+                TAG,
+                "folders unreadable: ${report.unreadableFolders}, volumes missing: ${report.missingVolumes}, " +
+                    "volumes being checked: $checking",
+            )
         }
         return ScanResult(found = report.found, updated = report.added + report.changed, missing = report.missing)
     }

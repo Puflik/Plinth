@@ -7,10 +7,13 @@
 //!   `.trash`) и `Music/.plinth` — зеркало журнала (C4).
 //! - По символьным ссылкам не ходит: петля ссылок обошлась бы вечно.
 //! - Аудио — по расширению; что внутри, решает чтение тегов (D2).
-//! - Папка, которую не прочесть, запоминается: её файлы не «пропали», о них
-//!   просто ничего не известно.
+//! - Обход ничего не теряет молча: «не увидел» — не «нет» (Р1.15). Папка, которую
+//!   не прочесть, и запись папки, сведения о которой не прочлись (`unseen`),
+//!   запоминаются: их файлы не «пропали», о них просто ничего не известно. «Нет» —
+//!   только когда система сама сказала `NotFound`.
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -38,8 +41,20 @@ pub struct Walk {
     pub files: Vec<FoundFile>,
     /// Папки, которые не прочесть, — путь с разделителем в конце.
     pub unreadable: Vec<String>,
+    /// Пути, которые обход не смог прочесть: запись папки (файл или папка — если
+    /// не прочёлся даже тип, неизвестно) и всё под ней; корень тома, о котором не
+    /// прочлись сведения; корень тома, который система знает, но ещё не отдала
+    /// (дописывает `scan_volumes`). Без разделителя в конце. Файлы здесь не
+    /// пропали: о них ничего не известно.
+    pub unseen: Vec<String>,
     /// Тома, которых нет: SD-карту вынули.
     pub missing_roots: Vec<String>,
+}
+
+/// Корень тома строкой без разделителя в конце: `/storage/1234-ABCD/` и
+/// `/storage/1234-ABCD` — один том, а `…/Card` не закрывает `…/Card2`.
+pub fn bare_root(root: &Path) -> String {
+    root.to_string_lossy().trim_end_matches([MAIN_SEPARATOR, '/']).to_owned()
 }
 
 /// Обходит `roots` — корни томов — по правилам `config`. `None` — остановлен
@@ -48,9 +63,23 @@ pub fn walk(roots: &[PathBuf], config: &FolderConfig, progress: Progress<'_>) ->
     let mut walk = Walk::default();
     let mut reported = 0;
     for root in roots {
-        if !root.is_dir() {
-            walk.missing_roots.push(root.to_string_lossy().into_owned());
-            continue;
+        // `Path::is_dir` превращает любую ошибку в «корня нет»: ввод-вывод
+        // умирающей карты сделал бы вынутой всю SD-библиотеку.
+        match fs::metadata(root) {
+            Ok(meta) if meta.is_dir() => {}
+            Ok(_) => {
+                walk.missing_roots.push(root.to_string_lossy().into_owned());
+                continue;
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                walk.missing_roots.push(root.to_string_lossy().into_owned());
+                continue;
+            }
+            Err(error) => {
+                log::warn!("scan: the root of a volume was not read: {error}");
+                walk.unseen.push(bare_root(root));
+                continue;
+            }
         }
         // По сегментам, а не строкой `Music/`: путь файла — его ключ в
         // каталоге, разделители в нём должны быть одни.
@@ -88,8 +117,31 @@ fn visit(dir: &Path, folder: &str, config: &FolderConfig, stack: &mut Vec<(PathB
             return false;
         }
     };
-    for entry in entries.flatten() {
-        let Ok(kind) = entry.file_type() else { continue };
+    let mut missed = Missed::default();
+    let mut listing_failed = false;
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                // Имя записи неизвестно, остаток листинга ненадёжен: «не знаю» — вся папка.
+                if !listing_failed {
+                    listing_failed = true;
+                    walk.unreadable.push(format!("{}{MAIN_SEPARATOR}", dir.to_string_lossy()));
+                }
+                missed.note(error);
+                continue;
+            }
+        };
+        let kind = match entry.file_type() {
+            Ok(kind) => kind,
+            // Запись пропала между листингом и запросом: файл удалили или переименовали.
+            Err(error) if error.kind() == ErrorKind::NotFound => continue,
+            Err(error) => {
+                walk.unseen.push(entry.path().to_string_lossy().into_owned());
+                missed.note(error);
+                continue;
+            }
+        };
         let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
             log::warn!("scan: skipped a name that is not UTF-8");
             continue;
@@ -101,8 +153,16 @@ fn visit(dir: &Path, folder: &str, config: &FolderConfig, stack: &mut Vec<(PathB
             }
         } else if kind.is_file()
             && let Some(format) = format_of(&name)
-            && let Ok(meta) = entry.metadata()
         {
+            let meta = match entry.metadata() {
+                Ok(meta) => meta,
+                Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                Err(error) => {
+                    walk.unseen.push(entry.path().to_string_lossy().into_owned());
+                    missed.note(error);
+                    continue;
+                }
+            };
             let modified = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).unwrap_or_default();
             walk.files.push(FoundFile {
                 uri: entry.path().to_string_lossy().into_owned(),
@@ -113,7 +173,30 @@ fn visit(dir: &Path, folder: &str, config: &FolderConfig, stack: &mut Vec<(PathB
             });
         }
     }
+    missed.report();
     true
+}
+
+/// Осечки чтения одной папки: сколько записей не прочлось и первая ошибка —
+/// одной строкой в лог на папку, а не по строке на запись (папка, где не
+/// прочлась каждая запись, дала бы тысячи строк).
+#[derive(Default)]
+struct Missed {
+    count: usize,
+    first: Option<std::io::Error>,
+}
+
+impl Missed {
+    fn note(&mut self, error: std::io::Error) {
+        self.count += 1;
+        self.first.get_or_insert(error);
+    }
+
+    fn report(self) {
+        if let Some(first) = self.first {
+            log::warn!("scan: {} entries of a folder were not read, the first error: {first}", self.count);
+        }
+    }
 }
 
 /// Формат по расширению: восемь, которые играет Media3 (B2.4, v0.1). ALAC

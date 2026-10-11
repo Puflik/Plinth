@@ -21,16 +21,28 @@ class CoreScan internal constructor(
      * пути от корня тома, как в `FolderConfig` (`Music/`, `Music/Podcasts/`).
      * Блокирует до конца; [onProgress] вернул `false` — скан останавливается,
      * записанное к этому моменту остаётся.
+     *
+     * [pending] — корни карт, которые система знает, но ещё не отдала (их
+     * проверяют после загрузки или вставки): скан их не обходит и о файлах на них
+     * ничего не решает — они не пропали и не вернулись. Вынутая карта — тома нет
+     * ни в [volumes], ни в [pending] — по-прежнему пропала.
      */
     fun scan(
         volumes: List<File>,
         included: List<String>,
         excluded: List<String> = emptyList(),
+        pending: List<File> = emptyList(),
         onProgress: (CoreScanProgress) -> Boolean = { true },
     ): CoreScanReport =
         try {
             core.call {
-                it.scan(volumes.map(File::getPath), RustFolderConfig(included, excluded), Listener(onProgress)).toApp()
+                it
+                    .scanVolumes(
+                        volumes.map(File::getPath),
+                        pending.map(File::getPath),
+                        RustFolderConfig(included, excluded),
+                        Listener(onProgress),
+                    ).toApp()
             }
         } finally {
             // Пропавшие и вернувшиеся файлы отмечаются в самом конце, после пачек.

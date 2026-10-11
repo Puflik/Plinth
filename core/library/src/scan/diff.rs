@@ -3,14 +3,21 @@
 //!
 //! Пропавший файл не удаляется, а становится недоступным (план 17.6,
 //! решение 16): место в плейлистах, лайк и история остаются, файл может
-//! вернуться — SD-карту вставят обратно. Файл в папке, которую не удалось
-//! прочесть, не пропал: о нём просто ничего не известно.
+//! вернуться — SD-карту вставят обратно.
+//!
+//! «Не увидел» — не «нет» (Р1.15): файл пропал, только когда скан знает, что его
+//! нет. Файл в папке, которую не удалось прочесть (`unreadable`), на записи
+//! папки, которая не прочлась (`unseen`), под такой записью, на томе, который
+//! система знает, но ещё не отдала (`unseen`, дописывает `scan_volumes`), не
+//! пропал: о нём просто ничего не известно. Он не попадает ни в `missing`, ни в
+//! `gone`, а значит, и к сведению перенесённых его не допускают.
 //!
 //! Недоступный с прошлых сканов файл, которого по-прежнему нет, — не новость
 //! (`gone`), но он может найтись на новом месте: файл вынесли из папок
 //! библиотеки, а потом вернули (Р1.2).
 
 use std::collections::{HashMap, HashSet};
+use std::path::MAIN_SEPARATOR;
 
 use super::walker::{FoundFile, Walk};
 use crate::db::repo::KnownFile;
@@ -25,9 +32,9 @@ pub struct ScanDiff {
     pub returned: Vec<KnownFile>,
     /// Доступные файлы, которых больше нет.
     pub missing: Vec<KnownFile>,
-    /// Недоступные с прошлых сканов файлы, которых по-прежнему нет, — кроме
-    /// лежавших в папках, которые не прочлись. Не пропали сейчас, но, как
-    /// [`missing`](Self::missing), могут оказаться новым файлом на другом месте.
+    /// Недоступные с прошлых сканов файлы, которых по-прежнему нет, — кроме тех,
+    /// о которых скан ничего не знает (папка, запись, том). Не пропали сейчас, но,
+    /// как [`missing`](Self::missing), могут оказаться новым файлом на другом месте.
     pub gone: Vec<KnownFile>,
     pub unchanged: usize,
 }
@@ -46,9 +53,13 @@ pub fn diff(known: &HashMap<String, KnownFile>, walk: &Walk) -> ScanDiff {
             Some(_) => diff.unchanged += 1,
         }
     }
+    // Набор, а не перебор: папка, где не прочлась каждая запись, даёт тысячи
+    // путей, а в каталоге тысячи файлов — перебор был бы квадратом.
+    let unseen: HashSet<&str> = walk.unseen.iter().map(String::as_str).collect();
     for (uri, was) in known {
-        let unknown = walk.unreadable.iter().any(|dir| uri.starts_with(dir.as_str()));
-        if unknown || seen.contains(uri.as_str()) {
+        // Файл, который обход видел, ничего нового не считает; неизвестность
+        // проверяется только у тех, кого обход не видел.
+        if seen.contains(uri.as_str()) || is_unknown(uri, walk, &unseen) {
             continue;
         }
         if was.available {
@@ -61,6 +72,18 @@ pub fn diff(known: &HashMap<String, KnownFile>, walk: &Walk) -> ScanDiff {
     diff.gone.sort_by_key(|file| file.source);
     diff.returned.sort_by_key(|file| file.source);
     diff
+}
+
+/// Скан ничего не знает о файле `uri`, которого обход не видел: он лежит в папке,
+/// которую не прочесть, равен неизвестному пути или лежит под ним. Граница —
+/// целый сегмент пути: `a.mp3.bak` не «под» `a.mp3`, `dirx` не «под» `dir`.
+fn is_unknown(uri: &str, walk: &Walk, unseen: &HashSet<&str>) -> bool {
+    walk.unreadable.iter().any(|dir| uri.starts_with(dir.as_str()))
+        || (!unseen.is_empty()
+            && (unseen.contains(uri)
+                || uri
+                    .match_indices(MAIN_SEPARATOR)
+                    .any(|(at, _)| uri.get(..at).is_some_and(|parent| unseen.contains(parent)))))
 }
 
 #[cfg(test)]

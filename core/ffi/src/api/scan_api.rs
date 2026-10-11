@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use plinth_library::db::Database;
-use plinth_library::scan::{DbAccess, FileTags, FolderConfig, ScanPhase, ScanProgress, ScanReport, scan};
+use plinth_library::scan::{
+    DbAccess, FileTags, FolderConfig, ScanPhase, ScanProgress, ScanReport, Volumes, scan_volumes,
+};
 use plinth_types::{CoreError, Timestamp};
 
 use crate::panic;
@@ -62,18 +64,39 @@ impl Core {
     /// скан узнаёт по паспорту среди пропавших и оставляет его треку прежний
     /// ID (`moved` в отчёте); журнал при этом не пишется. После скана треки
     /// журнала, которых в каталоге нет, узнаются по паспортам (C4):
-    /// переустановка выдала файлам новые ID.
+    /// переустановка выдала файлам новые ID. Все тома готовы; Kotlin зовёт
+    /// [`Core::scan_volumes`], а это — тот же скан без проверяемых томов.
     pub fn scan(
         &self,
         volumes: Vec<String>,
         folders: FolderConfig,
         listener: Arc<dyn ScanListener>,
     ) -> Result<ScanReport, CoreError> {
+        self.scan_volumes(volumes, Vec::new(), folders, listener)
+    }
+
+    /// То же, что [`Core::scan`], но Kotlin отдаёт тома в двух списках (Р1.15):
+    /// `ready` — смонтированные, их обходит скан; `pending` — те, что система
+    /// знает, но ещё не отдала (карту проверяют после загрузки или вставки).
+    /// О файлах на `pending` скан ничего не решает: они не пропали и не вернулись.
+    /// Вынутая карта — тома нет ни в одном списке — по-прежнему пропала; том из
+    /// обоих списков обходится как готовый.
+    pub fn scan_volumes(
+        &self,
+        ready: Vec<String>,
+        pending: Vec<String>,
+        folders: FolderConfig,
+        listener: Arc<dyn ScanListener>,
+    ) -> Result<ScanReport, CoreError> {
         panic::guard(|| {
             let _scanning = self.scanning()?;
-            let roots: Vec<PathBuf> = volumes.into_iter().map(PathBuf::from).collect();
+            let volumes = Volumes {
+                ready: ready.into_iter().map(PathBuf::from).collect(),
+                pending: pending.into_iter().map(PathBuf::from).collect(),
+            };
             let reader = FileTags::default();
-            let report = scan(self, &roots, &folders, &reader, &mut |p| listener.progress(p), Timestamp::now())?;
+            let report =
+                scan_volumes(self, &volumes, &folders, &reader, &mut |p| listener.progress(p), Timestamp::now())?;
             self.relink_catalog();
             Ok(report)
         })

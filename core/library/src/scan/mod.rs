@@ -14,6 +14,11 @@
 //! тегов и записью скан сводит новые файлы с пропавшими по паспорту (`moved`),
 //! и найденная пара пишется как новое место прежнего источника — трек, версия,
 //! источник и дата добавления те же, журнал не пишется.
+//!
+//! «Не увидел» — не «нет» (Р1.15): файл пропадает, только когда скан знает, что
+//! его нет. Папка, запись папки, том, которые не удалось прочесть или которые
+//! система ещё не отдала (`Volumes::pending`), оставляют свои файлы такими, какими
+//! они были: не недоступными, не вернувшимися и не кандидатами на сведение.
 
 mod catalog;
 mod diff;
@@ -23,6 +28,7 @@ mod progress;
 mod tags;
 mod walker;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use plinth_types::{Availability, CoreError, SourceId, Timestamp, TrackId, VersionId};
@@ -40,6 +46,7 @@ use crate::db::Database;
 use crate::db::repo::KnownFile;
 use crate::model::{AudioSpec, Explicitness, Source, SourceLocation, Track, Version, VersionKind};
 use progress::{REPORT_EVERY, count};
+use walker::bare_root;
 
 /// Сколько файлов пишется одной транзакцией.
 const BATCH: usize = 200;
@@ -88,7 +95,19 @@ pub struct ScanReport {
     pub stopped: bool,
 }
 
-/// Весь скан: томa `roots`, папки `config`, теги — `reader`.
+/// Тома одного скана.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Volumes {
+    /// Корни смонтированных томов — их обходит скан.
+    pub ready: Vec<PathBuf>,
+    /// Корни томов, которые система знает, но ещё не отдала: карту проверяют
+    /// после загрузки или вставки. Скан их не обходит и о файлах на них ничего
+    /// не решает. Том, который есть и в `ready`, обходится как готовый.
+    pub pending: Vec<PathBuf>,
+}
+
+/// Весь скан: томa `roots`, папки `config`, теги — `reader`. Все тома готовы;
+/// о ещё не отданных системой — [`scan_volumes`].
 pub fn scan(
     db: &dyn DbAccess,
     roots: &[PathBuf],
@@ -97,8 +116,26 @@ pub fn scan(
     progress: Progress<'_>,
     now: Timestamp,
 ) -> Result<ScanReport, CoreError> {
+    scan_volumes(db, &Volumes { ready: roots.to_vec(), pending: Vec::new() }, config, reader, progress, now)
+}
+
+/// Весь скан по томам `volumes`: готовые обходятся, о проверяемых скан только
+/// знает — их файлы не пропали и не вернулись (Р1.15). Вынутая карта (её нет
+/// ни среди готовых, ни среди проверяемых) по-прежнему пропала.
+pub fn scan_volumes(
+    db: &dyn DbAccess,
+    volumes: &Volumes,
+    config: &FolderConfig,
+    reader: &dyn TagReader,
+    progress: Progress<'_>,
+    now: Timestamp,
+) -> Result<ScanReport, CoreError> {
     let stopped = ScanReport { stopped: true, ..ScanReport::default() };
-    let Some(walked) = walk(roots, config, progress) else { return Ok(stopped) };
+    let Some(mut walked) = walk(&volumes.ready, config, progress) else { return Ok(stopped) };
+    // Проверяемый том обходу недоступен: его корень — «не знаю», как запись папки.
+    // Корень без разделителя в конце, том из обоих списков — готовый.
+    let ready: HashSet<String> = volumes.ready.iter().map(|root| bare_root(root)).collect();
+    walked.unseen.extend(volumes.pending.iter().map(|root| bare_root(root)).filter(|root| !ready.contains(root)));
     let mut known = Default::default();
     db.run(&mut |db| {
         known = db.known_local_files()?;
