@@ -6,12 +6,14 @@ import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.audio.engine.PlaybackError
 import io.github.puflik.plinth.ffi.TrackId
+import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.PlaybackQueue
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
+import io.github.puflik.plinth.ui.library.TrackActions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,7 +35,9 @@ class PlayerViewModelTest {
     private val engine = FakeAudioEngine().apply { trackDuration = 4.minutes }
     private val playback = PlaybackController(engine, CoroutineScope(Dispatchers.Unconfined))
     private val userData = FakeUserDataRepository()
-    private val viewModel by lazy { PlayerViewModel(playback, userData) }
+    private val actions =
+        TrackActions(playback, userData, FakePlaylistRepository(), CoroutineScope(Dispatchers.Unconfined))
+    private val viewModel by lazy { PlayerViewModel(playback, userData, actions) }
     private val album = QueueContext.Album("Jazz", "Queen")
     private val song = item("song", artist = "Queen")
     private val second = item("second")
