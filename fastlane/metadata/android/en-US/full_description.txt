@@ -22,4 +22,7 @@ more sources and sync between devices.
 <li>A log or a crash report leaves the device only if you share it yourself.</li>
 </ul>
 
+Plinth is written entirely by AI (Claude) under its author's direction: an
+experiment in how well AI can build and maintain a large app.
+
 Plinth is free software under the GNU AGPLv3.
