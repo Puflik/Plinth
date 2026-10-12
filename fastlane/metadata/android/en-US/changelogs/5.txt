@@ -1,0 +1,1 @@
+Reliability release: songs you move or rename keep their likes, playlists and history; tags edited on a computer no longer cost them after a reinstall; restoring a backup keeps your newer changes; a memory card still being checked after a restart no longer hides your SD library. Plinth opens faster on a big library and no longer stays shut when its data cannot be updated or read.

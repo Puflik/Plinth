@@ -1,8 +1,13 @@
 # Contributing to Plinth
 
-Thanks for looking. Plinth is **pre-alpha**: the first wave, v0.1 "Sound", is
-nearly done and nothing is released yet. Small, focused contributions are the
-easiest to accept right now.
+Thanks for looking. Plinth is **early software**: the first two waves are
+released (0.2.2 is the latest), the third, v0.3 "Identity", is next. Small,
+focused contributions are the easiest to accept right now.
+
+The code is written by AI under the author's direction — the project is an
+experiment in how far that goes (see [Written by AI](README.md#written-by-ai-an-experiment)).
+Bug reports, translations and ideas from people are welcome all the same, and a
+pull request is judged by the same rules as any other change.
 
 ## What is welcome
 
@@ -12,7 +17,7 @@ easiest to accept right now.
 | **Bug fixes** | With a test that fails before the fix, if the code is testable on the JVM |
 | **Small UI fixes, typos** | Screenshots before/after help |
 | **Themes** | Colour schemes on top of Material 3 |
-| **Provider fixes** | Once online providers exist (later waves) |
+| **Provider fixes** | Internet Archive today (`core/providers`); more providers come in later waves |
 
 **Open an issue first** for anything larger: a new feature, a change to a
 public interface (`AudioEngine`, `LibraryRepository`, `PlaybackController`),

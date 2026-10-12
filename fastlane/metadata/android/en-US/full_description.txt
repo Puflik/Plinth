@@ -1,22 +1,25 @@
 Plinth is an open-source music player for Android that treats a track as the
-music itself, not as a file. This first release plays the music files on your
-phone; online sources, playlists and sync between devices come later.
+music itself, not as a file. It plays the music on your phone and SD card and,
+if you want, albums and concerts from the Internet Archive; later versions add
+more sources and sync between devices.
 
 <b>What it does now</b>
 <ul>
-<li>Plays your local music in the background, with notification, lock-screen and headset controls.</li>
-<li>Builds a library of tracks, albums, artists and folders from Android's media index, in natural order.</li>
-<li>Searches by title, artist and album.</li>
-<li>Keeps a queue with shuffle, repeat and tracks you add by hand, and restores it after a restart.</li>
-<li>Skips files that can't be played and tells you once.</li>
-<li>Explains what to do when your phone's firmware stops background playback.</li>
+<li>Plays your music in the background, with notification, lock-screen and headset controls, and resumes where you left off.</li>
+<li>Reads tags straight from your files on the phone and SD cards: tracks, albums, artists and folders in natural order, and search.</li>
+<li>Searches the Internet Archive and plays what it finds: FLAC on Wi-Fi, MP3 on a metered network. Online sources can be turned off.</li>
+<li>Likes, listening history and playlists, with M3U, M3U8 and PLS import and M3U8 export.</li>
+<li>Keeps your likes, playlists and history through a reinstall: a copy in a folder you choose and in Android backup. Songs you moved, renamed or retagged are found again.</li>
+<li>Skips files that can't be played, and explains what to do when your phone's firmware stops background playback.</li>
 <li>English and Russian.</li>
 </ul>
 
-<b>What it doesn't do</b>
+<b>Privacy</b>
 <ul>
 <li>No accounts, no ads, no analytics or telemetry.</li>
-<li>Nothing leaves the device unless you save a log or open a bug report yourself.</li>
+<li>While online sources are on, searches and streams go to archive.org.</li>
+<li>Your likes, playlists and history go to Android backup only when the phone encrypts it; your music and library stay on the device.</li>
+<li>A log or a crash report leaves the device only if you share it yourself.</li>
 </ul>
 
 Plinth is free software under the GNU AGPLv3.
