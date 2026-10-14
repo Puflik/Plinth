@@ -8,6 +8,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,7 +75,9 @@ internal fun PlayerMenu(
 
 /**
  * Меню плеера, собранное из модели: лайк и выбор плейлиста идут в
- * [PlayerViewModel]. Вынесено из `PlayerScreen`, чтобы экран не рос.
+ * [PlayerViewModel]. Вынесено из `PlayerScreen`, чтобы экран не рос. Пока выбор
+ * плейлиста открыт, модель помнит трек, для которого его открыли: очередь может
+ * уйти дальше, а добавится тот, что был на экране.
  */
 @Composable
 internal fun PlayerScreenMenu(
@@ -88,6 +91,10 @@ internal fun PlayerScreenMenu(
     onOpenAlbum = onOpenAlbum,
     onOpenArtist = onOpenArtist,
     playlistPicker = { dismiss ->
+        DisposableEffect(Unit) {
+            viewModel.onPlaylistPickerShown()
+            onDispose { viewModel.onPlaylistPickerClosed() }
+        }
         PlaylistPicker(
             onAdd = { viewModel.onAddToPlaylist(it.id) },
             onAddToNew = viewModel::onAddToNewPlaylist,

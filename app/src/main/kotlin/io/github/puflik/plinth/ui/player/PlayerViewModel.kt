@@ -51,6 +51,9 @@ class PlayerViewModel
                 .mapLatest { source -> source?.let { userData.trackOf(it) } }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
 
+        /** Трек, для которого открыт выбор плейлиста; `null` — выбор закрыт, берётся играющий. */
+        private var pinned: TrackId? = null
+
         private val liked: Flow<Boolean?> =
             track.flatMapLatest { track -> track?.let(userData::liked) ?: flowOf(null) }
 
@@ -66,15 +69,35 @@ class PlayerViewModel
             viewModelScope.launch { userData.setLiked(track, !liked) }
         }
 
-        /** «В плейлист…» из меню: играющий трек фонотеки — в конец [playlist]; другого трека нет — ничего. */
+        /**
+         * Выбор плейлиста открыт (Р6): трек, для которого его открыли, запоминается.
+         * Пока диалог открыт, очередь может уйти дальше, а в диалоге не видно, какой
+         * трек добавляется, — в плейлист идёт запомненный, а не играющий в момент выбора.
+         */
+        fun onPlaylistPickerShown() {
+            pinned = track.value
+        }
+
+        /** Выбор плейлиста закрыт — выбрали или отказались: запомненный трек забыт. */
+        fun onPlaylistPickerClosed() {
+            pinned = null
+        }
+
+        /**
+         * «В плейлист…» из меню: трек фонотеки — запомненный при открытии выбора, а без
+         * открытого выбора играющий, — в конец [playlist]; трека нет — ничего.
+         */
         fun onAddToPlaylist(playlist: PlaylistId) {
-            val track = track.value ?: return
+            val track = pinned ?: track.value ?: return
             actions.addToPlaylist(track, playlist)
         }
 
-        /** «В плейлист…» → «Новый плейлист»: играющий трек — в плейлист [name]; нет трека — нет и плейлиста. */
+        /**
+         * «В плейлист…» → «Новый плейлист»: тот же трек, что у [onAddToPlaylist], — в
+         * плейлист [name]; трека нет — нет и плейлиста.
+         */
         fun onAddToNewPlaylist(name: String) {
-            val track = track.value ?: return
+            val track = pinned ?: track.value ?: return
             actions.addToNewPlaylist(track, name)
         }
 
