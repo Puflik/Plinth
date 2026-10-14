@@ -1,0 +1,1 @@
+Every song in a list now has a ⋮ button with the same menu as a long press: play next, add to queue, add to playlist, like. The player's ⋮ menu can like the song that is playing and add it to a playlist.

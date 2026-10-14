@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-15
+
+A small usability release: liking a song and adding it to a playlist no
+longer hide behind a long press.
+
 ### Added
 
 - Every song in a list has a ⋮ button with the same menu as a long press:
@@ -290,7 +295,8 @@ an early pre-release — online sources, playlists and sync come in later waves.
 - CI builds and tests both flavors (`github`, `fdroid`); architecture decision
   records in `docs/adr/`, a contributing guide in `CONTRIBUTING.md`.
 
-[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/Puflik/Plinth/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/Puflik/Plinth/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/Puflik/Plinth/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Puflik/Plinth/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Puflik/Plinth/compare/v0.1.1...v0.2.0

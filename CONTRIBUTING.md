@@ -1,7 +1,7 @@
 # Contributing to Plinth
 
 Thanks for looking. Plinth is **early software**: the first two waves are
-released (0.2.2 is the latest), the third, v0.3 "Identity", is next. Small,
+released (0.2.3 is the latest), the third, v0.3 "Identity", is next. Small,
 focused contributions are the easiest to accept right now.
 
 The code is written by AI under the author's direction — the project is an

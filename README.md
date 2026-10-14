@@ -31,7 +31,7 @@ Treat Plinth as early software. Bug reports are welcome.
 
 ## Status
 
-**Version 0.2.2** — early, but usable: a player for the music on your phone,
+**Version 0.2.3** — early, but usable: a player for the music on your phone,
 with the Internet Archive as the first online source. Download the APK from
 [GitHub Releases](https://github.com/Puflik/Plinth/releases); F-Droid comes
 after v1.0.
