@@ -250,6 +250,8 @@ LibraryScreen (стартовый) ── вкладки: TracksTab · AlbumsTab
      └── меню: «Open file» (SAF) ──► PlayerScreen
 
 PlayerScreen ── меню ⋮, касание по исполнителю ──► AlbumScreen / ArtistScreen (вместо плеера)
+     меню ⋮ (PlayerMenu): «Нравится» и «В плейлист…» (только трек фонотеки) · к альбому · к исполнителю;
+     лайк и плейлист пишет PlayerViewModel через TrackActions в журнал приложения
 MiniPlayer (над нижней навигацией, на всех экранах, кроме плеера) ── касание, свайп вверх ──► PlayerScreen
      PlayerViewModel на уровне Activity; свайп вбок — next/previous, play/pause
 
@@ -267,7 +269,9 @@ FolderSettingsScreen (вкладка «Настройки») ── FolderSettin
 Мини-плеер (`ui/player/MiniPlayer`, слой D0) виден, пока в очереди есть
 текущий трек, — и после восстановления на паузе; без нижней навигации он сам
 отступает от системной панели.
-Строка трека одна на все списки (`components/TrackRow`), карточка альбома
+Строка трека одна на все списки (`components/TrackRow`): касание играет, а меню
+очереди, «В плейлист…» и лайк открываются долгим нажатием или видимой кнопкой ⋮
+справа (Р6) — меню одно на оба. Карточка альбома
 (`components/AlbumCard`) — с обложкой первого трека (`Album.coverTrackUri`). Название играющего хранит
 `PlaybackController.title`: его видят и библиотека, и плеер.
 

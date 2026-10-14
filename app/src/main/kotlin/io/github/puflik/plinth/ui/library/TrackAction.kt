@@ -7,7 +7,10 @@ import io.github.puflik.plinth.queue.QueueAction
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 
-/** Что сделать с треком списка (D1.2, D4): касание — [PLAY], остальное — из меню долгого нажатия. */
+/**
+ * Что сделать с треком списка (D1.2, D4): касание — [PLAY], остальное — из меню
+ * строки, которое открывают долгим нажатием или кнопкой ⋮ (Р6).
+ */
 enum class TrackAction {
     /** Играть список, в котором трек стоит, начиная с него; вручную добавленное остаётся. */
     PLAY,

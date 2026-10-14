@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.audio.PlaybackController
+import io.github.puflik.plinth.ffi.PlaylistId
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.history.trackOf
 import io.github.puflik.plinth.library.UserDataRepository
 import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.ui.library.TrackActions
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +30,9 @@ import kotlin.time.Duration
  * перемотка, очередь. Сам плеер ничего не открывает: трек и очередь знает
  * [PlaybackController]. Лайк текущего трека (D4a) — через [UserDataRepository]:
  * очередь фонотеку не знает, трек находится по источнику — файл по пути,
- * сетевой трек (E3) своим ID.
+ * сетевой трек (E3) своим ID. «В плейлист» из меню плеера (Р6) пишет
+ * [TrackActions] — в журнал приложения, как строка списка: плеер можно
+ * свернуть сразу после выбора, и запись из его собственной области пропала бы.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -37,6 +41,7 @@ class PlayerViewModel
     constructor(
         private val playback: PlaybackController,
         private val userData: UserDataRepository,
+        private val actions: TrackActions,
     ) : ViewModel() {
         /** Трек фонотеки, который играет; файл не из фонотеки — `null`. */
         private val track: StateFlow<TrackId?> =
@@ -59,6 +64,18 @@ class PlayerViewModel
             val track = track.value ?: return
             val liked = uiState.value.liked ?: return
             viewModelScope.launch { userData.setLiked(track, !liked) }
+        }
+
+        /** «В плейлист…» из меню: играющий трек фонотеки — в конец [playlist]; другого трека нет — ничего. */
+        fun onAddToPlaylist(playlist: PlaylistId) {
+            val track = track.value ?: return
+            actions.addToPlaylist(track, playlist)
+        }
+
+        /** «В плейлист…» → «Новый плейлист»: играющий трек — в плейлист [name]; нет трека — нет и плейлиста. */
+        fun onAddToNewPlaylist(name: String) {
+            val track = track.value ?: return
+            actions.addToNewPlaylist(track, name)
         }
 
         fun onPlayPause() = playback.togglePlayPause()

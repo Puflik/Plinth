@@ -4,7 +4,6 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,7 +80,7 @@ fun PlayerScreen(
                     contentDescription = stringResource(R.string.player_collapse),
                 )
             }
-            PlayerMenu(state, onOpenAlbum, onOpenArtist)
+            PlayerScreenMenu(state, viewModel, onOpenAlbum, onOpenArtist)
         }
         PlayerCore(
             state = state,
@@ -129,41 +126,6 @@ private fun PlayerViewModel.perform(
         PlayerCommand.PlayPause -> onPlayPause()
         is PlayerCommand.SeekBy -> onSeekBy(command.delta)
         null -> Unit
-    }
-}
-
-/** Меню ⋮, слой D3 (E5): к альбому и к исполнителю — то, что известно о треке. */
-@Composable
-private fun PlayerMenu(
-    state: PlayerUiState,
-    onOpenAlbum: (Album) -> Unit,
-    onOpenArtist: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }, enabled = state.album != null || state.artist != null) {
-            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.library_more))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            state.album?.let { album ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.player_go_album)) },
-                    onClick = {
-                        expanded = false
-                        onOpenAlbum(album)
-                    },
-                )
-            }
-            state.artist?.let { artist ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.player_go_artist)) },
-                    onClick = {
-                        expanded = false
-                        onOpenArtist(artist)
-                    },
-                )
-            }
-        }
     }
 }
 

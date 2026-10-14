@@ -3,6 +3,7 @@ package io.github.puflik.plinth.ui.library
 import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.di.ApplicationScope
 import io.github.puflik.plinth.ffi.PlaylistId
+import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.PlaylistRepository
 import io.github.puflik.plinth.library.UserDataRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
@@ -48,16 +49,28 @@ class TrackActions
         fun addToPlaylist(
             track: LibraryTrack,
             playlist: PlaylistId,
+        ) = addToPlaylist(track.id, playlist)
+
+        /** То же по ID трека: плеер знает только его (Р6). */
+        fun addToPlaylist(
+            track: TrackId,
+            playlist: PlaylistId,
         ) {
-            scope.launch { playlists.add(playlist, track.id) }
+            scope.launch { playlists.add(playlist, track) }
         }
 
         /** «В плейлист» → «Новый плейлист»: создаёт плейлист [name] с [track]; пустое имя — ничего. */
         fun addToNewPlaylist(
             track: LibraryTrack,
             name: String,
+        ) = addToNewPlaylist(track.id, name)
+
+        /** То же по ID трека: плеер знает только его (Р6). */
+        fun addToNewPlaylist(
+            track: TrackId,
+            name: String,
         ) {
             val clean = playlistName(name) ?: return
-            scope.launch { playlists.create(clean)?.let { playlists.add(it, track.id) } }
+            scope.launch { playlists.create(clean)?.let { playlists.add(it, track) } }
         }
     }

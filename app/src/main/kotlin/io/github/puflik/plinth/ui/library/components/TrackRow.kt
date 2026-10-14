@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,8 +34,9 @@ import kotlin.time.Duration
  * Строка трека (C4.2): название, исполнитель и альбом, длительность — если
  * она известна, облако — если трек сетевой (E3).
  * Одна на все списки — треки, папки, альбом, поиск, плейлисты. Касание —
- * играть список с этого трека, долгое нажатие — меню очереди (D1.2), лайк
- * (D4a) и «В плейлист» (D4b). Плейлист выбирается здесь же, в диалоге.
+ * играть список с этого трека; долгое нажатие или видимая кнопка ⋮ справа
+ * (Р6) — меню очереди (D1.2), лайк (D4a) и «В плейлист» (D4b), одно на оба.
+ * Плейлист выбирается здесь же, в диалоге.
  */
 @Composable
 fun TrackRow(
@@ -53,8 +57,15 @@ fun TrackRow(
     playlistPicker: @Composable (onDismiss: () -> Unit) -> Unit,
 ) {
     val artist = label.artist ?: stringResource(R.string.library_unknown_artist)
-    var menu by remember { mutableStateOf(false) }
+    // Меню одно, а открывается у двух мест: у строки (долгое нажатие) и у кнопки ⋮.
+    var rowMenu by remember { mutableStateOf(false) }
+    var buttonMenu by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
+    val choose = { action: TrackAction ->
+        rowMenu = false
+        buttonMenu = false
+        if (action == TrackAction.ADD_TO_PLAYLIST) picker = true else onAction(action)
+    }
     Box(modifier = modifier) {
         ListItem(
             headlineContent = { Text(label.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -65,26 +76,51 @@ fun TrackRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             },
-            trailingContent = trailing(label),
+            trailingContent = {
+                Trailing(label) {
+                    MoreButton(onClick = { buttonMenu = true }) {
+                        TrackMenu(buttonMenu, label.liked, onDismiss = { buttonMenu = false }, onChoose = choose)
+                    }
+                }
+            },
             modifier =
                 Modifier.combinedClickable(
                     onClick = { onAction(TrackAction.PLAY) },
-                    onLongClick = { menu = true },
+                    onLongClick = { rowMenu = true },
                 ),
         )
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            (MENU + PLAYLIST_ITEM + likeItem(label.liked)).forEach { (action, text) ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(text)) },
-                    onClick = {
-                        menu = false
-                        if (action == TrackAction.ADD_TO_PLAYLIST) picker = true else onAction(action)
-                    },
-                )
-            }
-        }
+        TrackMenu(rowMenu, label.liked, onDismiss = { rowMenu = false }, onChoose = choose)
     }
     if (picker) playlistPicker { picker = false }
+}
+
+/** Пункты меню трека: очередь, «В плейлист…», лайк — одни для долгого нажатия и кнопки ⋮. */
+@Composable
+private fun TrackMenu(
+    expanded: Boolean,
+    liked: Boolean,
+    onDismiss: () -> Unit,
+    onChoose: (TrackAction) -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        (MENU + PLAYLIST_ITEM + likeItem(liked)).forEach { (action, text) ->
+            DropdownMenuItem(text = { Text(stringResource(text)) }, onClick = { onChoose(action) })
+        }
+    }
+}
+
+/** Кнопка ⋮ у строки; [menu] — меню, которое она открывает, раскрывается у неё же. */
+@Composable
+private fun MoreButton(
+    onClick: () -> Unit,
+    menu: @Composable () -> Unit,
+) {
+    Box {
+        IconButton(onClick = onClick) {
+            Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.library_more))
+        }
+        menu()
+    }
 }
 
 /** Что показывает [TrackRow]: подписи, лайк и откуда звук. */
@@ -102,14 +138,16 @@ data class TrackLabel(
     }
 }
 
-/** Облако и длительность справа; ни того, ни другого — ничего. */
-private fun trailing(label: TrackLabel): (@Composable () -> Unit)? {
-    if (!label.online && label.duration == null) return null
-    return {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (label.online) OnlineMark()
-            label.duration?.let { Text(formatTime(it)) }
-        }
+/** Справа: облако — если трек сетевой, длительность — если известна, и всегда [more] (кнопка ⋮). */
+@Composable
+private fun Trailing(
+    label: TrackLabel,
+    more: @Composable () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (label.online) OnlineMark()
+        label.duration?.let { Text(formatTime(it)) }
+        more()
     }
 }
 
