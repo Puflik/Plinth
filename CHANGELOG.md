@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every song in a list has a ⋮ button with the same menu as a long press:
+  play next, add to queue, replace queue, add to playlist, like.
+- The player's ⋮ menu can like the song that is playing and add it to a
+  playlist; the song you opened the choice for is the one that is added,
+  even if the next one has started meanwhile.
+
 ## [0.2.2] - 2026-10-12
 
 A reliability release after the review of the second wave. Your likes,
