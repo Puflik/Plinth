@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Online search no longer hangs for up to a minute when the network is
+  connected but silent: a search gives up after 15 seconds, and a new query
+  cancels the old one at once instead of waiting for it.
+- The tracks of an Internet Archive concert play in disc and track order;
+  files without a number follow in natural order, 2 before 10.
+
 ## [0.2.3] - 2026-10-15
 
 A small usability release: liking a song and adding it to a playlist no
