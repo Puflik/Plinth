@@ -1,13 +1,16 @@
 use std::time::Duration;
 
 use super::ExternalId;
+use crate::http::Limits;
 
 /// Поисковый запрос к провайдеру. Текст обрезан по краям, число результатов
-/// ограничено: провайдер не отдаёт больше, чем просили.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// ограничено: провайдер не отдаёт больше, чем просили. Срок и отмена — свойства
+/// этого вызова (Р1.11а); по умолчанию их нет.
+#[derive(Debug, Clone)]
 pub struct SearchQuery {
     text: String,
     limit: u32,
+    limits: Limits,
 }
 
 impl SearchQuery {
@@ -15,7 +18,12 @@ impl SearchQuery {
 
     /// `limit` приводится к 1..=[`Self::MAX_LIMIT`].
     pub fn new(text: &str, limit: u32) -> Self {
-        Self { text: text.trim().to_owned(), limit: limit.clamp(1, Self::MAX_LIMIT) }
+        Self { text: text.trim().to_owned(), limit: limit.clamp(1, Self::MAX_LIMIT), limits: Limits::none() }
+    }
+
+    /// Тот же запрос со сроком и отменой.
+    pub fn within(self, limits: Limits) -> Self {
+        Self { limits, ..self }
     }
 
     pub fn text(&self) -> &str {
@@ -24,6 +32,10 @@ impl SearchQuery {
 
     pub fn limit(&self) -> u32 {
         self.limit
+    }
+
+    pub fn limits(&self) -> &Limits {
+        &self.limits
     }
 
     /// Пустой запрос в сеть не уходит.

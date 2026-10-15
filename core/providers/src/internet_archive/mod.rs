@@ -23,7 +23,7 @@ use plinth_types::{CoreError, ProviderId, QualityTier};
 
 use crate::Provider;
 use crate::config::ProviderConfig;
-use crate::http::{HttpClient, HttpTransport};
+use crate::http::{HttpClient, HttpTransport, Limits};
 use crate::model::{Capabilities, ExternalId, RemoteTrack, ResultKind, SearchQuery, SearchResult, StreamRequest};
 
 /// Встроенный конфиг Internet Archive.
@@ -47,9 +47,9 @@ impl InternetArchive {
         self
     }
 
-    fn get(&self, endpoint: &str, vars: &[(&str, &str)]) -> Result<Vec<u8>, CoreError> {
+    fn get(&self, endpoint: &str, vars: &[(&str, &str)], limits: &Limits) -> Result<Vec<u8>, CoreError> {
         let url = self.config.endpoint(endpoint)?.url(vars)?;
-        self.http.get(&url, &self.config.headers)
+        self.http.get_within(&url, &self.config.headers, limits)
     }
 }
 
@@ -68,7 +68,7 @@ impl Provider for InternetArchive {
             return Ok(Vec::new());
         }
         let limit = query.limit().to_string();
-        let body = self.get("search", &[("query", &text), ("limit", &limit)])?;
+        let body = self.get("search", &[("query", &text), ("limit", &limit)], query.limits())?;
         search::results(&body, &self.config, query.limit())
     }
 
@@ -78,7 +78,7 @@ impl Provider for InternetArchive {
         if identifier.is_empty() {
             return Err(CoreError::unavailable("archive.org: no item in the id"));
         }
-        let body = self.get("metadata", &[("id", identifier)])?;
+        let body = self.get("metadata", &[("id", identifier)], &Limits::none())?;
         let tracks = mapping::tracks(&metadata::parse(&body, &self.config)?, identifier);
         match file {
             None if tracks.is_empty() => Err(CoreError::unavailable("archive.org: no playable audio in the item")),

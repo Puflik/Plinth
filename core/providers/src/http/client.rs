@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use plinth_types::CoreError;
 
-use super::{HttpRequest, HttpTransport};
+use super::{HttpRequest, HttpTransport, Limits};
 
 /// Политика запросов (E1.1). Таймаут, число попыток и пауза придут из
 /// конфига провайдера; User-Agent — от приложения: Internet Archive просит
@@ -64,13 +64,30 @@ impl HttpClient {
 
     /// Тело ответа 2xx. Свой `User-Agent` в `headers` заменяет политику.
     pub fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Vec<u8>, CoreError> {
-        let request = self.request(url, headers);
+        self.get_within(url, headers, &Limits::none())
+    }
+
+    /// То же, что [`HttpClient::get`], но в пределах `limits` (Р1.11а): срок и отмена
+    /// одного вызова. Отменено — `Network("cancelled")`, транспорт после этого не
+    /// зовётся; срок вышел до первой попытки — `Network("timed out")`; попытка просит у
+    /// транспорта не больше остатка срока; пауза, которая съела бы остаток, не берётся —
+    /// возвращается последняя настоящая ошибка. Ответ, который пришёл, возвращается как
+    /// всегда, даже если отменили в это время. Без срока и отмены — это `get`.
+    pub fn get_within(&self, url: &str, headers: &[(String, String)], limits: &Limits) -> Result<Vec<u8>, CoreError> {
+        let mut request = self.request(url, headers);
         let attempts = self.policy.attempts.max(1);
         let mut last = CoreError::network("no attempt");
         for attempt in 0..attempts {
-            if attempt > 0 {
-                (self.pause)(self.backoff_before(attempt));
+            if limits.is_cancelled() {
+                return Err(cancelled());
             }
+            if limits.left() == Some(Duration::ZERO) {
+                if attempt == 0 {
+                    return Err(CoreError::network("timed out"));
+                }
+                break;
+            }
+            request.timeout = limits.left().map_or(self.policy.timeout, |left| left.min(self.policy.timeout));
             match self.transport.get(&request) {
                 Ok(response) if (200..300).contains(&response.status) => {
                     return self.checked_body(response.body);
@@ -84,6 +101,18 @@ impl HttpClient {
                 Ok(response) => return Err(status_error(response.status)),
                 Err(error @ CoreError::Network { .. }) => last = error,
                 Err(error) => return Err(error),
+            }
+            // Неудачу, которую повторили бы: отменили — повторов и пауз нет.
+            if limits.is_cancelled() {
+                return Err(cancelled());
+            }
+            if attempt + 1 < attempts {
+                let pause = self.backoff_before(attempt + 1);
+                // Пауза, которая съела бы остаток срока, не берётся: ответа за ней не будет.
+                if limits.left().is_some_and(|left| left <= pause) {
+                    break;
+                }
+                (self.pause)(pause);
             }
         }
         log::warn!("http: gave up after {attempts} attempts: {last}");
@@ -119,6 +148,12 @@ impl HttpClient {
             Ok(body)
         }
     }
+}
+
+/// Отменённый вызов: `Network` без адреса и запроса. Реестр отмену узнаёт по флагу,
+/// а не по тексту, — текст нужен только логу.
+fn cancelled() -> CoreError {
+    CoreError::network("cancelled")
 }
 
 /// Ответ с неудачным статусом — `Network` с текстом «http NNN». Здоровье

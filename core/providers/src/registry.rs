@@ -53,22 +53,37 @@ impl Registry {
     }
 
     /// Ответ каждого провайдера по порядку; пустой запрос никого не спрашивает.
+    ///
+    /// Срок и отмена едут в запросе (Р1.11а). Отменённый поиск останавливается и
+    /// отдаёт то, что собрано: ответ, пришедший после отмены, выбрасывается и в
+    /// здоровье не пишется — ответа уже никто не ждёт, вины провайдера нет. Не
+    /// успевшему к сроку провайдеру достаётся секция «timed out»; его не
+    /// спрашивают и не наказывают.
     pub fn search(&self, query: &SearchQuery, now: Timestamp) -> Vec<ProviderSearch> {
+        let mut found = Vec::new();
         if query.is_blank() {
-            return Vec::new();
+            return found;
         }
-        self.providers
-            .iter()
-            .map(|provider| {
-                let id = provider.id().clone();
-                let outcome = if self.is_down(&id, now) {
-                    Err(CoreError::unavailable(format!("provider {id} is down")))
-                } else {
-                    self.observe(provider.as_ref(), now, provider.search(query))
-                };
-                ProviderSearch { provider: id, outcome }
-            })
-            .collect()
+        let limits = query.limits();
+        for provider in &self.providers {
+            if limits.is_cancelled() {
+                break;
+            }
+            let id = provider.id().clone();
+            let outcome = if self.is_down(&id, now) {
+                Err(CoreError::unavailable(format!("provider {id} is down")))
+            } else if limits.left().is_some_and(|left| left.is_zero()) {
+                Err(CoreError::network("timed out"))
+            } else {
+                let answer = provider.search(query);
+                if limits.is_cancelled() {
+                    break;
+                }
+                self.observe(provider.as_ref(), now, answer)
+            };
+            found.push(ProviderSearch { provider: id, outcome });
+        }
+        found
     }
 
     pub fn resolve(

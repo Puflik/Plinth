@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use plinth_library::model::AudioSpec;
 use plinth_library::model::{OnlineSource, OnlineTrack};
-use plinth_providers::http::{HttpRequest, HttpResponse, HttpTransport};
+use plinth_providers::http::{Cancel, HttpRequest, HttpResponse, HttpTransport, Limits};
 use plinth_providers::model::{
     ExternalId, HealthPolicy, Network, RemoteTrack, ResultKind, SearchQuery, SourceOption, playback_order,
 };
@@ -152,12 +152,16 @@ impl Core {
     }
 
     /// Секция на каждого провайдера по порядку. Источники выключены или
-    /// запрос пуст — секций нет. Блокирует на время ответа сети.
-    pub fn online_search(&self, query: String, limit: u32) -> Result<Vec<OnlineSearch>, CoreError> {
-        panic::guard(|| {
-            let Some(registry) = self.online() else { return Ok(Vec::new()) };
-            Ok(registry.search(&SearchQuery::new(&query, limit), Timestamp::now()).into_iter().map(section).collect())
-        })
+    /// запрос пуст — секций нет. Блокирует на время ответа сети, но не дольше
+    /// [`SEARCH_BUDGET`]; `cancel.cancel()` из другого потока обрывает поиск
+    /// между шагами — ответом будет то, что собрано до отмены (обычно ничего).
+    pub fn online_search(
+        &self,
+        query: String,
+        limit: u32,
+        cancel: Arc<OnlineCancel>,
+    ) -> Result<Vec<OnlineSearch>, CoreError> {
+        self.online_search_within(query, limit, &cancel, SEARCH_BUDGET)
     }
 
     /// Треки собрания `item` провайдера `provider` (экран альбома).
@@ -235,6 +239,48 @@ impl Core {
                     .collect(),
             })
         })
+    }
+}
+
+impl Core {
+    /// `online_search` со своим сроком: тесты берут короткий.
+    pub(crate) fn online_search_within(
+        &self,
+        query: String,
+        limit: u32,
+        cancel: &OnlineCancel,
+        budget: Duration,
+    ) -> Result<Vec<OnlineSearch>, CoreError> {
+        panic::guard(|| {
+            let Some(registry) = self.online() else { return Ok(Vec::new()) };
+            let query = SearchQuery::new(&query, limit).within(Limits::within(budget).cancelled_by(&cancel.cancel));
+            Ok(registry.search(&query, Timestamp::now()).into_iter().map(section).collect())
+        })
+    }
+}
+
+/// Срок одного онлайн-поиска вместе с повторами и паузами: одна попытка политики
+/// (15 с, `config.json`). `advancedsearch` Internet Archive на пробе 2026-10-15
+/// отвечал за 1,9–5,9 с, поэтому 10 с резали бы медленный, но живой ответ.
+pub(crate) const SEARCH_BUDGET: Duration = Duration::from_secs(15);
+
+/// Отмена онлайн-поиска. Kotlin заводит по одной на вызов и зовёт `cancel`,
+/// когда ответ уже не нужен. Ядро проверяет её между шагами: идущий запрос
+/// сети оно не прерывает, но после него не делает ничего.
+#[derive(uniffi::Object, Default)]
+pub struct OnlineCancel {
+    cancel: Cancel,
+}
+
+#[uniffi::export]
+impl OnlineCancel {
+    #[uniffi::constructor]
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn cancel(&self) {
+        self.cancel.cancel();
     }
 }
 
@@ -377,7 +423,9 @@ mod tests {
     use plinth_providers::testing::FixtureTransport;
     use plinth_types::{CoreError, Format};
 
-    use super::{NetAnswer, NetRequest, NetTransport, OnlineKind, OnlineProblem, PlatformTransport, registry};
+    use super::{
+        NetAnswer, NetRequest, NetTransport, OnlineCancel, OnlineKind, OnlineProblem, PlatformTransport, registry,
+    };
     use crate::session::{Core, DATABASE, JOURNAL};
     use crate::testing::Scratch;
 
@@ -418,7 +466,7 @@ mod tests {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
 
-        let sections = core.online_search("Piano".to_owned(), 10).unwrap();
+        let sections = core.online_search("Piano".to_owned(), 10, OnlineCancel::new()).unwrap();
 
         assert_eq!(sections.len(), 1);
         assert_eq!(sections[0].provider, "archive.org");
@@ -426,7 +474,10 @@ mod tests {
         assert_eq!(sections[0].results.len(), 5);
         assert_eq!(sections[0].results[0].external, "MIXG031");
         assert_eq!(sections[0].results[0].kind, OnlineKind::Album);
-        assert!(core.online_search("  ".to_owned(), 10).unwrap().is_empty(), "a blank query asks nobody");
+        assert!(
+            core.online_search("  ".to_owned(), 10, OnlineCancel::new()).unwrap().is_empty(),
+            "a blank query asks nobody"
+        );
     }
 
     #[test]
@@ -438,7 +489,7 @@ mod tests {
 
         core.disconnect_online().unwrap();
 
-        assert!(core.online_search("piano".to_owned(), 10).unwrap().is_empty());
+        assert!(core.online_search("piano".to_owned(), 10, OnlineCancel::new()).unwrap().is_empty());
         assert!(matches!(core.online_stream(ids[0], false, Vec::new()), Err(CoreError::Unavailable { .. })));
         assert!(matches!(
             core.online_album("archive.org".to_owned(), RECORD.to_owned()),
@@ -457,7 +508,7 @@ mod tests {
         let dir = Scratch::new();
         let core = online(&dir, Arc::new(Offline));
 
-        let sections = core.online_search("piano".to_owned(), 10).unwrap();
+        let sections = core.online_search("piano".to_owned(), 10, OnlineCancel::new()).unwrap();
 
         assert_eq!(sections[0].problem, Some(OnlineProblem::NoNetwork));
         assert!(sections[0].results.is_empty());
@@ -633,11 +684,11 @@ mod tests {
         let dir = Scratch::new();
         let core = online(&dir, spy.clone());
 
-        let sections = core.online_search("piano".to_owned(), 3).unwrap();
+        let sections = core.online_search("piano".to_owned(), 3, OnlineCancel::new()).unwrap();
 
         let requests = spy.0.lock().unwrap();
         assert_eq!(requests.len(), 1, "too large is not retried");
-        assert_eq!(requests[0].timeout_ms, 15_000);
+        assert!((14_000..=15_000).contains(&requests[0].timeout_ms));
         assert!(requests[0].headers.iter().any(|h| h.name == "User-Agent" && h.value.starts_with("Plinth/")));
         assert!(requests[0].url.contains("rows=3"), "{}", requests[0].url);
         assert_eq!(sections[0].problem, Some(OnlineProblem::Broken));

@@ -7,13 +7,16 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::metadata::{File, Metadata};
+use super::values::{disc, natural_cmp};
 use crate::model::{ExternalId, RemoteTrack, SourceOption};
 
 /// Сколько шагов по цепочке `original` — защита от петель в данных.
 const CHAIN: usize = 8;
 
-/// Треки элемента `identifier` по номеру, без номера — в конце, по имени
-/// исходника. ID трека — `{identifier}/{исходник}`, варианта —
+/// Треки элемента `identifier`: по диску (без диска — после дисков), на диске —
+/// по номеру (без номера — после пронумерованных); равное — в естественном
+/// порядке имени исходника (`2` раньше `10`). Порядок не зависит от порядка
+/// файлов в ответе. ID трека — `{identifier}/{исходник}`, варианта —
 /// `{identifier}/{файл}`.
 pub(super) fn tracks(metadata: &Metadata, identifier: &str) -> Vec<RemoteTrack> {
     let by_name: HashMap<&str, &File> = metadata.files.iter().map(|file| (file.name.as_str(), file)).collect();
@@ -21,12 +24,17 @@ pub(super) fn tracks(metadata: &Metadata, identifier: &str) -> Vec<RemoteTrack> 
     for file in metadata.files.iter().filter(|file| file.is_playable()) {
         groups.entry(anchor(file, &by_name)).or_default().push(file);
     }
-    let mut tracks: Vec<RemoteTrack> = groups
+    let mut tracks: Vec<(&str, RemoteTrack)> = groups
         .into_iter()
-        .filter_map(|(anchor, variants)| track(metadata, identifier, by_name.get(anchor).copied(), anchor, variants))
+        .filter_map(|(anchor, variants)| {
+            track(metadata, identifier, by_name.get(anchor).copied(), anchor, variants).map(|track| (anchor, track))
+        })
         .collect();
-    tracks.sort_by_key(|track| (track.number.is_none(), track.number));
-    tracks
+    tracks.sort_by(|(a_anchor, a), (b_anchor, b)| {
+        let order = |track: &RemoteTrack| (track.disc.is_none(), track.disc, track.number.is_none(), track.number);
+        order(a).cmp(&order(b)).then_with(|| natural_cmp(a_anchor, b_anchor))
+    });
+    tracks.into_iter().map(|(_, track)| track).collect()
 }
 
 /// Исходник файла: вверх по `original`, пока файл есть в элементе.
@@ -70,7 +78,7 @@ fn track(
         title: first(|file| file.title.clone()).unwrap_or_else(|| stem(anchor)),
         artist: first(|file| file.artist.clone()).or_else(|| metadata.item.creator.clone()),
         album: first(|file| file.album.clone()).or_else(|| metadata.item.title.clone()),
-        disc: None,
+        disc: disc(anchor),
         number: described.iter().find_map(|file| file.track),
         year: metadata.item.year,
         duration: length,
