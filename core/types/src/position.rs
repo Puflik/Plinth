@@ -35,6 +35,37 @@ impl Position {
     pub fn between(left: &Self, right: &Self) -> Option<Self> {
         FractionalIndex::new_between(&left.0, &right.0).map(Self)
     }
+
+    /// `count` строго возрастающих позиций для списка, который заполняется
+    /// разом (импорт M3U): `run(0)` — пусто. Цепочка [`Position::after`] растёт
+    /// по байту на ~127 записей — у 60 тысяч строк это 28,5 МБ в журнале, —
+    /// а здесь позиции делят отрезок между [`Position::first`] и
+    /// `after(first)` пополам, и длина растёт как log₂ от числа записей.
+    /// Между соседями и по краям остаётся место для `between`, `before`, `after`.
+    pub fn run(count: usize) -> Vec<Self> {
+        let mut run = Vec::with_capacity(count);
+        let low = Self::first();
+        let high = Self::after(&low);
+        bisect(&low, &high, count, &mut run);
+        run
+    }
+}
+
+/// `count` позиций строго между `low` и `high` по порядку: середина отрезка и
+/// половины по обе стороны от неё. Глубина рекурсии — log₂ `count`.
+fn bisect(low: &Position, high: &Position, count: usize, run: &mut Vec<Position>) {
+    if count == 0 {
+        return;
+    }
+    // `low < high` по построению: каждый отрезок ограничен серединой предыдущего.
+    let Some(middle) = Position::between(low, high) else {
+        debug_assert!(false, "bisect: {low} is not below {high}");
+        return;
+    };
+    let left = (count - 1) / 2;
+    bisect(low, &middle, left, run);
+    run.push(middle.clone());
+    bisect(&middle, high, count - 1 - left, run);
 }
 
 impl std::hash::Hash for Position {
@@ -127,6 +158,16 @@ mod tests {
         for (text, position) in texts.iter().zip(&positions) {
             assert_eq!(&text.parse::<Position>().unwrap(), position);
         }
+    }
+
+    /// Середина отрезка, а не цепочка: 1 000 позиций остаются короткими, а порядок — строгим.
+    #[test]
+    fn a_run_is_strictly_increasing_and_short() {
+        let run = Position::run(1_000);
+
+        assert_eq!(run.len(), 1_000);
+        assert!(run.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(run.iter().all(|position| position.to_string().len() <= 48));
     }
 
     #[test]

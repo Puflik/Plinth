@@ -131,10 +131,9 @@ impl Core {
                 let now = Timestamp::now();
                 let playlist = Playlist { id: PlaylistId::new(), name, kind: PlaylistKind::Manual, created_at: now };
                 let mut ops = vec![Op::CreatePlaylist(playlist.clone())];
-                let mut previous: Option<Position> = None;
-                for track in matched.tracks {
-                    let position = previous.as_ref().map_or_else(Position::first, Position::after);
-                    previous = Some(position.clone());
+                // Не цепочка `after`: на 60 тысячах строк она раздувает позиции до 948 символов.
+                let positions = Position::run(matched.tracks.len());
+                for (track, position) in matched.tracks.into_iter().zip(positions) {
                     let entry = PlaylistEntry {
                         id: PlaylistEntryId::new(),
                         playlist: playlist.id,

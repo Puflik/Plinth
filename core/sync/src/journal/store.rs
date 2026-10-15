@@ -7,9 +7,17 @@
 //!   удаления документа, и лог растёт квадратично (C1).
 //!
 //! Кадр — длина, CRC32 и байты; после записи — `fsync`. Оборванный последний
-//! кадр (сбой питания посреди записи) отбрасывается. Кадр с неверной суммой
-//! останавливает чтение: всё до него читается, файл откладывается в сторону
-//! как `tail.damaged-<мс>`, хвост начинается заново.
+//! кадр (сбой питания посреди записи) отбрасывается молча. Кадр с неверной
+//! суммой останавливает чтение: всё до него читается, файл откладывается в
+//! сторону как `tail.damaged-<мс>`, хвост начинается заново.
+//!
+//! Кадр, чьи данные не помещаются в файл, — оборванный конец, если за его
+//! заголовком нет целого кадра (длина больше нуля, данные помещаются, сумма
+//! сходится); иначе длина испорчена посреди файла, и это порча, как неверная
+//! сумма. Поиск целого кадра хеширует не больше `SCAN_BUDGET_BYTES` за
+//! открытие; вышел предел, а кадра не нашлось, — тоже порча (копия рядом, данные
+//! до кадра целы). Последний кадр с испорченной длиной неотличим от
+//! оборванного: теряется он один.
 //!
 //! Длинный хвост сворачивается в новый снимок: временный файл, `fsync`,
 //! переименование поверх старого, затем сброс хвоста. У хвоста в заголовке —
@@ -344,7 +352,17 @@ fn read_tail(dir: &Path, snapshot: &Header) -> Result<(Vec<Vec<u8>>, u64, bool),
     while at < bytes.len() {
         let Some(frame) = bytes.get(at..at + FRAME_HEADER_LEN) else { break };
         let length = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
-        let Some(payload) = bytes.get(at + FRAME_HEADER_LEN..at + FRAME_HEADER_LEN + length) else { break };
+        let data = at + FRAME_HEADER_LEN;
+        let Some(payload) = bytes.get(data..data.saturating_add(length)) else {
+            // Данных меньше, чем заявлено: оборванная запись или испорченная длина.
+            // Целый кадр дальше по файлу — свидетельство порчи (р1.11б).
+            if whole_frame_follows(&bytes[data..]) {
+                log::warn!("journal: frame {} in the tail has a length beyond the file, kept aside", frames.len());
+                keep_aside(dir, &path, "damaged")?;
+                repair = true;
+            }
+            break;
+        };
         if crc32fast::hash(payload).to_le_bytes() != frame[4..8] {
             log::warn!("journal: damaged frame {} in the tail, the rest is kept aside", frames.len());
             keep_aside(dir, &path, "damaged")?;
@@ -365,6 +383,36 @@ fn read_tail(dir: &Path, snapshot: &Header) -> Result<(Vec<Vec<u8>>, u64, bool),
     Ok((frames, at as u64, false))
 }
 
+/// Сколько данных за одно открытие хеширует поиск целого кадра. Оборванный кадр
+/// большого импорта — мегабайты, и на неудачных байтах кандидат есть почти на
+/// каждом смещении: без предела открытие хешировало бы терабайты.
+const SCAN_BUDGET_BYTES: usize = 64 * 1024 * 1024;
+
+/// Кадр хвоста объявил больше данных, чем осталось в файле; `rest` — всё после
+/// его заголовка. Порча ли это (длину испортило посреди файла) или оборванная
+/// запись (сбой питания)? Если дальше есть целый кадр — длина кадра, а не конец
+/// файла, неверна. Целый кадр — смещение, где длина больше нуля (нули после
+/// сбоя питания выглядят кадром с суммой 0, а настоящий кадр пустым не бывает),
+/// данные помещаются в файл и CRC32 сходится. Предел работы вышел, а целого
+/// кадра не нашлось, — тоже порча: данные до кадра целы, цена — копия рядом.
+fn whole_frame_follows(rest: &[u8]) -> bool {
+    let Some(last) = rest.len().checked_sub(FRAME_HEADER_LEN) else { return false };
+    let mut hashed = 0_usize;
+    for start in 0..=last {
+        let frame = &rest[start..start + FRAME_HEADER_LEN];
+        let length = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
+        let data = start + FRAME_HEADER_LEN;
+        if length == 0 || length > rest.len() - data {
+            continue;
+        }
+        hashed += length;
+        if hashed > SCAN_BUDGET_BYTES || crc32fast::hash(&rest[data..data + length]).to_le_bytes() == frame[4..8] {
+            return true;
+        }
+    }
+    false
+}
+
 /// Копия испорченного файла рядом, для отчёта о сбое.
 fn keep_aside(dir: &Path, path: &Path, why: &str) -> Result<(), CoreError> {
     let aside = dir.join(format!("{TAIL}.{why}-{}", Timestamp::now().as_millis()));
@@ -379,7 +427,7 @@ mod tests {
 
     use plinth_types::{CoreError, DeviceId};
 
-    use super::{COMPACT_TAIL_BYTES, SNAPSHOT, Store, TAIL};
+    use super::{COMPACT_TAIL_BYTES, SCAN_BUDGET_BYTES, SNAPSHOT, Store, TAIL, whole_frame_follows};
 
     /// Пустой каталог журнала для теста; стирается в `Drop`.
     struct Scratch(PathBuf);
@@ -582,5 +630,40 @@ mod tests {
         assert_eq!(loaded.snapshot, b"everything".to_vec());
         assert!(loaded.frames.is_empty());
         assert_eq!(store.seq(), 3);
+    }
+
+    /// Кадр как он лежит в хвосте: длина, CRC32, данные.
+    fn frame(data: &[u8]) -> Vec<u8> {
+        let mut bytes = u32::try_from(data.len()).unwrap().to_le_bytes().to_vec();
+        bytes.extend_from_slice(&crc32fast::hash(data).to_le_bytes());
+        bytes.extend_from_slice(data);
+        bytes
+    }
+
+    /// Целый кадр дальше по файлу — свидетельство порчи длины; нули, мусор и
+    /// кадр без данных — нет.
+    #[test]
+    fn a_whole_frame_is_found_anywhere_after_the_header_and_nothing_else_is() {
+        assert!(whole_frame_follows(&[b"junk".as_slice(), &frame(b"payload")].concat()));
+        assert!(whole_frame_follows(&frame(b"x")));
+        assert!(!whole_frame_follows(&[]));
+        assert!(!whole_frame_follows(&[0; 64]), "восемь нулей — не кадр: настоящий кадр пустым не бывает");
+        assert!(!whole_frame_follows(b"just junk, no frame at all"));
+        let mut cut = frame(b"payload");
+        cut.pop();
+        assert!(!whole_frame_follows(&cut), "кадр без последнего байта данных — оборван");
+        let mut spoiled = frame(b"payload");
+        spoiled[5] ^= 0xff;
+        assert!(!whole_frame_follows(&spoiled), "сумма не сошлась");
+    }
+
+    /// Предел работы: на байтах, где кандидат в кадры почти на каждом смещении, поиск
+    /// не хеширует больше `SCAN_BUDGET_BYTES` и считает такое порчей.
+    #[test]
+    fn the_search_stops_at_its_budget_and_calls_it_damage() {
+        // Четвёрки [0, 0, 0x10, 0]: с каждого кратного четырём смещения «длина» — 1 МБ.
+        let bytes = [0_u8, 0, 0x10, 0].repeat(SCAN_BUDGET_BYTES / 4 / 16);
+
+        assert!(whole_frame_follows(&bytes));
     }
 }

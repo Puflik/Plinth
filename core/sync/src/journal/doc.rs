@@ -102,13 +102,135 @@ impl Roots {
     /// Слоты регистров правка ищет по суффиксам установок своей карты, собранным
     /// одним проходом по ключам при первом обращении (`Slots`), — прохода на
     /// каждую операцию нет.
+    ///
+    /// Всё или ничего (Р1.11б): у транзакции `yrs` нет отката, а её правки ложатся
+    /// в документ при `Drop`, так что операция, отказавшая посреди пакета, оставила
+    /// бы в документе всё, что стояло перед ней. Поэтому у пакета из нескольких
+    /// операций сначала [`Roots::check`] — те же проверки, что в `write_one`, но
+    /// не трогая документ, — и только потом правки. Отказ — ошибка первой
+    /// операции, которая по одной не применилась бы; документ при этом прежний.
+    /// Одна операция сама отказывает до правки: ей проверка не нужна.
     pub(crate) fn write_all(&self, txn: &mut TransactionMut, ops: &[Op], meta: &OpMeta) -> Result<usize, CoreError> {
+        if ops.len() > 1 {
+            self.check(txn, ops, meta)?;
+        }
         let mut slots = Slots::default();
         let mut changed = 0;
         for op in ops {
             changed += usize::from(self.write_one(txn, op, meta, &mut slots)?);
         }
         Ok(changed)
+    }
+
+    /// Применились бы все операции пакета по порядку? Читает документ, ничего не
+    /// пишет. Отказать может только то, что в `write_one` кончается `missing(..)`:
+    /// переименование (плейлист читается), запись в плейлист (у него есть слот),
+    /// перенос записи (она читается). Остальное — только поправка на то, что
+    /// пакет уже сделал ([`Plan`]): создал, удалил, завёл, стёр. Суффиксы карт —
+    /// свои, не те, что у правки: проверка до первой правки и к ней не липнет.
+    fn check(&self, txn: &TransactionMut, ops: &[Op], meta: &OpMeta) -> Result<(), CoreError> {
+        let mut slots = Slots::default();
+        let mut plan = Plan::default();
+        for op in ops {
+            match op {
+                Op::CreatePlaylist(playlist) => {
+                    let key = playlist.id.to_string();
+                    let exists = match plan.playlists.get(&playlist.id) {
+                        Some(alive) => *alive,
+                        None => {
+                            self.playlists.contains_key(txn, &key)
+                                || self.playlists.contains_key(txn, &own_key(&key, meta.device))
+                        }
+                    };
+                    if !exists {
+                        plan.playlists.insert(playlist.id, true);
+                    }
+                }
+                Op::RenamePlaylist { playlist, .. } => {
+                    let readable = match plan.playlists.get(playlist) {
+                        Some(alive) => *alive,
+                        None => {
+                            let found = open(&self.playlists, &mut slots.playlists, txn, meta.device);
+                            current(found, txn, &playlist.to_string(), |r| r.playlist(*playlist)).is_some()
+                        }
+                    };
+                    if !readable {
+                        return Err(missing("playlist"));
+                    }
+                }
+                Op::DeletePlaylist { playlist } => plan.delete_playlist(*playlist),
+                Op::AddEntry(entry) => {
+                    let known = match plan.playlists.get(&entry.playlist) {
+                        Some(alive) => *alive,
+                        None => {
+                            let found = open(&self.playlists, &mut slots.playlists, txn, meta.device);
+                            has_slot(found, txn, &entry.playlist.to_string())
+                        }
+                    };
+                    if !known {
+                        return Err(missing("playlist"));
+                    }
+                    if !self.entry_taken(txn, &mut slots, &plan, entry.id, meta) {
+                        plan.entries.insert(entry.id, Planned::Alive(entry.playlist));
+                    }
+                }
+                Op::MoveEntry { entry, .. } => {
+                    let readable = match plan.entries.get(entry) {
+                        Some(planned) => matches!(planned, Planned::Alive(_)),
+                        None => self.doc_entry(txn, &mut slots, &plan, *entry, meta).is_some(),
+                    };
+                    if !readable {
+                        return Err(missing("entry"));
+                    }
+                }
+                Op::RemoveEntry { entry } => {
+                    plan.entries.insert(*entry, Planned::Dead);
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Запись `id` по документу: плейлист, если запись читается и не унесена
+    /// удалением плейлиста в этом пакете.
+    fn doc_entry(
+        &self,
+        txn: &TransactionMut,
+        slots: &mut Slots,
+        plan: &Plan,
+        id: PlaylistEntryId,
+        meta: &OpMeta,
+    ) -> Option<PlaylistId> {
+        let found = open(&self.entries, &mut slots.entries, txn, meta.device);
+        let (_, entry) = current(found, txn, &id.to_string(), |r| r.entry(id))?;
+        (!plan.deleted.contains(&entry.playlist)).then_some(entry.playlist)
+    }
+
+    /// `add_register` записи `id` ничего не положит: слот уже есть (свой или
+    /// журнала до Р1.6) и пакет его не стёр. Запись, унесённая удалением плейлиста
+    /// в этом пакете, слота не имеет.
+    fn entry_taken(
+        &self,
+        txn: &TransactionMut,
+        slots: &mut Slots,
+        plan: &Plan,
+        id: PlaylistEntryId,
+        meta: &OpMeta,
+    ) -> bool {
+        match plan.entries.get(&id) {
+            Some(planned) => matches!(planned, Planned::Alive(_)),
+            None => {
+                let key = id.to_string();
+                let present =
+                    self.entries.contains_key(txn, &key) || self.entries.contains_key(txn, &own_key(&key, meta.device));
+                let carried_off = present && !plan.deleted.is_empty() && {
+                    let found = open(&self.entries, &mut slots.entries, txn, meta.device);
+                    current(found, txn, &key, |r| r.entry(id)).is_some_and(|(_, e)| plan.deleted.contains(&e.playlist))
+                };
+                present && !carried_off
+            }
+        }
     }
 
     fn write_one(
@@ -391,6 +513,40 @@ struct Slots {
     entries: Option<Suffixes>,
     settings: Option<Suffixes>,
     passports: Option<Suffixes>,
+}
+
+/// Что пакет операций уже сделал бы с плейлистами и записями, поверх документа,
+/// который до конца проверки (`Roots::check`) не меняется. Чего в картах нет,
+/// то как в документе.
+#[derive(Default)]
+struct Plan {
+    /// Плейлист, который пакет создал (`true`) или удалил (`false`).
+    playlists: HashMap<PlaylistId, bool>,
+    /// Плейлисты, удалённые пакетом: записи документа в них стёрты, даже если
+    /// плейлист создан заново.
+    deleted: HashSet<PlaylistId>,
+    /// Записи, которые пакет завёл или стёр.
+    entries: HashMap<PlaylistEntryId, Planned>,
+}
+
+enum Planned {
+    /// Запись заведена пакетом в этот плейлист.
+    Alive(PlaylistId),
+    /// Запись стёрта пакетом: удалена сама или вместе с плейлистом.
+    Dead,
+}
+
+impl Plan {
+    /// Плейлист и все его записи — документа и заведённые пакетом — пропали.
+    fn delete_playlist(&mut self, playlist: PlaylistId) {
+        self.playlists.insert(playlist, false);
+        self.deleted.insert(playlist);
+        for planned in self.entries.values_mut() {
+            if matches!(planned, Planned::Alive(owner) if *owner == playlist) {
+                *planned = Planned::Dead;
+            }
+        }
+    }
 }
 
 /// Карта регистра вместе с суффиксами её слотов в этой правке.
