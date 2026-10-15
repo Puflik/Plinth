@@ -6,6 +6,7 @@ import io.github.puflik.plinth.ffi.generated.Format as RustFormat
 import io.github.puflik.plinth.ffi.generated.NetAnswer as RustNetAnswer
 import io.github.puflik.plinth.ffi.generated.NetRequest as RustNetRequest
 import io.github.puflik.plinth.ffi.generated.NetTransport as RustNetTransport
+import io.github.puflik.plinth.ffi.generated.OnlineCancel as RustOnlineCancel
 import io.github.puflik.plinth.ffi.generated.OnlineKind as RustOnlineKind
 import io.github.puflik.plinth.ffi.generated.OnlineProblem as RustOnlineProblem
 import io.github.puflik.plinth.ffi.generated.OnlineResult as RustOnlineResult
@@ -33,14 +34,18 @@ class CoreOnline internal constructor(
 
     /**
      * Секция на каждого провайдера. Источники выключены или запрос пуст —
-     * секций нет. Блокирует на время ответа сети.
+     * секций нет. Блокирует на время ответа сети, но не дольше срока поиска
+     * в ядре (15 с); [cancel] обрывает поиск между шагами — ответом будет то,
+     * что собрано до отмены. Идущий запрос сети отмена не прерывает: он
+     * кончится сам, не позже остатка срока.
      */
     fun search(
         query: String,
         limit: Int,
+        cancel: OnlineCancel = OnlineCancel(),
     ): List<OnlineSection> {
         require(limit > 0) { "limit: $limit" }
-        return core.call { rust -> rust.onlineSearch(query, limit.toUInt()).map { it.toApp() } }
+        return core.call { rust -> rust.onlineSearch(query, limit.toUInt(), cancel.rust).map { it.toApp() } }
     }
 
     /** Треки собрания [item] провайдера [provider]; выключено, нет сети, пропало — [CoreFailure]. */
@@ -79,6 +84,18 @@ class CoreOnline internal constructor(
         undecodable: Set<AudioFormat> = emptySet(),
     ): StreamAddress =
         core.quietCall { it.onlineStream(track.value, metered, undecodable.map(AudioFormat::toRust)).toApp() }
+}
+
+/**
+ * Отмена одного вызова [CoreOnline.search]: зови [cancel], когда ответ уже не
+ * нужен. Объект не закрывается вручную: [cancel] может прийти после конца
+ * вызова, а закрытый объект UniFFI бросает `IllegalStateException` — хватит
+ * очистки по сборке мусора.
+ */
+class OnlineCancel {
+    internal val rust = RustOnlineCancel()
+
+    fun cancel() = rust.cancel()
 }
 
 /** Сеть платформы для ядра: один GET без повторов, ответ с любым статусом — [NetAnswer.Response]. */

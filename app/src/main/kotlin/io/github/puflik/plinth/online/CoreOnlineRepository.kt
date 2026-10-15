@@ -6,13 +6,19 @@ import io.github.puflik.plinth.diagnostics.log.AppLog
 import io.github.puflik.plinth.ffi.AudioFormat
 import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.ffi.NetTransport
+import io.github.puflik.plinth.ffi.OnlineCancel
 import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.ffi.OnlineTrack
 import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.ffi.TrackId
 import io.github.puflik.plinth.library.attempt
+import io.github.puflik.plinth.library.quietly
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 
 /**
@@ -25,14 +31,35 @@ class CoreOnlineRepository(
     private val transport: NetTransport,
     private val io: CoroutineDispatcher,
 ) : OnlineRepository {
+    // Вызовы поиска, пережившие отмену своей корутины: их доживает ядро, а не вызывающий.
+    private val calls = CoroutineScope(SupervisorJob() + io)
+
     override suspend fun setEnabled(enabled: Boolean) {
         attempt(io, TAG, if (enabled) "connect" else "disconnect") {
             if (enabled) core.online.connect(transport) else core.online.disconnect()
         }
     }
 
-    override suspend fun search(query: String): List<OnlineSection> =
-        attempt(io, TAG, "search") { core.online.search(query, OnlineRepository.SEARCH_LIMIT) }.orEmpty()
+    /**
+     * Блокирующий вызов ядра живёт вне корутины поиска: `withContext` и
+     * `coroutineScope` не вернулись бы, пока сеть не ответит, а `interrupt`
+     * ни JNI, ни сокет не слышат. Отмена корутины будит ядро флагом
+     * ([OnlineCancel]) и возвращается сразу; сам вызов доживает не дольше
+     * остатка срока поиска и ничего не пишет.
+     */
+    override suspend fun search(query: String): List<OnlineSection> {
+        val cancel = OnlineCancel()
+        val call =
+            calls.async {
+                quietly(TAG, "search") { core.online.search(query, OnlineRepository.SEARCH_LIMIT, cancel) }
+            }
+        return try {
+            call.await().orEmpty()
+        } catch (cancelled: CancellationException) {
+            cancel.cancel()
+            throw cancelled
+        }
+    }
 
     override suspend fun album(
         provider: String,
