@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A journal file damaged in the middle no longer drops everything after the
+  damage quietly: Plinth keeps what comes before it and sets the damaged file
+  aside.
+- A group of changes that cannot be done in full, such as adding to a
+  playlist that is gone, leaves no half-done trace.
+- Importing a huge playlist no longer bloats the library journal: 60,000
+  lines take about a megabyte instead of 28.
 - Online search no longer hangs for up to a minute when the network is
   connected but silent: a search gives up after 15 seconds, and a new query
   cancels the old one at once instead of waiting for it.
