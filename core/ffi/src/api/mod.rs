@@ -9,6 +9,8 @@ mod online_api;
 #[cfg(test)]
 mod r1_11a_tests;
 #[cfg(test)]
+mod r1_11b_tests;
+#[cfg(test)]
 mod r1_15_tests;
 #[cfg(test)]
 mod r1_7_tests;
