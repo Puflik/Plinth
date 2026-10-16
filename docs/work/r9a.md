@@ -381,5 +381,80 @@ Linux проходят. ktlint требует переносить цепочк�
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод
-проверок (коротко)._
+**Сделано** (коммит реализации `24f4963` в `work/r9a`; изменены только пять файлов из «Менять»):
+
+- Взята контрольная реализация планировщика — `r9a-reference-implementation.patch`
+  (233 строки, папка заметок планировщика; её называет раздел «Проверка плана
+  планировщиком»). В запуске был указан более ранний черновик из scratchpad (230 строк):
+  от финального он отличается только переносами строк (`playing()` выражением, лайк в одну
+  строку), поэтому применён финальный; `git apply` лёг чисто.
+- Сверка с «Решением», п. 1–5. «Дословные» блоки (KDoc и сигнатура п. 1, сигнатура п. 3,
+  обе сигнатуры п. 4) найдены в коде проверочным скриптом. П. 2: сигнал
+  `core.catalogChanges`, поиск `core.library.trackAt` на `io`, `distinctUntilChanged()`;
+  отказ ядра пропускает значение (`mapNotNull` и `Lookup` с `null` внутри, в `map` лямбда).
+  П. 5: `track` — `flatMapLatest { trackChangesOf }` после `distinctUntilChanged()` по
+  источнику; `onLike` ищет ID по источнику играющего, не из `track.value`; `pinned` —
+  `AudioSource?`; ID для плейлиста ищет `TrackActions` в области приложения. Конструкторы
+  `PlayerViewModel` и `TrackActions`, граф Hilt, ядро, FFI не тронуты.
+- **Одно расхождение патча с «Решением», исправлено мной:** п. 5 требует обновить KDoc
+  заголовка `PlayerViewModel`, в патче его не было. Дописал три строки (ID файла не вечен;
+  лайк и «В плейлист» берут ID в момент действия; сердце следует за каталогом) и KDoc к
+  `playing()`. Только комментарии. Других расхождений не нашёл.
+
+**Красный шаг.** Сигнатуры первым отдельным шагом я не добавлял и красное до реализации не
+прогонял: по поручению сослался на раздел «Проверка плана планировщиком» — на сигнатурах без
+правки модели `R9aPlayerRelinkTest` 8 из 9 красные утверждениями (охранный зелёный),
+`R9aPlayerRestoreTest` на неизменной модели 3 из 3 красные. Реализация применена целиком
+одним шагом.
+
+**Проверки** (Windows; Gradle из PowerShell с `JAVA_HOME` из README; инструментальные —
+эмулятор `Medium_Phone_API_36.0`, перед прогоном `adb devices` — только он, `ANDROID_SERIAL`
+в той же команде, что и Gradle):
+
+- `ktlintCheck`, `detekt`, `lintGithubDebug`, `assembleGithubDebugAndroidTest` — чисто.
+  Lint: 0 ошибок, 22 предупреждения, ни одного в пяти файлах задачи. После правки KDoc
+  `runKtlintCheckOverMainSourceSet` и `detekt` исполнены заново, не из кэша.
+- JVM: `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` — по 656 тестов, упали только 4
+  известных `DataStore*SettingsTest`. Новые — все зелёные: `R9aPlayerRelinkTest` 9 из 9,
+  `R9aTrackActionsBySourceTest` 6 из 6, `R9aFakeRekeyTest` 2 из 2, `FakeUserDataRepositoryTest`
+  6 из 6 (в нём `the_track_of_a_file_follows_the_catalog`); соседи `PlayerHeartTest` 3,
+  `PlayerPlaylistTargetTest` 4, `PlayerViewModelTest` 14 — зелёные.
+- Эмулятор: пакет `ui.player` — 16 из 16 (`R9aPlayerRestoreTest` 3, `PlayerHeartRestoreTest`
+  2, `PlayerMenuTest` 8, `PlayerFrameTest` 3); `CoreUserDataRepositoryContractTest` — 6 из 6,
+  в том числе контрактный тест на настоящем ядре.
+- Вывод `R9aPlayerRelinkTest` (9 из 9): `the heart follows the song to the id the relink gave
+  it`; `a like comes off the song under the id the relink gave it`; `a like after the relink
+  lands on the song the catalog has now`; `a like tapped before the heart caught up lands on
+  the song the catalog has now`; `the song the picker was opened on keeps up with a relink`
+  и его вариант для нового плейлиста; `the picker keeps its song when the queue moves on and
+  the relink comes after`; `an add to a playlist without a picker takes the song the catalog
+  has now`; охранный `an add to a playlist that the player left behind is still written`.
+  Вывод `R9aPlayerRestoreTest` (3 из 3): `the_heart_of_a_playing_song_follows_a_restore`;
+  `a_like_from_the_player_after_a_restore_lands_on_the_song_the_catalog_has_now`;
+  `the_picker_of_the_player_keeps_up_with_a_restore`.
+- Защищённые тесты не тронуты: `git diff b8b93e6 HEAD` по `app/src/test`, `app/src/androidTest`
+  и `app/src/sharedTest` пуст. Новых `@Ignore`, `@Suppress`, `#[allow]` в диффе нет; файлов вне
+  «Менять» нет. Попыток исправить упавшие проверки не было: красные — только четыре известных.
+- **CI** (`api.github.com`, ветка `work/r9a`, прогон на `24f4963`): оба задания зелёные —
+  «Rust core — format, clippy, tests» и «Style, tests, both flavors»
+  (ktlint, detekt, Android lint both flavors, Unit tests both flavors, Assemble both flavors,
+  Release APK within the size budget, Assemble instrumented tests), прогон 38903577780.
+  Прогон на `fc56b89` (коммит тестов) красный — набор тестов без нового API не собирается,
+  как сказано в «Тесты»; причину по логу не разбирал.
+
+**На что глянуть при ревью:**
+
+- `onLike` ищет ID внутри `viewModelScope.launch` — так задано п. 5 (лайк и раньше писался из
+  области модели). «Готово, когда»: «нет поиска ID для записи в `viewModelScope`» относится к
+  плейлисту; там поиск в `TrackActions`, в области приложения, и охранный тест зелёный.
+- `onLike` берёт `!liked` из показа, а ID — из момента действия. В миллисекунды после смены
+  песни, пока сердце не перечиталось, касание применит состояние прежней песни к новой
+  (например, снимет лайк с песни, у которой его нет). Безвредно; тот же класс, что риск 3.
+- Настоящий экран плеера на устройстве я не открывал: `PlayerScreen`, `PlayerMenu` и
+  `PlaylistPicker` не менялись, поведение модели закрыто JVM-тестами и тестами на настоящем
+  ядре.
+- Эмулятор запущен мной и остановлен после прогонов.
+
+**Вопросов к решению нет**: условия «Остановиться и написать» не сработали (защищённые тесты
+верны, `PlayerHeartTest`, `PlayerPlaylistTargetTest`, `PlayerViewModelTest`,
+`PlayerHeartRestoreTest` зелёные, файлов вне списка не менялось).
