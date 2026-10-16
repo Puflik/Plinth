@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cancels the old one at once instead of waiting for it.
 - The tracks of an Internet Archive concert play in disc and track order;
   files without a number follow in natural order, 2 before 10.
+- A like or "Add to playlist" from the player no longer vanishes when a scan
+  or a restore has just moved the playing song to a new id: the heart follows
+  the song, and the change lands on the song in your library.
+- On an almost full phone your changes keep being saved in small pieces
+  instead of every other one failing, and a change counts as saved only once
+  it is on disk. The library opens even with no space left to tidy up.
+- Changes are no longer lost when the start of the journal's file of recent
+  changes is damaged: Plinth reads them back and keeps a copy of the file. A
+  single change that cannot be read is skipped instead of stopping the
+  library from opening.
+- After a power cut in the middle of a huge playlist import, the library
+  opens quickly and simply drops the unfinished import. Copies of damaged
+  journal files no longer pile up: only the newest few are kept.
 
 ## [0.2.3] - 2026-10-15
 
