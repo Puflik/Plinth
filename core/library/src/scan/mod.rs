@@ -13,7 +13,15 @@
 //! Перенесённый файл — другой путь, а не новая песня (Р1.2): между чтением
 //! тегов и записью скан сводит новые файлы с пропавшими по паспорту (`moved`),
 //! и найденная пара пишется как новое место прежнего источника — трек, версия,
-//! источник и дата добавления те же, журнал не пишется.
+//! источник и дата добавления те же, журнал не пишется. Пары раздаются лучшими
+//! вперёд, а пропавшие с данными пользователя — раньше остальных (Р9в).
+//!
+//! Файл, который скан завёл своим треком раньше, чем пропал оригинал (копия на
+//! SD-карту между «скопировать» и «удалить»; файл, застигнутый недописанным), под
+//! это сведение не попадает. Его достраивает второй этап после основной записи
+//! (`twin`, Р9в): пропавший трек с данными пользователя забирает файл двойника —
+//! трека без данных с того же альбома — и остаётся под своим ID; трек двойника
+//! уходит из каталога. Журнал не пишется и здесь.
 //!
 //! «Не увидел» — не «нет» (Р1.15): файл пропадает, только когда скан знает, что
 //! его нет. Папка, запись папки, том, которые не удалось прочесть или которые
@@ -26,6 +34,7 @@ mod folder_config;
 mod moved;
 mod progress;
 mod tags;
+mod twin;
 mod walker;
 
 use std::collections::HashSet;
@@ -84,7 +93,8 @@ pub struct ScanReport {
     pub returned: u32,
     pub missing: u32,
     /// Пропавшие файлы, найденные на новом месте (Р1.2): их треки остались
-    /// прежними. В `added` и `missing` они не считаются.
+    /// прежними. В `added` и `missing` они не считаются. Сюда же — пропавший трек с
+    /// данными, забравший файл двойника (Р9в): копия, снятая раньше, чем исчез оригинал.
     pub moved: u32,
     /// Файлы, теги которых не прочлись: новые добавлены под именем файла,
     /// изменённые остались какими были и перечитаются следующим сканом.
@@ -144,7 +154,7 @@ pub fn scan_volumes(
     let mut diff = diff(&known, &walked);
     let Some((mut files, unreadable)) = read(&diff, reader, progress) else { return Ok(stopped) };
     let moved = moved::relocate(db, &mut diff, &mut files)?;
-    let report = ScanReport {
+    let mut report = ScanReport {
         found: count(walked.files.len()),
         added: count(diff.added.len().saturating_sub(moved)),
         changed: count(diff.changed.len()),
@@ -164,6 +174,13 @@ pub fn scan_volumes(
         if !progress(ScanProgress { phase: ScanPhase::Writing, done, total }) {
             return Ok(ScanReport { stopped: true, ..report });
         }
+    }
+    let context = twin::Context { db, reader, volumes, known: &known, walked: &walked, files: &files, now };
+    let adopted = twin::adopt(&context, &mut diff, progress)?;
+    report.moved += count(adopted.moved);
+    report.missing = report.missing.saturating_sub(count(adopted.from_missing));
+    if adopted.stopped {
+        return Ok(ScanReport { stopped: true, ..report });
     }
     db.run(&mut |db| db.in_transaction(|db| mark(db, &diff, now)))?;
     log::info!("scan: {report:?}");
@@ -263,14 +280,18 @@ fn add(db: &Database, scanned: &ScannedFile, now: Timestamp) -> Result<SourceId,
 
 fn update(db: &Database, scanned: &ScannedFile, known: &KnownFile, now: Timestamp) -> Result<SourceId, CoreError> {
     let tags = &scanned.tags;
-    if let Some(mut track) = db.track(known.track)? {
+    // ID трека мог смениться после того, как скан снял список знакомых файлов
+    // (перепривязка, «Восстановить» посреди скана, Р9в, №19); версия и источник ID
+    // сохраняют, поэтому трек берётся по версии.
+    let track_id = db.track_of_version(known.version)?.unwrap_or(known.track);
+    if let Some(mut track) = db.track(track_id)? {
         track.title = title(scanned);
         track.artist_credit = tags.artist.clone().unwrap_or_default();
         track.sort_artist_credit = tags.sort_artist.clone();
         track.artists = catalog::artist_ids(db, &tags.artists, tags)?;
         db.save_track(&track)?;
     }
-    if let Some(mut version) = db.versions_of(known.track)?.into_iter().find(|v| v.id == known.version) {
+    if let Some(mut version) = db.versions_of(track_id)?.into_iter().find(|v| v.id == known.version) {
         version.duration = tags.duration.or(version.duration);
         version.album = catalog::placement(db, tags)?;
         version.release_year = tags.year;

@@ -13,7 +13,8 @@
 //! Р1.15): исчезнувший в этом скане ([`ScanDiff::missing`]) или давно
 //! недоступный ([`ScanDiff::gone`]). Файл на месте своего трека не отдаёт: копия
 //! рядом с живым оригиналом — новый трек; файл, который просто не увидели, тоже
-//! не отдаёт — он не в этих списках.
+//! не отдаёт — он не в этих списках. Файл, который скан уже завёл своим треком
+//! раньше, сюда не попадает — им занимается `twin` (Р9в).
 
 use std::collections::{HashMap, HashSet};
 
@@ -31,57 +32,85 @@ use crate::model::TrackPassport;
 /// Паспорта читаются одним запросом `track_passports()` по всему каталогу, из
 /// него берутся только треки пропавших: запрос на каждого пропавшего (два
 /// запроса на трек) держал бы замок ядра тем дольше, чем больше недоступных
-/// файлов накопил каталог.
+/// файлов накопил каталог. Так же, одним запросом, читаются свежие ID треков
+/// пропавших (`known_local_files()`: перепривязка могла сменить ID трека после
+/// того, как скан снял список знакомых файлов, Р9в, №19) и множество треков с
+/// данными пользователя (Р9в, №11).
 pub(super) fn relocate(db: &dyn DbAccess, diff: &mut ScanDiff, files: &mut [ScannedFile]) -> Result<usize, CoreError> {
     let any_new = files.iter().any(|file| file.known.is_none() && file.readable);
     if !any_new || (diff.missing.is_empty() && diff.gone.is_empty()) {
         return Ok(0);
     }
-    let wanted: HashSet<TrackId> = diff.missing.iter().chain(&diff.gone).map(|known| known.track).collect();
+    let wanted: HashSet<SourceId> = diff.missing.iter().chain(&diff.gone).map(|known| known.source).collect();
+    let mut fresh: HashMap<SourceId, KnownFile> = HashMap::with_capacity(wanted.len());
     let mut passports: HashMap<TrackId, TrackPassport> = HashMap::with_capacity(wanted.len());
+    let mut with_data: HashSet<TrackId> = HashSet::new();
     db.run(&mut |db| {
+        fresh.clear();
         passports.clear();
+        for known in db.known_local_files()?.into_values() {
+            if wanted.contains(&known.source) {
+                fresh.insert(known.source, known);
+            }
+        }
+        let tracks: HashSet<TrackId> = fresh.values().map(|known| known.track).collect();
         for passport in db.track_passports()? {
-            if wanted.contains(&passport.track) {
+            if tracks.contains(&passport.track) {
                 passports.insert(passport.track, passport);
             }
         }
+        with_data = db.tracks_with_user_data()?;
         Ok(())
     })?;
     let vanished = diff
         .missing
         .iter()
         .chain(&diff.gone)
-        .filter_map(|known| passports.get(&known.track).map(|passport| (*known, passport.clone())))
+        .filter_map(|known| {
+            let known = fresh.get(&known.source)?;
+            passports.get(&known.track).map(|passport| (*known, passport.clone()))
+        })
         .collect();
-    Ok(pair(diff, files, vanished))
+    Ok(pair(diff, files, vanished, &with_data))
 }
 
 /// Сводит новые файлы с пропавшими. Новые идут по порядку `files` (обход
-/// сортирует их по пути); для каждого — кандидаты с тем же ключом паспорта и
-/// лучший из них. При равном сходстве первым идёт файл, исчезнувший в этом
-/// скане (`diff.missing`), и только потом давно недоступный (`diff.gone`);
-/// внутри — трек, заведённый раньше (меньший ID). Пропавший берётся один раз,
+/// сортирует их по пути). Сначала раздаются пропавшие с данными пользователя
+/// (`with_data`), потом остальные; в каждой группе пары идут лучшими вперёд
+/// ([`TrackPassport::pair_up`]), а не по очереди пути; при равном сходстве первым
+/// идёт исчезнувший в этом скане (`diff.missing`), затем давно недоступный
+/// (`diff.gone`), затем более старый трек (меньший ID). Пропавший берётся один раз,
 /// новый файл сводится не больше чем с одним. Сведённый пропавший снимается с
 /// `diff`: иначе скан скрыл бы его снова.
-pub(super) fn pair(diff: &mut ScanDiff, files: &mut [ScannedFile], vanished: Vec<(KnownFile, TrackPassport)>) -> usize {
-    let mut groups: HashMap<(String, String), Candidates> = HashMap::new();
-    for (known, passport) in vanished {
-        groups.entry(passport.key()).or_default().push(known, passport);
-    }
-    for group in groups.values_mut() {
-        group.order();
-    }
+pub(super) fn pair(
+    diff: &mut ScanDiff,
+    files: &mut [ScannedFile],
+    vanished: Vec<(KnownFile, TrackPassport)>,
+    with_data: &HashSet<TrackId>,
+) -> usize {
+    let eligible: Vec<usize> =
+        files.iter().enumerate().filter(|(_, file)| file.known.is_none() && file.readable).map(|(i, _)| i).collect();
+    let wanted: Vec<TrackPassport> = eligible.iter().map(|&index| passport_of(&files[index])).collect();
+    let (owners, others): (Vec<_>, Vec<_>) =
+        vanished.into_iter().partition(|(known, _)| with_data.contains(&known.track));
 
     let mut taken: HashSet<SourceId> = HashSet::new();
-    for scanned in files.iter_mut().filter(|file| file.known.is_none() && file.readable) {
-        let passport = passport_of(scanned);
-        let Some(group) = groups.get_mut(&passport.key()) else { continue };
-        if let Some(index) = passport.best_match(&group.passports) {
-            let known = group.take(index);
+    let mut free: Vec<usize> = (0..wanted.len()).collect();
+    for group in [owners, others] {
+        let (vanished_files, candidates): (Vec<KnownFile>, Vec<TrackPassport>) = group.into_iter().unzip();
+        let remaining: Vec<TrackPassport> = free.iter().map(|&index| wanted[index].clone()).collect();
+        let pairs = TrackPassport::pair_up(&remaining, &candidates, |index| {
+            (!vanished_files[index].available, vanished_files[index].track)
+        });
+        let mut used: HashSet<usize> = HashSet::new();
+        for pair in pairs {
+            let index = free[pair.wanted];
+            used.insert(index);
+            let known = vanished_files[pair.candidate];
             taken.insert(known.source);
-            scanned.known = Some(known);
+            files[eligible[index]].known = Some(known);
         }
+        free.retain(|index| !used.contains(index));
     }
     if !taken.is_empty() {
         diff.missing.retain(|known| !taken.contains(&known.source));
@@ -102,35 +131,6 @@ fn passport_of(scanned: &ScannedFile) -> TrackPassport {
         duration: scanned.tags.duration,
         mbid: None,
         sources: Vec::new(),
-    }
-}
-
-/// Пропавшие одного ключа: паспорта и файлы рядом, по одному индексу.
-#[derive(Default)]
-struct Candidates {
-    passports: Vec<TrackPassport>,
-    files: Vec<KnownFile>,
-}
-
-impl Candidates {
-    fn push(&mut self, known: KnownFile, passport: TrackPassport) {
-        self.files.push(known);
-        self.passports.push(passport);
-    }
-
-    /// Сначала пропавшие в этом скане (до скана файл был доступен), потом давно
-    /// недоступные, внутри — по ID трека: при равенстве сходства `best_match`
-    /// берёт первого.
-    fn order(&mut self) {
-        let mut both: Vec<(KnownFile, TrackPassport)> =
-            std::mem::take(&mut self.files).into_iter().zip(std::mem::take(&mut self.passports)).collect();
-        both.sort_by_key(|(known, _)| (!known.available, known.track));
-        (self.files, self.passports) = both.into_iter().unzip();
-    }
-
-    fn take(&mut self, index: usize) -> KnownFile {
-        self.passports.remove(index);
-        self.files.remove(index)
     }
 }
 
@@ -194,7 +194,7 @@ mod tests {
         let mut diff = ScanDiff { missing: vec![one], gone: vec![two], ..ScanDiff::default() };
         let mut files = vec![found("/m/a.mp3"), found("/m/b.mp3"), found("/m/c.mp3")];
 
-        let moved = pair(&mut diff, &mut files, vec![(one, one_passport), (two, two_passport)]);
+        let moved = pair(&mut diff, &mut files, vec![(one, one_passport), (two, two_passport)], &HashSet::new());
 
         assert_eq!(moved, 2);
         assert!(diff.missing.is_empty() && diff.gone.is_empty());
@@ -212,7 +212,7 @@ mod tests {
         let mut diff = ScanDiff { missing: vec![a, b], ..ScanDiff::default() };
         let mut files = vec![found("/m/new.mp3")];
 
-        pair(&mut diff, &mut files, vec![(b, b_passport), (a, a_passport)]);
+        pair(&mut diff, &mut files, vec![(b, b_passport), (a, a_passport)], &HashSet::new());
 
         assert_eq!(files[0].known, Some(older));
         assert_eq!(diff.missing.len(), 1);
@@ -229,7 +229,7 @@ mod tests {
         let mut diff = ScanDiff { missing: vec![gone], ..ScanDiff::default() };
         let mut files = vec![unreadable, changed];
 
-        let moved = pair(&mut diff, &mut files, vec![(gone, passport)]);
+        let moved = pair(&mut diff, &mut files, vec![(gone, passport)], &HashSet::new());
 
         assert_eq!(moved, 0);
         assert_eq!(diff.missing, vec![gone]);

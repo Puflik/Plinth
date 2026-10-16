@@ -30,7 +30,7 @@ pub use artist::Artist;
 pub use blocklist::{BlockEntry, BlockTarget};
 pub use merge_decision::{DecidedBy, IdentityBasis, MergeDecision, TrackPair, Verdict};
 pub use online::{OnlineSource, OnlineTrack};
-pub use passport::TrackPassport;
+pub use passport::{Pairing, TrackPassport};
 pub use play_event::{OutputDevice, PlayEvent};
 pub use playlist::{Playlist, PlaylistEntry, PlaylistKind, ordered_entries, position_for};
 pub use plinth_types::ProviderId;

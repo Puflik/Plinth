@@ -1,14 +1,14 @@
 //! Учёт сканера (D1): какие локальные файлы уже в каталоге и какими они
 //! были при прошлом скане.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use plinth_types::{Availability, CoreError, EntityId, SourceId, Timestamp, TrackId, VersionId};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use crate::db::Database;
 use crate::db::codes::Code;
-use crate::db::sql::{Storage, id, opt_timestamp};
+use crate::db::sql::{Storage, first_id, id, opt_timestamp};
 
 /// Локальный файл, который каталог уже знает.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +55,33 @@ impl Database {
         rows.collect::<Result<_, _>>().storage()
     }
 
+    /// Треки каталога, на которые у пользователя есть данные: строка `track_user`,
+    /// запись плейлиста, прослушивание, решение о склейке (обе стороны), блокировка
+    /// трека — то же, что журнал считает данными (`referenced` в `core/sync`).
+    pub fn tracks_with_user_data(&self) -> Result<HashSet<TrackId>, CoreError> {
+        let mut statement = self
+            .conn()
+            .prepare(
+                "SELECT track FROM track_user
+                 UNION SELECT track FROM playlist_entry
+                 UNION SELECT track FROM play_event
+                 UNION SELECT track_low FROM merge_decision
+                 UNION SELECT track_high FROM merge_decision
+                 UNION SELECT target FROM block_entry WHERE kind = 'track'",
+            )
+            .storage()?;
+        statement.query_map([], first_id::<TrackId>).storage()?.collect::<Result<_, _>>().storage()
+    }
+
+    /// Трек, которому сейчас принадлежит версия; версии нет — `None`. ID версии и
+    /// источника перепривязка не меняет, ID трека — меняет.
+    pub fn track_of_version(&self, version: VersionId) -> Result<Option<TrackId>, CoreError> {
+        self.conn()
+            .query_row("SELECT track FROM version WHERE id = ?1", [version.as_bytes()], |row| id(row, "track"))
+            .optional()
+            .storage()
+    }
+
     /// Каким файл источника был при этом скане и в какой папке от корня тома лежит.
     pub fn save_file_stamp(
         &self,
@@ -93,12 +120,14 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use plinth_types::Timestamp;
+    use std::collections::HashSet;
+
+    use plinth_types::{Timestamp, TrackId, VersionId};
 
     use plinth_types::Timestamp as Time;
 
     use crate::db::repo::fixtures::{album, artist, creep, db};
-    use crate::model::{BlockEntry, BlockTarget, Subscription};
+    use crate::model::{BlockEntry, BlockTarget, Subscription, TrackUserData};
 
     #[test]
     fn local_files_are_known_by_path_with_their_stamp() {
@@ -179,5 +208,49 @@ mod tests {
 
         assert!(db.artist(subscribed.id).unwrap().is_some());
         assert!(db.artist(blocked.id).unwrap().is_some());
+    }
+
+    /// Голый трек данных не несёт, лайк — несёт, снятый лайк строки не оставляет.
+    /// Плейлист, прослушивание и обе стороны склейки — в `core/sync`
+    /// (`r9c_user_data_set`): там данные ставит сам журнал.
+    #[test]
+    fn a_liked_track_has_user_data_and_a_cleared_like_leaves_none() {
+        let db = db();
+        let (_, _, track, _, _) = creep(&db);
+        assert!(db.tracks_with_user_data().unwrap().is_empty(), "голый трек");
+
+        db.save_user_data(&TrackUserData { liked: true, ..TrackUserData::empty(track.id) }).unwrap();
+        assert_eq!(db.tracks_with_user_data().unwrap(), HashSet::from([track.id]));
+
+        db.save_user_data(&TrackUserData::empty(track.id)).unwrap();
+        assert!(db.tracks_with_user_data().unwrap().is_empty(), "снятый лайк");
+    }
+
+    /// Блокировка трека — данные трека, блокировка артиста — нет: в наборе только ID треков.
+    #[test]
+    fn only_a_blocked_track_counts_as_user_data() {
+        let db = db();
+        let (artist, _, track, _, _) = creep(&db);
+
+        db.block(&BlockEntry { target: BlockTarget::Artist(artist.id), since: Time::from_millis(1) }).unwrap();
+        assert!(db.tracks_with_user_data().unwrap().is_empty(), "артист заблокирован, треки нет");
+
+        db.block(&BlockEntry { target: BlockTarget::Track(track.id), since: Time::from_millis(2) }).unwrap();
+        assert_eq!(db.tracks_with_user_data().unwrap(), HashSet::from([track.id]));
+    }
+
+    /// Версия знает свой трек; нет такой версии — нет и трека. После `rekey_track`
+    /// версия идёт за треком: ID версии и источника перепривязка не меняет.
+    #[test]
+    fn a_version_knows_its_track_and_follows_it_when_the_id_changes() {
+        let db = db();
+        let (_, _, track, version, _) = creep(&db);
+
+        assert_eq!(db.track_of_version(version.id).unwrap(), Some(track.id));
+        assert_eq!(db.track_of_version(VersionId::new()).unwrap(), None);
+
+        let restored = TrackId::new();
+        db.rekey_track(track.id, restored).unwrap();
+        assert_eq!(db.track_of_version(version.id).unwrap(), Some(restored));
     }
 }
