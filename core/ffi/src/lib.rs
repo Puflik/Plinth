@@ -19,6 +19,8 @@ mod r1_12_tests;
 mod r1_4_tests;
 #[cfg(test)]
 mod r1_5_tests;
+#[cfg(test)]
+mod r9b_tests;
 mod session;
 #[cfg(test)]
 mod testing;

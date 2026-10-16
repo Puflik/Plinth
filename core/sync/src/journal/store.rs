@@ -420,6 +420,9 @@ fn keep_aside(dir: &Path, path: &Path, why: &str) -> Result<(), CoreError> {
 }
 
 #[cfg(test)]
+mod r9b_tests;
+
+#[cfg(test)]
 mod tests {
     use std::fs::{self, OpenOptions};
     use std::io::Write;
