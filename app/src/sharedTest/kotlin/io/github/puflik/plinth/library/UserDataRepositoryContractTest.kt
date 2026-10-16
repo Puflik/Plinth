@@ -6,6 +6,7 @@ import io.github.puflik.plinth.ffi.TrackId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -95,6 +96,27 @@ abstract class UserDataRepositoryContractTest {
 
             assertThat(seen.first { it == true }).isTrue()
             subscription.cancel()
+        }
+
+    /**
+     * Р9а: плеер держит трек файла дольше одного вызова — поток отдаёт его сейчас, первым
+     * (файла в фонотеке нет — `null`), и снова, когда фонотека изменилась: скан нашёл файл.
+     * Перепривязка меняет ID трека под тем же путём так же — новым значением потока.
+     */
+    @Test
+    fun the_track_of_a_file_follows_the_catalog() =
+        contract { repository ->
+            val seen = MutableStateFlow(emptyList<TrackId?>())
+            val subscription =
+                launch { repository.trackAtChanges(SONG).collect { found -> seen.update { it + found } } }
+            seen.first { it.isNotEmpty() }
+
+            seed(repository, listOf(SONG))
+            val song = checkNotNull(repository.trackAt(SONG))
+            seen.first { song in it }
+
+            subscription.cancel()
+            assertThat(seen.value).containsExactly(null, song).inOrder()
         }
 
     @Test
