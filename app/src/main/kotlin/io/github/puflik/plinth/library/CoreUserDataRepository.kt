@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 
 /**
@@ -23,6 +24,13 @@ class CoreUserDataRepository(
     private val io: CoroutineDispatcher,
 ) : UserDataRepository {
     override suspend fun trackAt(uri: String): TrackId? = attempt(io, TAG, "track lookup") { core.library.trackAt(uri) }
+
+    override fun trackAtChanges(uri: String): Flow<TrackId?> =
+        core.catalogChanges
+            .mapNotNull { quietly(TAG, "track lookup") { Lookup(core.library.trackAt(uri)) } }
+            .map { it.track }
+            .distinctUntilChanged()
+            .flowOn(io)
 
     override fun liked(track: TrackId): Flow<Boolean> =
         core.userDataChanges
@@ -43,6 +51,11 @@ class CoreUserDataRepository(
 
     override suspend fun recentPlays(limit: Int): List<PlayEvent> =
         attempt(io, TAG, "history read") { core.journal.recentPlays(limit) }.orEmpty()
+
+    /** Ответ поиска: `null` внутри — файла в фонотеке нет; отказ ядра — не ответ вовсе. */
+    private data class Lookup(
+        val track: TrackId?,
+    )
 
     private companion object {
         const val TAG = "UserData"
