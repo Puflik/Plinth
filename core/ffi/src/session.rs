@@ -155,8 +155,15 @@ impl Core {
             Err(poisoned) => {
                 let mut state = poisoned.into_inner();
                 log::warn!("core: a call panicked mid-way; saving the journal and rebuilding the projection");
-                state.journal.compact()?;
-                rebuild(&state.journal, &state.db)?;
+                // Место могло кончиться: чтения и следующие записи не должны от этого отказывать.
+                // Журнал помнит, что на диске не всё (следующая правка положит всё снимком), а
+                // отставшую проекцию догонит метка журнала.
+                if let Err(error) = state.journal.compact() {
+                    log::warn!("core: the journal was not saved after the panic, the next write retries: {error}");
+                }
+                if let Err(error) = rebuild(&state.journal, &state.db) {
+                    log::warn!("core: the projection was not rebuilt after the panic, the next write retries: {error}");
+                }
                 self.state.clear_poison();
                 state
             }

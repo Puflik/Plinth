@@ -61,26 +61,28 @@ impl Journal {
     /// паника тоже ошибка («journal: unreadable snapshot: panicked: …»). Что
     /// с таким снимком делать, решает вызывающий: [`damaged_snapshot`],
     /// [`start_over`].
+    ///
+    /// Хвост читается так, как сказано в `store.rs`: порча и несошедшийся
+    /// заголовок откладывают файл рядом, а годные кадры применяются. Кадр,
+    /// который `yrs` не разбирает или применяет паникой, пропускается (после
+    /// паники документ собирается заново без него) и тоже откладывается. Ремонт
+    /// — свёртка в снимок — не требует места, чтобы просто открыться: не вышел —
+    /// `warn`, и первая же правка положит всё снимком.
     pub fn open(dir: &Path, device: DeviceId) -> Result<Self, CoreError> {
         let (store, loaded) = Store::open(dir)?;
-        let doc = Doc::new();
-        let roots = Roots::new(&doc);
-        if !loaded.snapshot.is_empty() {
-            apply_snapshot(&doc, &loaded.snapshot).map_err(|reason| unreadable("snapshot", &reason))?;
-        }
-        {
-            let mut txn = doc.transact_mut();
-            for (index, frame) in loaded.frames.iter().enumerate() {
-                // Сумма кадра сошлась, значит, байты те, что записаны: не
-                // разбирается — ошибка кода, не диска. Кадр пропускается.
-                if let Err(error) = apply_v1(&mut txn, frame) {
-                    log::error!("journal: frame {index} is not an update: {error}");
-                }
-            }
-        }
+        let frames: Vec<&[u8]> = loaded.frames.iter().chain(&loaded.salvaged).map(Vec::as_slice).collect();
+        let (doc, roots, skipped) = load(&loaded.snapshot, &frames)?;
         let mut journal = Self { doc, roots, store, device };
-        if loaded.repair {
-            journal.compact()?;
+        if skipped > 0 {
+            // Кадр, который не обновление, не пропадает без следа: свёртка ниже унесла бы его.
+            journal.store.keep_tail_aside("damaged");
+        }
+        if loaded.repair || skipped > 0 {
+            // Свёртка нужна месту: не вышла — не отказ открытия. Журнал помнит, что на диске
+            // не всё, и первая же правка положит всё снимком.
+            if let Err(error) = journal.compact() {
+                log::warn!("journal: the repair is not saved yet, the next write retries: {error}");
+            }
         }
         Ok(journal)
     }
@@ -183,7 +185,12 @@ impl Journal {
 
     /// Сворачивает хвост в снимок, не дожидаясь его длины.
     pub fn compact(&mut self) -> Result<(), CoreError> {
-        self.store.compact(&snapshot(&self.doc))
+        let result = self.store.compact(&snapshot(&self.doc));
+        if result.is_err() {
+            // Документ мог уйти вперёд диска (паника посреди вызова): следующая правка положит всё снимком.
+            self.store.mark_unsaved();
+        }
+        result
     }
 
     /// Всё состояние журнала — update v2, как в его файле `snapshot`. Из
@@ -244,6 +251,51 @@ fn apply_snapshot(doc: &Doc, snapshot: &[u8]) -> Result<(), String> {
         doc.transact_mut().apply_update(update).map_err(|e| e.to_string())
     }));
     applied.unwrap_or_else(|payload| Err(format!("panicked: {}", panic_text(payload.as_ref()))))
+}
+
+/// Сколько кадров хвоста могут уронить `yrs` паникой, прежде чем хвост считается нечитаемым целиком.
+const MAX_PANICKING_FRAMES: usize = 8;
+
+/// Документ из снимка и кадров хвоста. Кадр, который `yrs` не разбирает или применяет
+/// паникой, — не обновление: он пропускается, остальные читаются. Паника при применении
+/// могла оставить документ наполовину собранным, поэтому он собирается заново без этого
+/// кадра. Число — сколько кадров пропущено.
+fn load(snapshot: &[u8], frames: &[&[u8]]) -> Result<(Doc, Roots, usize), CoreError> {
+    let mut skipped: Vec<usize> = Vec::new();
+    'rebuild: loop {
+        let doc = Doc::new();
+        let roots = Roots::new(&doc);
+        if !snapshot.is_empty() {
+            apply_snapshot(&doc, snapshot).map_err(|reason| unreadable("snapshot", &reason))?;
+        }
+        let mut rejected = 0;
+        {
+            let mut txn = doc.transact_mut();
+            for (index, frame) in frames.iter().enumerate() {
+                if skipped.contains(&index) {
+                    continue;
+                }
+                // Сумма кадра сошлась, значит, байты те, что записаны: не разбирается —
+                // ошибка кода, не диска. Кадр пропускается.
+                match std::panic::catch_unwind(AssertUnwindSafe(|| apply_v1(&mut txn, frame))) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        log::error!("journal: frame {index} is not an update: {error}");
+                        rejected += 1;
+                    }
+                    Err(payload) => {
+                        log::error!("journal: frame {index} made yrs panic: {}", panic_text(payload.as_ref()));
+                        skipped.push(index);
+                        if skipped.len() > MAX_PANICKING_FRAMES {
+                            skipped = (0..frames.len()).collect();
+                        }
+                        continue 'rebuild;
+                    }
+                }
+            }
+        }
+        return Ok((doc, roots, skipped.len() + rejected));
+    }
 }
 
 fn panic_text(payload: &(dyn Any + Send)) -> &str {
