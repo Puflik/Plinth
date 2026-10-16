@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After a power cut in the middle of a huge playlist import, the library
   opens quickly and simply drops the unfinished import. Copies of damaged
   journal files no longer pile up: only the newest few are kept.
+- Moving music to the SD card the usual way, copying first and deleting the
+  originals later, no longer leaves likes, playlists and listening history on
+  a hidden song: the song keeps them and plays from its new place. The same
+  goes for a file a scan caught half-copied. A song from another album is
+  never taken for the moved one.
+- When several songs with the same title move at once, each lands on the file
+  that matches it best, and the one you liked or played comes first.
+- Tags edited while a restore ran during a rescan are no longer stuck: the
+  scan saves them to the restored song.
 
 ## [0.2.3] - 2026-10-15
 
