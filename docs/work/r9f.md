@@ -383,4 +383,80 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+Всё из плана сделано, защищённые тесты не тронуты (`git diff 5d260e8 HEAD` по их файлам пуст; в `mod tests` файла `store.rs` правок нет),
+`#[ignore]`/`#[allow]`/`@Ignore`/`@Suppress` не добавлялись.
+
+**Коммиты** (ветка `work/r9f`, запушены без прокси):
+`516a373` — ядро (`store.rs`, `session.rs`, `mirror_api.rs`); `9fc68c7` — ресурсы (правила Auto Backup, строки); `5a7c816` — Kotlin и
+инструментальный `R9fRetryOpeningTest`; `2e4cca2` — ADR 0007; `79917c0` — отступ над подсказкой (найдено на эмуляторе); затем коммит с этим отчётом.
+
+### Что сделано
+
+1. **`store.rs`:** `ASIDE_DIR`; `keep_copy` — единственная запись копии (временный `<имя>.tmp` → `fsync` → `rename` → `sync_dir(aside)`, любая ошибка
+   стирает временный и уходит наверх; `cut` только для проверки: без `cfg(test)` всегда `false`); `next_stamp` = `max(сейчас, наибольшая прежняя + 1)`;
+   `prune_aside` переносит копии сборок до Р9е из `journal/` в `aside/`, стирает остатки `*.tmp` и оставляет новейшие по метке; крючок
+   `fail_next_aside_midway` (`cfg(test)`); шапка модуля поправлена. Папку `aside/` заводит только первая копия или перенос.
+2. **`session.rs`, `mirror_api.rs`:** `RESTORE_PENDING`, `Core::dir`; `open_journal` после `start_over` с `carried == 0` ставит пометку
+   (`write_durably`, не записалась — `warn`); экспортированы `restore_pending()` (`is_file()`) и `dismiss_restore_pending()`; `restore_mirror` снимает
+   пометку при `merged > 0`.
+3. **Kotlin:** `CoreErrors.opened(report)`; `PlinthCore` читает отчёт в `lazy` сразу после `Core.open` (`announce`: лог «journal started over» / «core restored»,
+   `errors.opened`, отказ чтения — `warn`); `CoreInitializer` отчёт больше не читает; `ErrorPresenter.shown` + `ErrorNoticesViewModel.shown` +
+   вызов в `ErrorNotices` после `showSnackbar`; `JournalMirror`/`CoreMirror`/`CoreJournalMirror`: `restorePending`, `dismissRestorePending`;
+   `BackupViewModel` (`restorePending`, `UNREADABLE`, `NOTHING_TO_RESTORE`, `onDismissPending`, `refreshPending` в `init`/`onRestore`/`onDecline`);
+   `backupSection(…, onDismissPending)` и `RestorePending`; `SafMirrorFolder.read` отдаёт файл больше 64 МБ пустым `MirrorFile` (в лог — размер);
+   `writeInto` сверяет размер временного файла до удаления прежней копии, `renameDocument == null` — `IOException`.
+4. **Ресурсы:** `<exclude domain="file" path="core/journal/aside/"/>` в `data_extraction_rules.xml` (оба раздела) и `backup_rules.xml`; четыре строки в
+   `values/` и `values-ru/` (тексты из плана).
+5. **ADR 0007:** абзац про `aside/` и `restore-pending`, строка в «Статусе».
+
+### Проверки (на `79917c0`)
+
+- `cargo test -p plinth-sync -p plinth-library -p plinth-ffi --no-fail-fast`: 55 тестовых бинарей, 651 тест, 0 падений (до реализации новые падали:
+  5 из 6 в `r9f_aside_folder`, остальные не собирались); `cargo clippy --workspace --all-targets -- -D warnings` чист; `cargo fmt --all -- --check` — без `Diff in`.
+- `ktlintCheck`, `detekt`, `lintGithubDebug` — чисто. `testGithubDebugUnitTest` и `testFdroidDebugUnitTest`: 708 тестов, падают только четыре известных
+  `DataStore*SettingsTest` (Windows). Новые Kotlin-классы: `R9fToldAfterShownTest` 5, `R9fOpeningReportTest` 5, `R9fBackupPendingTest` 8,
+  `R9fBackupRulesTest` 2, а также `BackupViewModelTest`, `ErrorPresenterTest`, `R14JournalNoticeTest`, `BackupRulesTest`, `FakeJournalMirrorTest`,
+  `RussianTranslationTest` — зелёные.
+- Эмулятор `Medium_Phone_API_36.0` (`ANDROID_SERIAL=emulator-5554`), пакеты `ffi` и `backup` целиком: `CoreInitializerTest`, `CoreScanTest`, `PlinthCoreTest`,
+  `R14CoreOpeningTest`, `R9fRetryOpeningTest` (18 тестов), `ReinstallRestoreTest`, `CoreJournalMirrorContractTest` (11) — 0 падений. Первый запуск с
+  перечнем классов через запятую выполнил только один класс (запятая теряется при вызове `gradlew.bat`), поэтому прогнаны по пакетам.
+
+### Руками на эмуляторе (debug-сборка, свой профиль; на телефон автора ничего не ставилось)
+
+- Здоровый журнал: в `files/core/journal/` только `snapshot` и `tail`, `aside/` нет.
+- Последний байт `snapshot` испорчен, `library.db*` удалены → запуск: снизу «Likes and playlists were damaged. Restore them from your backup…»; в логе
+  «Core: journal started over»; рядом с `device` появился `restore-pending`, в `journal/aside/` — `snapshot.damaged-<мс>` и `tail.foreign-<мс>` (без `*.tmp`).
+- Поворот экрана через ~5 с после запуска: строка снимается и возвращается (через 2 с); дождались, пока она кончится сама, повернули ещё раз — не возвращается.
+  Второй такой же запуск: в `aside/` остались по одной копии, старые стёрты.
+- Настройки → «Data backup»: под строкой папки подсказка «…haven’t come back yet…» и «Hide»; «Hide» убирает её и стирает `restore-pending`.
+- Папка без копии при пометке → тост «There is no copy to restore from in this folder.»; папка с файлом формата 2 (`PLNM` + `02`) → «The folder holds a copy that
+  Plinth can’t read…»; файл 70 МБ → то же, в логе «a journal copy is too large to read (73400320 bytes), left untouched», ядро «skipped a file: parse: too short»,
+  файл в папке не тронут. Запись своей копии через SAF (`<установка>.journal`, 30 байт, провайдер внутренней памяти) прошла с новой сверкой размера, `*.tmp` не осталось.
+
+### Решения исполнителя и отступления (для Opus)
+
+1. **`CoreInitializer`:** параметр `errors` остался в конструкторе — его передают `CoreModule` и два существующих инструментальных теста, которые менять нельзя, —
+   но не используется. `private val` убран (detekt `UnusedPrivateProperty`), `@Suppress` не ставил; KDoc объясняет. Убрать параметр можно отдельной правкой вместе с `CoreModule`
+   и тестами.
+2. **`writeInto`** пришлось разделить (`writeTemporary`, `checkWritten`): detekt `ThrowsCount` — не больше двух `throw` в функции.
+3. **`mark_restore_pending`** при неудаче ещё стирает `restore-pending.tmp` (в плане не было; иначе при каталоге на месте пометки оставался бы временный файл).
+   **`clear_restore_pending`**: на месте пометки не файл (каталог) — `Ok`, ничего не стирается, как и `restore_pending() == false`.
+4. **ADR:** кроме абзаца и строки в «Статусе» заменено предложение в разделе о копиях рядом («Исключить копии правилами нельзя … решение за автором»): с `aside/` оно
+   стало неверным.
+5. **Порядок коммитов:** ресурсы идут раньше Kotlin (код ссылается на новые строки, иначе коммит Kotlin не собирается). Комментарии в XML — две строки, а не одна.
+6. **Отступ** `Modifier.padding(top = 8.dp)` над подсказкой: на эмуляторе она сливалась со строкой «No folder chosen…».
+
+### Замечено, не в этой задаче
+
+- **Тост обрезает `backup_unreadable`.** На Android 12+ текстовый тост — две строки: видно «…не может прочитать: она записана более новой версией,…», а «повреждена или слишком
+  велика. Файл не тронут» — нет (проверено на английской; русскую руками не смотрел, длина у неё та же). Тексты заданы планом, не менял. Варианты: сократить обе строки
+  или показывать этот итог не тостом (остальные исходы `BackupPrompts` короче и помещаются).
+- **`BackupViewModel` читает пометку при создании и после действий.** Если в этот момент ядро не открылось, `restorePending() == null` читается как «нет», и подсказка появится
+  при следующем создании модели (повтор открытия сам её не обновляет).
+- **Прочие вести** (`CoreFailed`, пропуски) по-прежнему считаются сказанными до показа — как записано в «Замечено» выше.
+
+### Не проверено
+
+- Ветки отказа `SafMirrorFolder.writeInto` (размер временного файла не сошёлся; `renameDocument` вернул `null`): провайдер внутренней памяти сообщает размер верно и переименовывает,
+  вызвать их нечем; на JVM не проверить. Код — по плану.
+- Русская локаль — только `RussianTranslationTest` (сверка наборов строк), руками не смотрел. Телефон автора (HiOS) и CI на Linux не запускались: пуш в `work/r9f` запустит CI.
