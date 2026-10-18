@@ -144,12 +144,20 @@ class PlinthCore(
      */
     internal fun <T> quietCall(block: (Core) -> T): T = mapped { block(core()) }
 
-    /** Вызов API: отказ — исключением и в поток [errors]. */
-    internal fun <T> call(block: (Core) -> T): T =
+    /**
+     * Вызов API: отказ — исключением и в поток [errors]. [saving] — вызов
+     * записывает пользовательское (лайк, плейлист…): отказ хранилища на нём
+     * значит «правка не на диске», и `ErrorPresenter` говорит об этом каждый раз,
+     * а не раз за запуск, как об остальных отказах ядра.
+     */
+    internal fun <T> call(
+        saving: Boolean = false,
+        block: (Core) -> T,
+    ): T =
         try {
             block(core())
         } catch (e: CoreException) {
-            val failure = CoreFailure.of(e)
+            val failure = CoreFailure.of(e, saving)
             errors.report(failure)
             throw failure
         }

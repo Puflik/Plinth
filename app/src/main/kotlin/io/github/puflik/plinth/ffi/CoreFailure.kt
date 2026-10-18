@@ -16,8 +16,14 @@ class CoreFailure(
     cause: Throwable,
 ) : Exception(message, cause) {
     internal companion object {
-        /** `CoreException` ядра → отказ с видом ошибки. */
-        fun of(exception: CoreException): CoreFailure {
+        /**
+         * `CoreException` ядра → отказ с видом ошибки. [saving] — отказал вызов,
+         * который записывал пользовательское (лайк, плейлист…): правка не на диске.
+         */
+        fun of(
+            exception: CoreException,
+            saving: Boolean = false,
+        ): CoreFailure {
             val problem =
                 when (exception) {
                     is CoreException.Storage -> CoreProblem.STORAGE
@@ -26,7 +32,7 @@ class CoreFailure(
                     is CoreException.Unavailable -> CoreProblem.UNAVAILABLE
                     is CoreException.Internal -> CoreProblem.INTERNAL
                 }
-            return CoreFailure(AppError.CoreFailed(problem), exception.message, exception)
+            return CoreFailure(AppError.CoreFailed(problem, saving), exception.message, exception)
         }
     }
 }

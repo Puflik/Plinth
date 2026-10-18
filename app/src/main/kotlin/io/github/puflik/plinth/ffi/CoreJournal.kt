@@ -75,7 +75,7 @@ class CoreJournal internal constructor(
     ): PlaylistImport = write { it.importPlaylist(name, content, folder).toApp() }
 
     /** Записывает прослушивание; засчитать ли его в счётчик, решает ядро. */
-    fun recordPlay(play: NewPlay): PlayEventId = write { PlayEventId(it.recordPlay(play.toRust())) }
+    fun recordPlay(play: NewPlay): PlayEventId = write(saving = false) { PlayEventId(it.recordPlay(play.toRust())) }
 
     /** Последние [limit] прослушиваний всей библиотеки, новые первыми. */
     fun recentPlays(limit: Int): List<PlayEvent> {
@@ -87,9 +87,17 @@ class CoreJournal internal constructor(
 
     fun setVersionPreference(preference: VersionPreference) = write { it.setVersionPreference(preference.toRust()) }
 
-    /** Запись в журнал: после неё списки с пользовательским перечитают ядро. */
-    private inline fun <T> write(crossinline block: (Core) -> T): T =
-        core.call { block(it) }.also { core.userDataChanged() }
+    /**
+     * Запись в журнал: после неё списки с пользовательским перечитают ядро.
+     * Отказ записи — «не сохранено» ([saving]), и сердце со списками не меняются:
+     * `userDataChanged()` при исключении не зовётся. Прослушивание — не правка
+     * человека: на полном диске сообщение шло бы после каждого трека, поэтому
+     * [recordPlay] пишет с `saving = false`.
+     */
+    private inline fun <T> write(
+        saving: Boolean = true,
+        crossinline block: (Core) -> T,
+    ): T = core.call(saving) { block(it) }.also { core.userDataChanged() }
 
     private companion object {
         val STARS = 1..5

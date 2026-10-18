@@ -30,7 +30,8 @@ import kotlinx.coroutines.launch
  * Сообщения об ошибках — строкой внизу, на любом экране. Приложение в фоне —
  * сказать некому: ошибка остаётся только в логе. Об остановке на открытом
  * плеере строка молчит — плеер сам пишет ошибку под названием. Отказ ядра —
- * «что-то пошло не так» с кнопкой «Сохранить лог» (план 17.6).
+ * «что-то пошло не так» с кнопкой «Сохранить лог» (план 17.6). Правка, что не
+ * записалась (лайк, плейлист), — «не сохранено», дольше обычного и без кнопки.
  */
 @Composable
 fun ErrorNotices(
@@ -92,14 +93,21 @@ private fun Resources.text(notice: ErrorNotice): String =
                 getQuantityString(R.plurals.error_stopped_many, notice.count, notice.count)
             }
         ErrorNotice.CoreFailed -> getString(R.string.error_core_failed)
+        ErrorNotice.NotSaved -> getString(R.string.error_not_saved)
         ErrorNotice.LibraryRestored -> getString(R.string.notice_library_restored)
         is ErrorNotice.JournalStartedOver ->
             getString(if (notice.carried) R.string.notice_journal_started_over else R.string.notice_journal_lost)
     }
 
-/** О журнале, начатом заново, говорим дольше: в строке — что делать дальше. */
+/**
+ * О журнале, начатом заново, и о правке, что не записалась, говорим дольше:
+ * в строке — что случилось с данными человека и, у журнала, что делать дальше.
+ */
 private fun duration(notice: ErrorNotice) =
-    if (notice is ErrorNotice.JournalStartedOver) SnackbarDuration.Long else SnackbarDuration.Short
+    when (notice) {
+        is ErrorNotice.JournalStartedOver, ErrorNotice.NotSaved -> SnackbarDuration.Long
+        else -> SnackbarDuration.Short
+    }
 
 private fun Resources.name(track: FailedTrack): String = track.title ?: getString(R.string.error_untitled)
 

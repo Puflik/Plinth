@@ -229,6 +229,7 @@
     <string name="error_problem_unknown">ошибка воспроизведения</string>
     <string name="error_untitled">трек без названия</string>
     <string name="error_core_failed">Что-то пошло не так</string>
+    <string name="error_not_saved">Не удалось сохранить изменение. Возможно, на устройстве кончилось место.</string>
     <string name="notice_library_restored">Библиотека восстановлена: лайки и плейлисты на месте, треки вернёт скан</string>
     <string name="notice_journal_started_over">Лайки и плейлисты были повреждены — Plinth собрал их заново по библиотеке</string>
     <string name="notice_journal_lost">Лайки и плейлисты были повреждены. Верните их из копии: Настройки → Копия данных, выберите ту же папку</string>

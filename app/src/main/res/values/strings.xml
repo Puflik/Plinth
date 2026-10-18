@@ -216,6 +216,7 @@
     <string name="error_problem_unknown">playback failed</string>
     <string name="error_untitled">untitled track</string>
     <string name="error_core_failed">Something went wrong</string>
+    <string name="error_not_saved">Couldn’t save the change. The device may be out of space.</string>
     <string name="notice_library_restored">Library restored: likes and playlists are safe, tracks are coming back with the scan</string>
     <string name="notice_journal_started_over">Likes and playlists were damaged and have been rebuilt from your library</string>
     <string name="notice_journal_lost">Likes and playlists were damaged. Restore them from your backup: Settings → Data backup, choose the same folder</string>
