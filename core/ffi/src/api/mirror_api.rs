@@ -5,9 +5,13 @@
 //! Файл — на установку: имя — идентификатор установки (`device`). Он новый
 //! после переустановки и не попадает в Auto Backup, поэтому копия прошлой
 //! установки для новой — чужая, и новая её не перезапишет.
+//!
+//! Журнал, начатый заново из базы, помнит установку, которую сменил (Р9д): её копия —
+//! прежняя. Ядро узнаёт её по имени файла, поэтому имена идут вместе с содержимым
+//! (`Candidate`): данных из прежней копии «Восстановить» не берёт, паспорта — берёт.
 
 use plinth_sync::journal::{describe_changed, describe_missing, relink};
-use plinth_sync::mirror::{copy_of, inspect, restore};
+use plinth_sync::mirror::{Candidate, copy_of, inspect_named, restore_named};
 use plinth_types::{CoreError, Timestamp};
 
 use crate::panic;
@@ -28,7 +32,9 @@ pub struct MirrorFound {
     pub plays: u32,
     /// Время самой свежей копии; прочитанных нет — `None`.
     pub written_at: Option<Timestamp>,
-    /// Есть то, чего журнал ещё не знает, — есть что восстанавливать.
+    /// Есть что восстанавливать: копия живой установки с тем, чего журнал ещё не знает, или
+    /// паспорт трека из копии сменённой (Р9д). Одна копия, снятая до порчи журнала, данных не
+    /// предлагает.
     pub news: bool,
     /// Файлы, которые не прочлись.
     pub unreadable: u32,
@@ -36,7 +42,8 @@ pub struct MirrorFound {
 
 #[derive(uniffi::Record, Debug, PartialEq, Eq)]
 pub struct MirrorRestore {
-    /// Копии, принёсшие новое.
+    /// Копии, принёсшие новое: живые, влитые в журнал, и копии сменённой установки,
+    /// отдавшие хотя бы один паспорт.
     pub merged: u32,
     pub unreadable: u32,
     /// Треки библиотеки, узнанные по паспорту.
@@ -60,7 +67,7 @@ impl Core {
     pub fn inspect_mirror(&self, files: Vec<MirrorFile>) -> Result<MirrorFound, CoreError> {
         panic::guard(|| {
             self.with(|state| {
-                let found = inspect(&state.journal, &others(state, &files))?;
+                let found = inspect_named(&state.journal, &others(state, &files))?;
                 Ok(MirrorFound {
                     likes: count(found.likes),
                     playlists: count(found.playlists),
@@ -73,13 +80,13 @@ impl Core {
         })
     }
 
-    /// Вливает копии `files` в журнал, кроме своей; база пересобирается,
-    /// треки библиотеки узнаются по паспортам.
+    /// Вливает копии `files` в журнал, кроме своей и копий сменённой установки (из тех
+    /// берутся только паспорта); база пересобирается, треки библиотеки узнаются по паспортам.
     pub fn restore_mirror(&self, files: Vec<MirrorFile>) -> Result<MirrorRestore, CoreError> {
         panic::guard(|| {
             self.with(|state| {
                 let others = others(state, &files);
-                let restored = restore(&mut state.journal, &state.db, &others)?;
+                let restored = restore_named(&mut state.journal, &state.db, &others)?;
                 Ok(MirrorRestore {
                     merged: count(restored.merged),
                     unreadable: count(restored.unreadable),
@@ -112,9 +119,14 @@ fn own_name(state: &State) -> String {
     format!("{}.journal", state.journal.device())
 }
 
-fn others<'a>(state: &State, files: &'a [MirrorFile]) -> Vec<&'a [u8]> {
+/// Чужие файлы папки с именами: свой, как и его временный файл, пропускается.
+fn others<'a>(state: &State, files: &'a [MirrorFile]) -> Vec<Candidate<'a>> {
     let own = state.journal.device().to_string();
-    files.iter().filter(|file| !file.name.starts_with(&own)).map(|file| file.content.as_slice()).collect()
+    files
+        .iter()
+        .filter(|file| !file.name.starts_with(&own))
+        .map(|file| Candidate { name: Some(file.name.as_str()), bytes: file.content.as_slice() })
+        .collect()
 }
 
 fn count(value: usize) -> u32 {
