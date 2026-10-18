@@ -65,6 +65,7 @@ fun BackupStep(viewModel: BackupViewModel = hiltViewModel()) {
 internal fun LazyListScope.backupSection(
     state: BackupUiState,
     onPick: () -> Unit,
+    onDismissPending: () -> Unit,
 ) {
     item(key = "backup") {
         ListItem(
@@ -80,6 +81,7 @@ internal fun LazyListScope.backupSection(
                         },
                     )
                     if (folder != null) CopyStatus(state)
+                    if (state.restorePending) RestorePending(onDismissPending)
                 }
             },
             trailingContent = {
@@ -117,6 +119,8 @@ fun BackupPrompts(
             BackupOutcome.NO_ACCESS -> R.string.backup_no_access
             BackupOutcome.NOT_WRITABLE -> R.string.backup_not_writable
             BackupOutcome.FAILED -> R.string.backup_failed
+            BackupOutcome.UNREADABLE -> R.string.backup_unreadable
+            BackupOutcome.NOTHING_TO_RESTORE -> R.string.backup_nothing_to_restore
             null -> null
         }
     LaunchedEffect(message) {
@@ -125,6 +129,16 @@ fun BackupPrompts(
             viewModel.onOutcomeShown()
         }
     }
+}
+
+/**
+ * Журнал начат заново пустым, и данные не вернулись (Р9е): подсказка выбрать папку с копией и
+ * кнопка «Скрыть». Это не отказ, а подсказка, поэтому обычный цвет текста.
+ */
+@Composable
+private fun RestorePending(onDismiss: () -> Unit) {
+    Text(text = stringResource(R.string.backup_pending), style = MaterialTheme.typography.bodyMedium)
+    TextButton(onClick = onDismiss) { Text(stringResource(R.string.backup_pending_dismiss)) }
 }
 
 /** Отказ папки — красным, иначе — когда копия записана в последний раз; ещё не писалась — ничего. */

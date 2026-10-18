@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
  * плеере строка молчит — плеер сам пишет ошибку под названием. Отказ ядра —
  * «что-то пошло не так» с кнопкой «Сохранить лог» (план 17.6). Правка, что не
  * записалась (лайк, плейлист), — «не сохранено», дольше обычного и без кнопки.
+ * Вести «библиотека восстановлена» и «журнал начат заново» считаются сказанными,
+ * когда строка показана до конца: отменённая поворотом экрана придёт снова.
  */
 @Composable
 fun ErrorNotices(
@@ -50,17 +52,20 @@ fun ErrorNotices(
             if (notice is ErrorNotice.Stopped && onPlayer) return@showWhileStarted
             // Строки показываются по очереди; сбор не ждёт, пока закроется прошлая.
             launch {
-                if (notice is ErrorNotice.CoreFailed) {
-                    val result =
+                val result =
+                    if (notice is ErrorNotice.CoreFailed) {
                         snackbar.showSnackbar(
                             resources.text(notice),
                             actionLabel = saveLogLabel,
                             duration = SnackbarDuration.Long,
                         )
-                    if (result == SnackbarResult.ActionPerformed) saveLog()
-                } else {
-                    snackbar.showSnackbar(resources.text(notice), duration = duration(notice))
-                }
+                    } else {
+                        snackbar.showSnackbar(resources.text(notice), duration = duration(notice))
+                    }
+                // Сказано, когда показано (Р9е): поворот или уход ниже STARTED отменяет корутину
+                // до этой строки, и при новом сборе весть придёт снова.
+                viewModel.shown(notice)
+                if (result == SnackbarResult.ActionPerformed) saveLog()
             }
         }
     }

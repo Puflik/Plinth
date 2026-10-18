@@ -1,5 +1,6 @@
 package io.github.puflik.plinth.ffi
 
+import io.github.puflik.plinth.diagnostics.log.AppLog
 import io.github.puflik.plinth.diagnostics.log.LogLevel
 import io.github.puflik.plinth.ffi.generated.Core
 import io.github.puflik.plinth.ffi.generated.CoreException
@@ -27,6 +28,9 @@ import io.github.puflik.plinth.ffi.generated.start as coreStart
  *
  * Отказ ядра приходит исключением [CoreFailure]. Отказ вызова API к тому же
  * уходит в [errors] — дальше `ErrorPresenter` решает, говорить ли человеку.
+ * Что ядро сделало при открытии (базу собрало заново, журнал начало заново),
+ * фасад отдаёт в [errors] сам, у любого открытия, которое удалось, — и у
+ * первой попытки, и у повтора.
  *
  * Изменения каталога видны в [catalogChanges], изменения пользовательского —
  * в [userDataChanges]: по ним списки перечитывают ядро.
@@ -41,7 +45,7 @@ class PlinthCore(
     private val opened =
         lazy {
             started
-            Core.open(dataDir.path)
+            Core.open(dataDir.path).also(::announce)
         }
 
     private val changes = MutableStateFlow(0L)
@@ -176,10 +180,32 @@ class PlinthCore(
             }.onFailure { mutableOpening.value = CoreOpening.FAILED }
             .getOrThrow()
 
+    /**
+     * Отчёт открытия, которое удалось, — первого или любого повтора (Р9е, ревью №7): откуда бы
+     * ядро ни позвали, весть о восстановлении не пропадает. Идёт внутри `lazy` открытия, поэтому
+     * сюда нельзя добавлять ничего, что снова идёт в фасад. Отчёт не прочёлся — предупреждение:
+     * открытое ядро держит замок файлов, и отказ здесь не должен его ронять.
+     */
+    private fun announce(core: Core) {
+        runCatching { core.startupReport().toApp() }
+            .onSuccess { report ->
+                if (report.journalStartedOver) {
+                    AppLog.w(TAG, "journal started over: $report")
+                } else if (report.databaseRecovered || report.restoredFromJournal) {
+                    AppLog.w(TAG, "core restored: $report")
+                }
+                errors.opened(report)
+            }.onFailure { AppLog.w(TAG, "the startup report was not read", it) }
+    }
+
     private inline fun <T> mapped(block: () -> T): T =
         try {
             block()
         } catch (e: CoreException) {
             throw CoreFailure.of(e)
         }
+
+    private companion object {
+        const val TAG = "Core"
+    }
 }

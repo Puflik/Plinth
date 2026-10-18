@@ -22,32 +22,28 @@ import kotlin.time.measureTimedValue
  *
  * Несостоявшийся запуск — ошибка в логе, а не падение. Экраны зовут ядро
  * сами (D3c): первый же вызов попробует открыть его снова, а отказ уйдёт в
- * [errors]. Базу, собранную заново — испорченную, с провалившейся миграцией
- * или отставшую от журнала, — [errors] тоже узнают: «Библиотека
- * восстановлена». Журнал, начатый заново (его снимок не читался, Р1.4), —
- * отдельная весть вместо этой: «собраны заново по библиотеке» или «верните
- * из копии в папке».
+ * [CoreErrors]. Базу, собранную заново — испорченную, с провалившейся
+ * миграцией или отставшую от журнала, — и журнал, начатый заново (его снимок
+ * не читался, Р1.4), [CoreErrors] тоже узнают, но не от этого класса: отчёт
+ * читает сам [PlinthCore] у любого открытия, которое удалось, — запуска или
+ * повтора после отказа (Р9е).
+ *
+ * @param errors больше не нужен: весть об открытии отдаёт [PlinthCore]. Параметр
+ * остаётся, чтобы не менять место вызова и инструментальные тесты.
  */
 class CoreInitializer(
     private val core: PlinthCore,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
-    private val errors: CoreErrors,
+    errors: CoreErrors,
 ) {
     fun start() {
         scope.launch(io) {
             runCatching {
                 core.start()
                 measureTimedValue { core.open() }
-            }.onSuccess { (report, opening) ->
+            }.onSuccess { (_, opening) ->
                 AppLog.i(TAG, "core opened in ${opening.inWholeMilliseconds} ms")
-                if (report.journalStartedOver) {
-                    AppLog.w(TAG, "journal started over: $report")
-                    errors.journalStartedOver(carried = report.restoredFromJournal)
-                } else if (report.databaseRecovered || report.restoredFromJournal) {
-                    AppLog.w(TAG, "core restored: $report")
-                    errors.libraryRestored()
-                }
                 checkIntegrity()
             }.onFailure { AppLog.e(TAG, "core did not open", it) }
         }

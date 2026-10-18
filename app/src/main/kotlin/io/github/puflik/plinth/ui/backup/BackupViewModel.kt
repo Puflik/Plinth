@@ -9,6 +9,7 @@ import io.github.puflik.plinth.backup.MirrorSettings
 import io.github.puflik.plinth.backup.MirrorWriter
 import io.github.puflik.plinth.backup.TreeLabel
 import io.github.puflik.plinth.ffi.MirrorFile
+import io.github.puflik.plinth.ffi.MirrorFound
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,9 @@ import kotlin.time.Instant
  * @property outcome итог последнего действия — для сообщения; показали — [BackupViewModel.onOutcomeShown].
  * @property copyFailing папка копии отказывает в записи: выбрана, но копия не пишется.
  * @property lastCopyAt когда копия записана в последний раз в этом запуске; не писалась — `null`.
+ * @property restorePending журнал начат заново пустым, и данные не вернулись (Р9е): под строкой
+ * папки — подсказка выбрать папку с копией и кнопка «Скрыть»; пока человек не вернул данные или
+ * не отказался от них, она остаётся и после перезапуска.
  */
 data class BackupUiState(
     val folder: String? = null,
@@ -36,6 +40,7 @@ data class BackupUiState(
     val outcome: BackupOutcome? = null,
     val copyFailing: Boolean = false,
     val lastCopyAt: Instant? = null,
+    val restorePending: Boolean = false,
 )
 
 /** Что нашлось в папке: «N лайков, M плейлистов, от даты». */
@@ -56,6 +61,12 @@ enum class BackupOutcome {
 
     /** Ядро не смогло прочесть или влить копии. */
     FAILED,
+
+    /** В папке есть копия, которую Plinth не читает: новее приложения, повреждена или слишком велика (Р9е). */
+    UNREADABLE,
+
+    /** Журнал начат заново пустым, а в выбранной папке нечего вернуть (Р9е). */
+    NOTHING_TO_RESTORE,
 }
 
 /**
@@ -63,6 +74,10 @@ enum class BackupOutcome {
  * данные прошлой установки — вопрос «Восстановить?»; «Восстановить» сливает
  * журнал (CRDT), сделанное до ответа не теряется, а «Не нужно» ничего не
  * трогает — ни журнал, ни файлы в папке.
+ *
+ * Журнал начат заново пустым (Р9е) — под строкой папки напоминание, пока данные
+ * не вернулись из копии или человек не отказался («Не нужно», «Скрыть»).
+ * Копия в папке, которую ядро не читает, не выглядит как «данных нет».
  *
  * Общий для шага мастера и настроек.
  */
@@ -89,6 +104,10 @@ class BackupViewModel
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), BackupUiState())
 
+        init {
+            viewModelScope.launch { refreshPending() }
+        }
+
         /** Человек выбрал папку [tree] системным диалогом. */
         fun onFolderPicked(tree: String) {
             viewModelScope.launch {
@@ -104,7 +123,7 @@ class BackupViewModel
                     offered = files
                     screen.update { it.copy(found = FoundData(found.likes, found.playlists, found.writtenAt)) }
                 }
-                done(outcome = if (found == null) BackupOutcome.FAILED else null)
+                done(outcome = inspected(found))
             }
         }
 
@@ -114,17 +133,50 @@ class BackupViewModel
             viewModelScope.launch {
                 screen.update { it.copy(busy = true, found = null) }
                 val restored = mirror.restore(files)
-                if (restored != null) writer.writeNow()
+                if (restored != null) {
+                    writer.writeNow()
+                    // Что влилось, ядро отметило само: напоминать больше не о чем.
+                    refreshPending()
+                }
                 done(if (restored != null) BackupOutcome.RESTORED else BackupOutcome.FAILED)
             }
         }
 
+        /** «Не нужно»: отказ от найденного — решение человека, напоминание о потере тоже снимается. */
         fun onDecline() {
             offered = emptyList()
             screen.update { it.copy(found = null) }
+            onDismissPending()
+        }
+
+        /** «Скрыть» на подсказке: напоминание снимается, больше ничего не меняется. */
+        fun onDismissPending() {
+            viewModelScope.launch {
+                mirror.dismissRestorePending()
+                refreshPending()
+            }
         }
 
         fun onOutcomeShown() = screen.update { it.copy(outcome = null) }
+
+        private suspend fun refreshPending() {
+            val pending = mirror.restorePending() == true
+            screen.update { it.copy(restorePending = pending) }
+        }
+
+        /**
+         * Итог осмотра папки. Есть что восстанавливать — вопрос «Восстановить?», итога нет, а нечитаемые
+         * файлы рядом с годными его не отменяют. Иначе нечитаемая копия не выглядит как «данных нет»; пустая
+         * папка говорит о себе, только пока журнал, начатый заново, ждёт данных.
+         */
+        private fun inspected(found: MirrorFound?): BackupOutcome? =
+            when {
+                found == null -> BackupOutcome.FAILED
+                found.news -> null
+                found.unreadable > 0 -> BackupOutcome.UNREADABLE
+                screen.value.restorePending -> BackupOutcome.NOTHING_TO_RESTORE
+                else -> null
+            }
 
         private fun done(outcome: BackupOutcome?) = screen.update { it.copy(busy = false, outcome = outcome) }
 

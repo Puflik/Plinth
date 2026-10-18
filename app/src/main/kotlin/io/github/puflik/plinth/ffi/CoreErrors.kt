@@ -15,8 +15,9 @@ import kotlinx.coroutines.flow.merge
 /**
  * Отказы ядра по ходу работы (A3.3) — туда же, куда ошибки воспроизведения:
  * говорить ли о них человеку, решает `ErrorPresenter`. Сюда их отдаёт фасад
- * [PlinthCore] на каждом вызове API, а [CoreInitializer] — весть о базе,
- * собранной заново при запуске, и о журнале, начатом заново.
+ * [PlinthCore] на каждом вызове API, а при каждом открытии ядра, которое
+ * удалось, — весть о базе, собранной заново, и о журнале, начатом заново
+ * ([opened]).
  *
  * Отказ без слушателя пропадает: экрана нет — и говорить некому. Вести о
  * восстановлении и о журнале ждут первого слушателя: ядро открывается раньше
@@ -55,6 +56,19 @@ class CoreErrors {
      */
     fun journalStartedOver(carried: Boolean) {
         startedOver.value = carried
+    }
+
+    /**
+     * Что сделало открытие ядра, по его отчёту [report] (Р9е): журнал начат заново — [journalStartedOver],
+     * иначе база собрана заново или пересобрана по журналу — [libraryRestored]; обычное открытие молчит.
+     * Отчёт читает тот, у кого ядро открылось, — первая попытка или любой повтор.
+     */
+    fun opened(report: StartupReport) {
+        if (report.journalStartedOver) {
+            journalStartedOver(carried = report.restoredFromJournal)
+        } else if (report.databaseRecovered || report.restoredFromJournal) {
+            libraryRestored()
+        }
     }
 
     private companion object {

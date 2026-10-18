@@ -28,4 +28,14 @@ interface JournalMirror {
      * Треки фонотеки узнаются по паспортам — и сейчас, и после скана.
      */
     suspend fun restore(files: List<MirrorFile>): MirrorRestore?
+
+    /**
+     * Журнал начат заново пустым, и данные не вернулись (Р9е): экран копии напоминает выбрать
+     * папку, пока пометка стоит. `null` — ядро не ответило. Пометку снимает [restore], когда
+     * что-то влилось, и [dismissRestorePending]; она переживает перезапуск.
+     */
+    suspend fun restorePending(): Boolean?
+
+    /** Человек отказался от восстановления или закрыл напоминание: пометка снимается; `true` — снято. */
+    suspend fun dismissRestorePending(): Boolean
 }

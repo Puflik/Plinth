@@ -94,7 +94,7 @@ fun SettingsScreen(
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
         onlineSources(onlineEnabled, onToggle = online::onToggle)
-        backupSection(backupState, onPick = pickBackupFolder)
+        backupSection(backupState, onPick = pickBackupFolder, onDismissPending = backup::onDismissPending)
         diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
         vendorGuideItem(onOpen = { vendorGuide = true })
     }

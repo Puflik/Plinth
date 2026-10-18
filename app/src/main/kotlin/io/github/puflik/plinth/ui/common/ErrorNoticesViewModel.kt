@@ -18,7 +18,10 @@ class ErrorNoticesViewModel
     constructor(
         playback: PlaybackController,
         core: CoreErrors,
-        presenter: ErrorPresenter,
+        private val presenter: ErrorPresenter,
     ) : ViewModel() {
         val notices: Flow<ErrorNotice> = merge(playback.errors, core.events).mapNotNull(presenter::present)
+
+        /** Строка [notice] показана до конца: вести о восстановлении считаются сказанными (Р9е). */
+        fun shown(notice: ErrorNotice) = presenter.shown(notice)
     }

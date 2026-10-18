@@ -31,6 +31,16 @@ class CoreMirror internal constructor(
             core.userDataChanged()
             core.catalogChanged()
         }
+
+    /**
+     * Журнал начат заново пустым, и данные не вернулись (Р9е): пока пометка стоит, экран
+     * копии напоминает выбрать папку. Её снимает [restore], когда что-то влилось, и
+     * [dismissRestorePending]; переживает перезапуск.
+     */
+    fun restorePending(): Boolean = core.call { it.restorePending() }
+
+    /** Человек отказался от восстановления или закрыл напоминание: пометка снимается. */
+    fun dismissRestorePending() = core.call { it.dismissRestorePending() }
 }
 
 /** Файл копии журнала: имя в папке и содержимое. */

@@ -19,8 +19,10 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Запись — во временный `<имя>.tmp`, затем старый файл удаляется, а новый
  * переименовывается: переименование SAF поверх существующего файла не
- * пишет, а дописывает « (1)» к имени. Сбой посередине оставит только
- * временный файл — он такая же полная копия, её прочтёт и восстановление.
+ * пишет, а дописывает « (1)» к имени. Прежний файл не удаляется, пока
+ * временный не записан целиком: провайдер сообщает размер — он должен
+ * сойтись с записанным (Р9е). Сбой после этого оставит только временный
+ * файл — он такая же полная копия, её прочтёт и восстановление.
  */
 class SafMirrorFolder(
     private val resolver: ContentResolver,
@@ -46,8 +48,14 @@ class SafMirrorFolder(
                 val root = Uri.parse(tree)
                 val journal = find(root, rootOf(root), PATH) ?: return@guarded emptyList()
                 children(root, journal)
-                    .filter { !it.directory && it.size <= MAX_BYTES }
+                    .filter { !it.directory }
                     .mapNotNull { child ->
+                        if (child.size > MAX_BYTES) {
+                            // Не читается целиком: ядро получает пустой файл и считает его нечитаемым,
+                            // а человек — сообщение, а не «данных нет» (Р9е). Файл не тронут.
+                            AppLog.w(TAG, "a journal copy is too large to read (${child.size} bytes), left untouched")
+                            return@mapNotNull MirrorFile(child.name, ByteArray(0))
+                        }
                         resolver
                             .openInputStream(child.uri(root))
                             ?.use { it.readBytes() }
@@ -79,6 +87,20 @@ class SafMirrorFolder(
         val present = children(root, journal)
         val temporary = "${file.name}.tmp"
         present.find { it.name == temporary }?.let { DocumentsContract.deleteDocument(resolver, it.uri(root)) }
+        val created = writeTemporary(root, journal, temporary, file.content)
+        present.find { it.name == file.name }?.let { DocumentsContract.deleteDocument(resolver, it.uri(root)) }
+        DocumentsContract.renameDocument(resolver, created, file.name)
+            ?: throw IOException("the provider did not rename $temporary")
+        return true
+    }
+
+    /** Временный файл [temporary] с [content]; записан целиком — иначе исключение, прежняя копия цела (Р9е). */
+    private fun writeTemporary(
+        root: Uri,
+        journal: String,
+        temporary: String,
+        content: ByteArray,
+    ): Uri {
         val created =
             DocumentsContract.createDocument(
                 resolver,
@@ -86,11 +108,28 @@ class SafMirrorFolder(
                 MIME,
                 temporary,
             ) ?: throw IOException("the provider did not create $temporary")
-        resolver.openOutputStream(created, "wt")?.use { it.write(file.content) }
+        resolver.openOutputStream(created, "wt")?.use { it.write(content) }
             ?: throw IOException("the provider did not open $temporary")
-        present.find { it.name == file.name }?.let { DocumentsContract.deleteDocument(resolver, it.uri(root)) }
-        DocumentsContract.renameDocument(resolver, created, file.name)
-        return true
+        checkWritten(root, journal, created, temporary, content.size)
+        return created
+    }
+
+    /**
+     * Временный файл записан целиком (Р9е): провайдер сообщает размер, и он совпадает с записанным.
+     * Нет — временный стирается, прежняя копия остаётся, запись не удалась. Провайдер не сообщает
+     * размер (0) — проверять нечем, как и прежде. В лог — оба размера, без имени файла.
+     */
+    private fun checkWritten(
+        root: Uri,
+        journal: String,
+        created: Uri,
+        temporary: String,
+        expected: Int,
+    ) {
+        val reported = children(root, journal).find { it.name == temporary }?.size ?: 0L
+        if (reported <= 0L || reported == expected.toLong()) return
+        runCatching { DocumentsContract.deleteDocument(resolver, created) }
+        throw IOException("the provider stored $reported bytes of $expected, the previous copy is kept")
     }
 
     private fun rootOf(tree: Uri): String = DocumentsContract.getTreeDocumentId(tree)

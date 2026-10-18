@@ -26,6 +26,12 @@ class CoreJournalMirror(
     override suspend fun restore(files: List<MirrorFile>): MirrorRestore? =
         attempt(io, TAG, "restore") { core.mirror.restore(files) }
 
+    override suspend fun restorePending(): Boolean? =
+        attempt(io, TAG, "restore reminder") { core.mirror.restorePending() }
+
+    override suspend fun dismissRestorePending(): Boolean =
+        attempt(io, TAG, "reminder dismissal") { core.mirror.dismissRestorePending() } != null
+
     private companion object {
         const val TAG = "Mirror"
     }

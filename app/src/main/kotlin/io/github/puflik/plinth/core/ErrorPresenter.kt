@@ -33,6 +33,11 @@ import kotlin.time.Instant
  *   знать, что лайки и плейлисты пересобраны по библиотеке или что их надо
  *   вернуть из копии в папке.
  *
+ * Две последние вести считаются сказанными, когда строка показана ([shown]),
+ * а не когда [present] её отдал (Р9е): поворот экрана отменяет начатую строку,
+ * и при новом сборе весть должна прийти снова. Прочие правила «раз за запуск»
+ * ставят пометку сразу, в [present].
+ *
  * Помнит, о каких файлах сказано, поэтому один на процесс.
  */
 @Singleton
@@ -56,21 +61,23 @@ class ErrorPresenter
                 is AppError.PlaybackStopped ->
                     if (error.whileRestoring) null else ErrorNotice.Stopped(error.track, error.skipped.size + 1)
                 is AppError.CoreFailed -> coreFailed(error)
-                AppError.LibraryRestored ->
-                    if (toldRestored) {
-                        null
-                    } else {
-                        toldRestored = true
-                        ErrorNotice.LibraryRestored
-                    }
+                AppError.LibraryRestored -> if (toldRestored) null else ErrorNotice.LibraryRestored
                 is AppError.JournalStartedOver ->
-                    if (toldJournalStartedOver) {
-                        null
-                    } else {
-                        toldJournalStartedOver = true
-                        ErrorNotice.JournalStartedOver(error.carried)
-                    }
+                    if (toldJournalStartedOver) null else ErrorNotice.JournalStartedOver(error.carried)
             }
+
+        /**
+         * Строка [notice] показана до конца — закрыта временем, смахнута или по кнопке: вести о
+         * восстановлении и о журнале с этого момента сказаны. Остальные виды говорятся по своим
+         * правилам (см. выше) и здесь ничего не меняют.
+         */
+        fun shown(notice: ErrorNotice) {
+            when (notice) {
+                ErrorNotice.LibraryRestored -> toldRestored = true
+                is ErrorNotice.JournalStartedOver -> toldJournalStartedOver = true
+                is ErrorNotice.Skipped, is ErrorNotice.Stopped, ErrorNotice.CoreFailed, ErrorNotice.NotSaved -> Unit
+            }
+        }
 
         private fun coreFailed(error: AppError.CoreFailed): ErrorNotice? =
             when (error.problem) {
