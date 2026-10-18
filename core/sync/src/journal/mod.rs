@@ -14,6 +14,7 @@ mod passport;
 mod projection;
 mod rebuild;
 mod relink;
+mod stale;
 mod start_over;
 mod store;
 
@@ -37,8 +38,16 @@ pub use passport::{describe_changed, describe_missing};
 pub use projection::{CatchUp, catch_up, record_and_project, record_and_project_all};
 pub use rebuild::rebuild;
 pub use relink::relink;
+pub(crate) use stale::{absorb_passports, absorbable_passports, contained_in};
 pub use start_over::{damaged_snapshot, start_over};
 use store::Store;
+
+/// Сколько операций журнала ложится одной правкой, когда их тысячи (Р9д). Время правки растёт от числа
+/// прослушиваний и решений о склейке в ней квадратом (`Roots::write_all`, массивы `yrs`): 12 000
+/// прослушиваний одной правкой — 5,3 с (debug), пачками по 500 — 0,23 с; 24 000 в `start_over` одной
+/// транзакцией — 22 с, пачками — 0,45 с. Кто пишет их тысячами (`start_over`, слияние в `relink`, будущий
+/// импорт истории), режет по этой константе: пачка за пачкой, а не всё сразу.
+pub const WRITE_CHUNK: usize = 500;
 
 pub struct Journal {
     doc: Doc,
@@ -117,6 +126,11 @@ impl Journal {
     /// по одной все по порядку — применяется и пакет. Какая-то нет — ошибка
     /// этой операции (`Unavailable`), а документ, диск, метка ([`Journal::mark`]) и
     /// снимок ([`Journal::snapshot`]) остаются прежними.
+    ///
+    /// Время растёт квадратом от числа прослушиваний и решений о склейке в пачке;
+    /// кто пишет их тысячами, режет по [`WRITE_CHUNK`]. Одна правка — один кадр на
+    /// диске, поэтому режет вызывающий, а не `record_all`: он же решает, что
+    /// пачка — «всё или ничего».
     pub fn record_all(&mut self, ops: &[Op]) -> Result<Option<OpMeta>, CoreError> {
         self.record_all_at(ops, Timestamp::now())
     }

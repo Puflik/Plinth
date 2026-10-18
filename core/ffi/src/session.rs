@@ -10,7 +10,7 @@
 //! - `lock` — замок: два ядра на одних файлах — два писателя одного журнала.
 
 use std::fs::{self, File, OpenOptions};
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, TryLockError};
@@ -225,8 +225,10 @@ fn lock(dir: &Path) -> Result<File, CoreError> {
 /// записанная до порчи, осталась бы «своей»: восстановление её пропускает, а
 /// зеркало перезаписало бы при первом уходе в фон. Новое имя — до замены
 /// снимка: обрыв между ними повторит всё, а обратный порядок оставил бы новый
-/// журнал со старым именем. Прочее — ошибка как есть: снимок новее
-/// приложения, файл не прочесть.
+/// журнал со старым именем. Прежнее имя (`device`) журнал запоминает пометкой:
+/// копия в папке под этим именем — прежняя, и «Восстановить» данных из неё не
+/// берёт (Р9д). Прочее — ошибка как есть: снимок новее приложения, файл не
+/// прочесть.
 fn open_journal(dir: &Path, device: DeviceId, db: &Database) -> Result<(Journal, bool), CoreError> {
     let journal = dir.join(JOURNAL);
     match Journal::open(&journal, device) {
@@ -234,9 +236,9 @@ fn open_journal(dir: &Path, device: DeviceId, db: &Database) -> Result<(Journal,
         Err(error) => {
             let Some(reason) = damaged_snapshot(&journal)? else { return Err(error) };
             log::warn!("core: the journal snapshot is unreadable, the journal starts over ({reason})");
-            let device = renew_device(dir)?;
-            start_over(&journal, device, db)?;
-            Ok((Journal::open(&journal, device)?, true))
+            let renewed = renew_device(dir)?;
+            start_over(&journal, renewed, db, device)?;
+            Ok((Journal::open(&journal, renewed)?, true))
         }
     }
 }
@@ -256,15 +258,39 @@ fn device(dir: &Path) -> Result<DeviceId, CoreError> {
 }
 
 /// Новый идентификатор установки в файле `device`: временный файл, затем
-/// переименование — в любой момент в файле целый идентификатор.
+/// переименование — в любой момент в файле целый идентификатор, а после сбоя
+/// питания — тоже: файл и каталог сброшены на диск ([`write_durably`]). Без
+/// этого файл мог оказаться пустым, и установка получила бы ещё одно имя, а
+/// журнал, начатый заново, остался бы подписан прежним — вместе с пометкой
+/// «сменена», по которой узнаются копии в папке.
 fn renew_device(dir: &Path) -> Result<DeviceId, CoreError> {
     let path = dir.join(DEVICE);
     let device = DeviceId::new();
     let tmp = dir.join(format!("{DEVICE}.tmp"));
-    fs::write(&tmp, device.to_string())
-        .and_then(|()| fs::rename(&tmp, &path))
-        .map_err(|e| io_error("write device id", &e))?;
+    write_durably(&tmp, &path, device.to_string().as_bytes()).map_err(|e| io_error("write device id", &e))?;
     Ok(device)
+}
+
+/// Содержимое `path` целиком или прежнее: запись во временный `tmp`, `fsync`
+/// файла, переименование, `fsync` каталога — как снимок журнала (`store.rs`).
+fn write_durably(tmp: &Path, path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let mut file = File::create(tmp)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    fs::rename(tmp, path)?;
+    path.parent().map_or(Ok(()), sync_dir)
+}
+
+/// Переименование переживёт сбой питания, только если записан и каталог.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> io::Result<()> {
+    File::open(dir)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]

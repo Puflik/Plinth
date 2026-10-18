@@ -15,7 +15,7 @@ use super::doc::Roots;
 use super::op::Op;
 use super::op_meta::OpMeta;
 use super::store::{self, Snapshot};
-use super::{apply_snapshot, snapshot};
+use super::{WRITE_CHUNK, apply_snapshot, snapshot};
 
 /// Почему снимок журнала в каталоге `dir` не читается: сумма не сошлась,
 /// файл обрезан, не снимок журнала или `yrs` его не разбирает (в том числе
@@ -38,16 +38,28 @@ pub fn damaged_snapshot(dir: &Path) -> Result<Option<String>, CoreError> {
 
 /// Начинает журнал в `dir` заново, когда его снимок не читается
 /// ([`damaged_snapshot`]), — с пользовательским, которое показывает база
-/// `db`; автор записей — `device`. Испорченный снимок остаётся рядом копией
+/// `db`; автор записей — `device`, а `replaced` — имя установки, под которым
+/// ядро работало до порчи. Испорченный снимок остаётся рядом копией
 /// `snapshot.damaged-<мс>`; новый, с новым идентификатором журнала, встаёт на
 /// его место одной заменой файла: обрыв до неё оставляет испорченный снимок,
 /// и следующая попытка повторит всё. Хвост прежнего журнала новый не
 /// читает — `Journal::open` отложит его как чужой.
 ///
-/// Сколько записей перенесено; ноль — в базе ничего не было, журнал пуст, как
-/// у нового. Снимок читается, его нет или он новее приложения — ошибка,
-/// файлы не тронуты.
-pub fn start_over(dir: &Path, device: DeviceId, db: &Database) -> Result<usize, CoreError> {
+/// Перенесённое пишется в документ пачками по [`WRITE_CHUNK`] операций: одной
+/// транзакцией история в десятки тысяч прослушиваний растёт квадратом (24 000 —
+/// 22 с против 0,5 с). Пачки только в памяти, на диск документ ложится целиком —
+/// «всё или ничего» (Р1.4) не меняется.
+///
+/// Перенесено что-то — в журнал пишется ещё и пометка `Op::Supersede { replaced }`
+/// (Р9д): установка сменена, её копии в папке — прежние, и «Восстановить» данных
+/// из них не берёт, потому что база показывает всё, что человек оставил, и это
+/// уже здесь. Ничего не перенесено (базы не было) — пометки нет: копия в папке
+/// остаётся единственным путём назад.
+///
+/// Сколько записей перенесено из базы; пометка в это число не входит. Ноль — в
+/// базе ничего не было, журнал пуст, как у нового. Снимок читается, его нет или он
+/// новее приложения — ошибка, файлы не тронуты.
+pub fn start_over(dir: &Path, device: DeviceId, db: &Database, replaced: DeviceId) -> Result<usize, CoreError> {
     let Some(reason) = damaged_snapshot(dir)? else {
         return Err(CoreError::storage("journal: the snapshot is readable, there is nothing to start over"));
     };
@@ -56,11 +68,17 @@ pub fn start_over(dir: &Path, device: DeviceId, db: &Database) -> Result<usize, 
     let ops = database_ops(db)?;
     let doc = Doc::new();
     let roots = Roots::new(&doc);
-    let carried = {
-        let meta = OpMeta::now(device);
-        let mut txn = doc.transact_mut();
-        roots.write_all(&mut txn, &ops, &meta)?
-    };
+    let meta = OpMeta::now(device);
+    // Транзакция на пачку живёт одно выражение. Пачка видит то, что положили прежние:
+    // плейлист, созданный в одной, наполняется в следующих.
+    let mut carried = 0;
+    for chunk in ops.chunks(WRITE_CHUNK) {
+        carried += roots.write_all(&mut doc.transact_mut(), chunk, &meta)?;
+    }
+    if carried > 0 {
+        // Пометка идёт после переноса и в `carried` не входит: это не запись из базы.
+        roots.write_all(&mut doc.transact_mut(), &[Op::Supersede { device: replaced }], &meta)?;
+    }
     let payload = if carried > 0 { snapshot(&doc) } else { Vec::new() };
 
     store::keep_snapshot_aside(dir)?;

@@ -39,7 +39,7 @@ use plinth_types::{CoreError, EntityId, Timestamp, TrackId};
 
 use super::passport::referenced;
 use super::projection::record_and_project_all;
-use super::{Journal, JournalState, Op};
+use super::{Journal, JournalState, Op, WRITE_CHUNK};
 
 /// Переводит треки каталога на ID журнала по паспортам и складывает данные одной
 /// песни на меньший ID; сколько треков переведено, слито и сетевых восстановлено.
@@ -89,7 +89,7 @@ pub fn relink(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> 
         }
         Ok((moved, restored))
     })?;
-    // Пары пишутся пачками по `FOLD_CHUNK` операций, пара — целиком в одной пачке: правка на
+    // Пары пишутся пачками по `WRITE_CHUNK` операций, пара — целиком в одной пачке: правка на
     // пару заново разбирала бы журнал, а пар у двух установок с общей библиотекой тысячи.
     let by_track = ByTrack::of(&state);
     let (mut ops, mut adopted, mut merged) = (Vec::new(), Vec::new(), 0);
@@ -109,7 +109,7 @@ pub fn relink(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> 
             adopted.push((local, gone));
         }
         merged += 1;
-        if ops.len() >= FOLD_CHUNK {
+        if ops.len() >= WRITE_CHUNK {
             write_folds(journal, db, &mut ops, &mut adopted)?;
         }
     }
@@ -120,11 +120,6 @@ pub fn relink(journal: &mut Journal, db: &Database) -> Result<usize, CoreError> 
     );
     Ok(moved + merged + restored)
 }
-
-/// Сколько операций журнала ложится одной правкой при слиянии. `Journal::record_all`
-/// растёт от размера пачки квадратом: 12 000 прослушиваний одной правкой — 5,3 с (debug),
-/// пачками по 500 — 0,23 с.
-const FOLD_CHUNK: usize = 500;
 
 /// Пишет накопленные операции слияния одной правкой журнала, затем переводит каталог на
 /// ID потерянных (`adopted`: трек каталога, ID журнала). Сначала журнал, потом каталог:
