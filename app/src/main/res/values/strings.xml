@@ -251,7 +251,7 @@
     <string name="backup_failed">Couldn’t read the backup. The details are in the log.</string>
     <string name="backup_pending">Your likes and playlists were damaged and haven’t come back yet. Choose the folder with your copy — Plinth will offer to restore them.</string>
     <string name="backup_pending_dismiss">Hide</string>
-    <string name="backup_unreadable">The folder holds a copy that Plinth can’t read: it was written by a newer version, is damaged or too large. The file is left untouched.</string>
+    <string name="backup_unreadable">Can’t read the copy in this folder: it’s from a newer Plinth or damaged.</string>
     <string name="backup_nothing_to_restore">There is no copy to restore from in this folder.</string>
     <plurals name="backup_likes">
         <item quantity="one">%d like</item>
