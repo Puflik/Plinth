@@ -164,7 +164,7 @@ fn a_snapshot_from_a_newer_app_is_not_damaged_and_not_started_over() {
     let files = listing(&dir.journal());
 
     assert_eq!(damaged_snapshot(&dir.journal()).unwrap(), None);
-    let started = start_over(&dir.journal(), DeviceId::new(), &db);
+    let started = start_over(&dir.journal(), DeviceId::new(), &db, DeviceId::new());
 
     assert!(matches!(started, Err(CoreError::Storage { .. })), "{started:?}");
     assert_eq!(fs::read(snapshot(&dir)).unwrap(), newer);
@@ -180,7 +180,7 @@ fn a_readable_snapshot_is_never_started_over() {
     let files = listing(&dir.journal());
     let bytes = fs::read(snapshot(&dir)).unwrap();
 
-    let started = start_over(&dir.journal(), DeviceId::new(), &db);
+    let started = start_over(&dir.journal(), DeviceId::new(), &db, DeviceId::new());
 
     assert!(matches!(started, Err(CoreError::Storage { .. })), "{started:?}");
     assert_eq!(listing(&dir.journal()), files);
@@ -202,7 +202,7 @@ fn starting_over_carries_everything_the_database_shows() {
     let damaged = spoil(&dir, |bytes| flip_last(bytes));
     let device = DeviceId::new();
 
-    let carried = start_over(&dir.journal(), device, &db).unwrap();
+    let carried = start_over(&dir.journal(), device, &db, DeviceId::new()).unwrap();
     let journal = Journal::open(&dir.journal(), device).unwrap();
 
     assert!(carried > 0);
@@ -224,7 +224,7 @@ fn with_nothing_in_the_database_the_journal_starts_empty() {
     spoil(&dir, |bytes| flip_last(bytes));
     let device = DeviceId::new();
 
-    let carried = start_over(&dir.journal(), device, &memory_db()).unwrap();
+    let carried = start_over(&dir.journal(), device, &memory_db(), DeviceId::new()).unwrap();
     let journal = Journal::open(&dir.journal(), device).unwrap();
 
     assert_eq!(carried, 0);
@@ -247,7 +247,7 @@ fn the_old_tail_does_not_leak_into_the_new_journal() {
     let before = dump(&db);
     spoil(&dir, |bytes| flip_last(bytes));
     let device = DeviceId::new();
-    start_over(&dir.journal(), device, &db).unwrap();
+    start_over(&dir.journal(), device, &db, DeviceId::new()).unwrap();
 
     let journal = Journal::open(&dir.journal(), device).unwrap();
     assert_eq!(catch_up(&journal, &db).unwrap(), CatchUp::Rebuilt);
@@ -272,7 +272,7 @@ fn the_journal_started_over_keeps_working() {
     drop(filled(&dir, &db));
     spoil(&dir, |bytes| flip_last(bytes));
     let device = DeviceId::new();
-    start_over(&dir.journal(), device, &db).unwrap();
+    start_over(&dir.journal(), device, &db, DeviceId::new()).unwrap();
     let mut journal = Journal::open(&dir.journal(), device).unwrap();
     catch_up(&journal, &db).unwrap();
     let track = TrackId::new();

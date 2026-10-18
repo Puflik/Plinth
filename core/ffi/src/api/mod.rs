@@ -14,5 +14,7 @@ mod r1_11b_tests;
 mod r1_15_tests;
 #[cfg(test)]
 mod r1_7_tests;
+#[cfg(test)]
+mod r9e_tests;
 mod scan_api;
 mod test_api;
