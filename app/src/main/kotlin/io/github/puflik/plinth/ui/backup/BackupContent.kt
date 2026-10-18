@@ -137,7 +137,11 @@ fun BackupPrompts(
  */
 @Composable
 private fun RestorePending(onDismiss: () -> Unit) {
-    Text(text = stringResource(R.string.backup_pending), style = MaterialTheme.typography.bodyMedium)
+    Text(
+        text = stringResource(R.string.backup_pending),
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(top = 8.dp),
+    )
     TextButton(onClick = onDismiss) { Text(stringResource(R.string.backup_pending_dismiss)) }
 }
 
