@@ -21,11 +21,18 @@ import kotlin.time.Instant
  * очередью, а время последней игры от смены трека не зависит.
  *
  * Формат — свой, двоичный, с версией в начале: таблица в базе ради одной
- * очереди не нужна, а фонотеку с 0.2 ведёт ядро. Файл, который не
- * читается (повреждён, другая версия), — как будто ничего не сохранено.
+ * очереди не нужна, а фонотеку с 0.2 ведёт ядро. Файл очереди, который не
+ * читается (повреждён, другая версия), — как будто ничего не сохранено;
+ * позиция и время игры — мелочь рядом с очередью: не читаются — трек с
+ * начала, но очередь не теряется (ревью v0.2, №19).
  * Запись — во временный файл и переименование: убитый посреди записи процесс
- * не оставит половину очереди. Заголовки потоков на диск не пишутся — в них
- * бывают ключи доступа.
+ * не оставит половину очереди; очередь перед переименованием ещё и сбрасывается
+ * на диск. Заголовки потоков на диск не пишутся — в них бывают ключи доступа.
+ * Строка длиннее предела `writeUTF` пишется обрезанной (см. [fitUtf]): одна
+ * такая строка не должна останавливать сохранение очереди (ревью v0.2, №27).
+ *
+ * Позиция на диске либо принадлежит очереди в `queue.bin`, либо её там нет:
+ * очередь не записалась — позицию новой очереди к прежней не пишем.
  *
  * Файлы трогает одна операция за раз ([lock]): очередь и позицию пишут две
  * корутины, и на пуле IO они сталкивались на временном файле позиции.
@@ -39,43 +46,55 @@ class FileQueueStore(
     private val playedFile = File(directory, "played.bin")
     private val lock = Mutex()
 
+    /** Новую очередь записать не вышло: на диске прежняя, и позиция новой ей не принадлежит. Под [lock]. */
+    private var queueStale = false
+
     override suspend fun load(): SavedQueue? =
         exclusive {
-            try {
-                val queue = DataInputStream(queueFile.inputStream().buffered()).use(::readQueue)
-                val position =
-                    if (positionFile.exists()) {
-                        DataInputStream(
-                            positionFile.inputStream(),
-                        ).use { it.readLong() }
-                    } else {
-                        0L
-                    }
-                SavedQueue(queue, position.milliseconds, readPlayedAt())
-            } catch (expected: IOException) {
-                null
-            } catch (expected: IllegalArgumentException) {
-                // Прочиталось, но не складывается в очередь: чужой или испорченный файл.
-                null
-            } catch (expected: IndexOutOfBoundsException) {
-                null
-            }
+            val queue =
+                try {
+                    DataInputStream(queueFile.inputStream().buffered()).use(::readQueue)
+                } catch (expected: IOException) {
+                    null
+                } catch (expected: IllegalArgumentException) {
+                    // Прочиталось, но не складывается в очередь: чужой или испорченный файл.
+                    null
+                } catch (expected: IndexOutOfBoundsException) {
+                    null
+                }
+            queue?.let { SavedQueue(it, readPosition(), readPlayedAt()) }
         }
 
     override suspend fun saveQueue(queue: PlaybackQueue) {
         exclusive {
-            // Очередь не записалась — прежняя остаётся вместе со своей позицией.
-            if (write(queueFile) { writeQueue(queue) }) write(positionFile) { writeLong(0) }
+            queueStale = !write(queueFile, durable = true) { writeQueue(queue) }
+            // Очередь записалась — позиция с начала трека; не записалась и она — позиции прежней очереди не оставляем.
+            if (!queueStale && !write(positionFile) { writeLong(0) }) positionFile.delete()
         }
     }
 
     override suspend fun savePosition(position: Duration) {
-        exclusive { write(positionFile) { writeLong(position.inWholeMilliseconds) } }
+        exclusive { if (!queueStale) write(positionFile) { writeLong(position.inWholeMilliseconds) } }
     }
 
     override suspend fun savePlayedAt(at: Instant) {
         exclusive { write(playedFile) { writeLong(at.toEpochMilliseconds()) } }
     }
+
+    /**
+     * Секунда в треке; файла нет, он короче восьми байт или не читается, а
+     * прочитанное отрицательно — трек с начала. Очередь из-за позиции не теряется.
+     */
+    private fun readPosition(): Duration =
+        try {
+            if (positionFile.exists()) {
+                DataInputStream(positionFile.inputStream()).use { it.readLong() }.coerceAtLeast(0).milliseconds
+            } else {
+                Duration.ZERO
+            }
+        } catch (expected: IOException) {
+            Duration.ZERO
+        }
 
     /** Время последней игры; не читается — неизвестно, но очередь из-за него не теряется. */
     private fun readPlayedAt(): Instant? =
@@ -95,15 +114,26 @@ class FileQueueStore(
      * Запись с заменой файла; `false` — не вышло. Нет места или доступа —
      * не повод ронять процесс (план 17.6): прежний файл цел, приложение
      * играет дальше, в лог — предупреждение.
+     *
+     * [durable] — до переименования данные сбрасываются на диск (`sync`),
+     * иначе обесточенное устройство оставит переименованный, но пустой файл.
+     * Это дорого для батареи и флеша, поэтому только для редкого — очереди;
+     * позицию, что пишется каждую секунду, спасает допуск при чтении.
      */
     private fun write(
         file: File,
+        durable: Boolean = false,
         block: DataOutputStream.() -> Unit,
     ): Boolean =
         try {
             directory.mkdirs()
             val temporary = File(directory, "${file.name}.tmp")
-            DataOutputStream(temporary.outputStream().buffered()).use(block)
+            temporary.outputStream().use { stream ->
+                val output = DataOutputStream(stream.buffered())
+                output.block()
+                output.flush()
+                if (durable) stream.fd.sync()
+            }
             if (!temporary.renameTo(file)) {
                 file.delete()
                 if (!temporary.renameTo(file)) throw IOException("не удалось заменить ${file.name}")
@@ -151,25 +181,25 @@ class FileQueueStore(
             QueueContext.Recent -> writeUTF("recent")
             is QueueContext.Album -> {
                 writeUTF("album")
-                writeUTF(context.title)
+                writeText(context.title)
                 writeNullable(context.artist)
             }
             is QueueContext.Folder -> {
                 writeUTF("folder")
-                writeUTF(context.path)
+                writeText(context.path)
             }
             is QueueContext.Search -> {
                 writeUTF("search")
-                writeUTF(context.query)
+                writeText(context.query)
             }
             is QueueContext.Artist -> {
                 writeUTF("artist")
-                writeUTF(context.name)
+                writeText(context.name)
             }
             is QueueContext.Playlist -> {
                 writeUTF("playlist")
-                writeUTF(context.id.value)
-                writeUTF(context.name)
+                writeText(context.id.value)
+                writeText(context.name)
             }
         }
     }
@@ -200,15 +230,15 @@ class FileQueueStore(
         when (val source = item.source) {
             is AudioSource.LocalFile -> {
                 writeUTF("file")
-                writeUTF(source.uri)
+                writeText(source.uri)
             }
             is AudioSource.Remote -> {
                 writeUTF("remote")
-                writeUTF(source.url)
+                writeText(source.url)
             }
             is AudioSource.Online -> {
                 writeUTF("online")
-                writeUTF(source.track)
+                writeText(source.track)
             }
         }
         writeNullable(item.title)
@@ -238,10 +268,13 @@ class FileQueueStore(
 
     private fun DataOutputStream.writeNullable(text: String?) {
         writeBoolean(text != null)
-        text?.let(::writeUTF)
+        text?.let { writeText(it) }
     }
 
     private fun DataInputStream.readNullable(): String? = if (readBoolean()) readUTF() else null
+
+    /** Переменная строка — обрезанная до того, что `writeUTF` ещё запишет; метки формата пишутся прямо. */
+    private fun DataOutputStream.writeText(text: String) = writeUTF(text.fitUtf())
 
     private companion object {
         /** 2 — владелец альбома у элемента и контекст «исполнитель» (E5); файл версии 1 не читается. */
@@ -251,3 +284,43 @@ class FileQueueStore(
         const val TAG = "QueueStore"
     }
 }
+
+/** Предел `DataOutputStream.writeUTF`: длина записи в байтах модифицированного UTF-8. */
+private const val MAX_UTF = 65_535
+
+/** Самые большие коды, что ещё занимают в модифицированном UTF-8 один и два байта; дальше — три. */
+private const val LAST_ONE_BYTE = 0x7f
+private const val LAST_TWO_BYTES = 0x7ff
+private const val THREE_BYTES = 3
+
+/**
+ * Самое длинное начало строки, которое `writeUTF` ещё запишет: не больше [MAX_UTF] байт
+ * модифицированного UTF-8. Строка, что помещается, возвращается как есть. Обрезка
+ * не оставляет первую половину суррогатной пары без второй.
+ */
+internal fun String.fitUtf(): String {
+    val end = utfPrefixLength()
+    return when {
+        end == length -> this
+        this[end - 1].isHighSurrogate() -> substring(0, end - 1)
+        else -> substring(0, end)
+    }
+}
+
+/** Сколько первых символов строки помещается в [MAX_UTF] байт модифицированного UTF-8. */
+private fun String.utfPrefixLength(): Int {
+    var bytes = 0
+    for (index in indices) {
+        bytes += utfSize(this[index])
+        if (bytes > MAX_UTF) return index
+    }
+    return length
+}
+
+/** Размер символа в модифицированном UTF-8: `\u0000` — два байта, половина суррогатной пары — три. */
+private fun utfSize(char: Char): Int =
+    when (char.code) {
+        in 1..LAST_ONE_BYTE -> 1
+        in 0..LAST_TWO_BYTES -> 2
+        else -> THREE_BYTES
+    }
