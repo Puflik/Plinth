@@ -7,6 +7,9 @@
 //! - `device` — идентификатор этой установки, автор операций журнала. Лежит
 //!   вне журнала: восстановленный на новом телефоне журнал не делает новую
 //!   установку старой;
+//! - `restore-pending` — пометка (Р9е): журнал начат заново пустым, и данные не
+//!   вернулись. Рядом с `device`, а не в журнале: Auto Backup и перенос на новый
+//!   телефон её не уносят;
 //! - `lock` — замок: два ядра на одних файлах — два писателя одного журнала.
 
 use std::fs::{self, File, OpenOptions};
@@ -28,11 +31,15 @@ use crate::types::{IntegrityOutcome, StartupReport};
 pub(crate) const DATABASE: &str = "library.db";
 pub(crate) const JOURNAL: &str = "journal";
 pub(crate) const DEVICE: &str = "device";
+/// Пометка «журнал начат заново пустым, данные не вернулись» (Р9е).
+pub(crate) const RESTORE_PENDING: &str = "restore-pending";
 const LOCK: &str = "lock";
 
 #[derive(uniffi::Object)]
 pub struct Core {
     state: Mutex<State>,
+    /// Каталог данных: рядом с базой лежат `device` и пометка `restore-pending`.
+    dir: PathBuf,
     /// Скан идёт один: два разом добавили бы одни файлы дважды.
     scan: Mutex<()>,
     report: StartupReport,
@@ -137,6 +144,7 @@ impl Core {
         log::info!("core opened: {report:?}, schema v{}", opened.db.schema_version()?);
         Ok(Self {
             state: Mutex::new(State { db: opened.db, journal }),
+            dir: dir.to_owned(),
             scan: Mutex::new(()),
             report,
             database,
@@ -195,6 +203,25 @@ impl Core {
         panic::guard(|| self.with(|state| record_and_project(&mut state.journal, &state.db, op)))
     }
 
+    /// Журнал начат заново пустым, и данные не вернулись (Р9е). Пометка — **файл**: каталог на её
+    /// месте пометкой не считается.
+    pub(crate) fn is_restore_pending(&self) -> bool {
+        self.dir.join(RESTORE_PENDING).is_file()
+    }
+
+    /// Снимает пометку: данные вернулись или человек от них отказался. Пометки нет — не ошибка,
+    /// повтор безвреден.
+    pub(crate) fn clear_restore_pending(&self) -> Result<(), CoreError> {
+        let path = self.dir.join(RESTORE_PENDING);
+        if !path.is_file() {
+            return Ok(());
+        }
+        match fs::remove_file(&path) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => Err(io_error("clear restore-pending", &error)),
+            _ => Ok(()),
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn panic_inside_the_lock(&self) -> Result<(), CoreError> {
         panic::guard(|| self.with(|_| panic!("on purpose, inside the lock")))
@@ -228,7 +255,10 @@ fn lock(dir: &Path) -> Result<File, CoreError> {
 /// журнал со старым именем. Прежнее имя (`device`) журнал запоминает пометкой:
 /// копия в папке под этим именем — прежняя, и «Восстановить» данных из неё не
 /// берёт (Р9д). Прочее — ошибка как есть: снимок новее приложения, файл не
-/// прочесть.
+/// прочесть. Из базы ничего не перенесено (журнал пуст) — рядом с `device` остаётся пометка
+/// `restore-pending` (Р9е): вернуть данные может только копия в папке, и экран копии напоминает об
+/// этом, пока данные не вернулись или человек не отказался. Перенесено — пометки нет: данные уже
+/// в журнале.
 fn open_journal(dir: &Path, device: DeviceId, db: &Database) -> Result<(Journal, bool), CoreError> {
     let journal = dir.join(JOURNAL);
     match Journal::open(&journal, device) {
@@ -237,9 +267,22 @@ fn open_journal(dir: &Path, device: DeviceId, db: &Database) -> Result<(Journal,
             let Some(reason) = damaged_snapshot(&journal)? else { return Err(error) };
             log::warn!("core: the journal snapshot is unreadable, the journal starts over ({reason})");
             let renewed = renew_device(dir)?;
-            start_over(&journal, renewed, db, device)?;
+            let carried = start_over(&journal, renewed, db, device)?;
+            if carried == 0 {
+                mark_restore_pending(dir);
+            }
             Ok((Journal::open(&journal, renewed)?, true))
         }
+    }
+}
+
+/// Пометка `restore-pending`: записана целиком или нет ([`write_durably`]). Подсказка экрану, а не
+/// условие работы: не записалась — предупреждение, ядро открывается.
+fn mark_restore_pending(dir: &Path) {
+    let tmp = dir.join(format!("{RESTORE_PENDING}.tmp"));
+    if let Err(error) = write_durably(&tmp, &dir.join(RESTORE_PENDING), b"1") {
+        log::warn!("core: the restore-pending mark was not written: {error}");
+        let _ = fs::remove_file(&tmp);
     }
 }
 

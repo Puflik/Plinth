@@ -82,9 +82,11 @@ impl Core {
 
     /// Вливает копии `files` в журнал, кроме своей и копий сменённой установки (из тех
     /// берутся только паспорта); база пересобирается, треки библиотеки узнаются по паспортам.
+    /// Что-то влилось (`merged > 0`) — пометка `restore-pending` снимается: данные вернулись.
+    /// Пустое восстановление и мусорные файлы её оставляют.
     pub fn restore_mirror(&self, files: Vec<MirrorFile>) -> Result<MirrorRestore, CoreError> {
         panic::guard(|| {
-            self.with(|state| {
+            let restored = self.with(|state| {
                 let others = others(state, &files);
                 let restored = restore_named(&mut state.journal, &state.db, &others)?;
                 Ok(MirrorRestore {
@@ -92,8 +94,26 @@ impl Core {
                     unreadable: count(restored.unreadable),
                     relinked: count(restored.relinked),
                 })
-            })
+            })?;
+            if restored.merged > 0
+                && let Err(error) = self.clear_restore_pending()
+            {
+                log::warn!("mirror: the restore-pending mark was not cleared: {error}");
+            }
+            Ok(restored)
         })
+    }
+
+    /// Журнал начат заново пустым, и данные не вернулись (Р9е): экран копии напоминает выбрать
+    /// папку с копией. Пометка переживает перезапуск; на её месте каталог — не пометка.
+    pub fn restore_pending(&self) -> Result<bool, CoreError> {
+        panic::guard(|| Ok(self.is_restore_pending()))
+    }
+
+    /// Человек отказался от восстановления или закрыл напоминание: пометка снимается. Пометки
+    /// нет — не ошибка, повтор безвреден.
+    pub fn dismiss_restore_pending(&self) -> Result<(), CoreError> {
+        panic::guard(|| self.clear_restore_pending())
     }
 }
 

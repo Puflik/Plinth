@@ -86,10 +86,20 @@
 //! — первым делом в `reset_tail`. Копия не удалась — хвост не тронут, и повтор при
 //! следующем сбросе.
 //!
-//! Каталог журнала уходит в Auto Backup целиком (квота 25 МБ на приложение), а
-//! отложенные файлы никто не читает, поэтому после каждой копии и при каждом
-//! открытии (`prune_aside`) остаются новейшие по метке времени в имени: две
-//! `tail.damaged-*`, по одной `snapshot.damaged-*` и `tail.foreign-*`.
+//! Каталог журнала уходит в Auto Backup (квота 25 МБ на приложение), а отложенные
+//! файлы никто не читает, поэтому копии лежат в `journal/aside/`, и правила Auto
+//! Backup эту папку исключают (`res/xml/*.xml`, Р9е). Папку заводит первая копия;
+//! сборки до Р9е клали копии рядом с журналом, и `prune_aside` переносит их в
+//! `aside/` при открытии. После каждой копии и при каждом открытии (`prune_aside`)
+//! остаются новейшие по метке в имени: две `tail.damaged-*`, по одной
+//! `snapshot.damaged-*` и `tail.foreign-*`.
+//!
+//! Метка — миллисекунды, но не ниже меток прежних копий того же вида: часы ушли
+//! назад — свежая копия всё равно новейшая, и чистка стирает прежнюю старейшую, а
+//! не копию, после которой хвост перезаписывается. Копия пишется целиком или
+//! никак: во временный `<имя>.tmp`, `fsync`, переименование. Копия, оборвавшаяся
+//! на полном диске, не оставляет обрывка под настоящим именем; временный файл
+//! стирается сразу, а остаток оборвавшегося запуска — при следующем открытии.
 //!
 //! Снимок, который не читается, `Store` не трогает: открытие — ошибка. Его
 //! откладывает рядом как `snapshot.damaged-<мс>` и заменяет новым журналом
@@ -105,6 +115,8 @@ use plinth_types::{CoreError, Timestamp};
 pub(crate) const SNAPSHOT: &str = "snapshot";
 pub(crate) const TAIL: &str = "tail";
 const SNAPSHOT_TMP: &str = "snapshot.tmp";
+/// Папка копий рядом с журналом, `journal/aside/` (Р9е): правила Auto Backup её исключают.
+pub(crate) const ASIDE_DIR: &str = "aside";
 
 /// Хвост длиннее — сворачивается. Снимок на 10 000 событий весит сотни
 /// килобайт (C1), перезапись раз в пару тысяч операций незаметна.
@@ -133,6 +145,8 @@ pub(crate) struct Store {
     fail_next_append: bool,
     #[cfg(test)]
     fail_next_aside: bool,
+    #[cfg(test)]
+    fail_next_aside_midway: bool,
     #[cfg(test)]
     fail_next_tail_header: bool,
 }
@@ -194,6 +208,8 @@ impl Store {
             fail_next_append: false,
             #[cfg(test)]
             fail_next_aside: false,
+            #[cfg(test)]
+            fail_next_aside_midway: false,
             #[cfg(test)]
             fail_next_tail_header: false,
         };
@@ -295,6 +311,13 @@ impl Store {
         self.fail_next_aside = true;
     }
 
+    /// Следующая копия рядом оборвётся посреди записи, как `fs::copy` на полном диске
+    /// (Р9е): половина байтов во временном файле, затем ошибка.
+    #[cfg(test)]
+    pub(crate) fn fail_next_aside_midway(&mut self) {
+        self.fail_next_aside_midway = true;
+    }
+
     /// Следующий сброс хвоста усечёт файл и не сможет записать заголовок.
     #[cfg(test)]
     pub(crate) fn fail_next_tail_header(&mut self) {
@@ -341,7 +364,11 @@ impl Store {
         if std::mem::take(&mut self.fail_next_aside) {
             return Err(CoreError::storage("journal: simulated copy failure"));
         }
-        keep_aside(&self.dir, &self.dir.join(TAIL), why)?;
+        #[cfg(test)]
+        let cut = std::mem::take(&mut self.fail_next_aside_midway);
+        #[cfg(not(test))]
+        let cut = false;
+        keep_copy(&self.dir, &self.dir.join(TAIL), &format!("{TAIL}.{why}-"), cut)?;
         self.aside = None;
         prune_aside(&self.dir);
         Ok(())
@@ -452,10 +479,9 @@ pub(crate) fn inspect_snapshot(dir: &Path) -> Result<Option<Snapshot>, CoreError
     }))
 }
 
-/// Копия снимка рядом, `snapshot.damaged-<мс>`; оригинал на месте.
+/// Копия снимка рядом, `aside/snapshot.damaged-<метка>`; оригинал на месте.
 pub(crate) fn keep_snapshot_aside(dir: &Path) -> Result<(), CoreError> {
-    let aside = dir.join(format!("{SNAPSHOT}.damaged-{}", Timestamp::now().as_millis()));
-    fs::copy(dir.join(SNAPSHOT), aside).map(drop).map_err(|e| io_error("keep snapshot aside", &e))?;
+    keep_copy(dir, &dir.join(SNAPSHOT), &format!("{SNAPSHOT}.damaged-"), false)?;
     prune_aside(dir);
     Ok(())
 }
@@ -647,42 +673,125 @@ fn frame_end(bytes: &[u8], at: usize) -> Option<usize> {
     (length > 0 && end <= bytes.len()).then_some(end)
 }
 
-/// Копия испорченного файла рядом, для отчёта о сбое.
-fn keep_aside(dir: &Path, path: &Path, why: &str) -> Result<(), CoreError> {
-    let aside = dir.join(format!("{TAIL}.{why}-{}", Timestamp::now().as_millis()));
-    fs::copy(path, aside).map(drop).map_err(|e| io_error("keep tail aside", &e))
+/// Суффикс временного файла, в который пишется копия рядом.
+const TMP_SUFFIX: &str = ".tmp";
+
+/// Копия `source` в `dir/aside/<префикс><метка>`, для отчёта о сбое (Р9е): целиком или никак.
+/// Копия пишется во временный `<имя>.tmp`, `fsync`, переименование, `fsync` папки, поэтому
+/// готовое имя в `aside/` — всегда целый файл. Любая ошибка стирает временный файл и уходит
+/// наверх: оригинал не тронут, повтор при следующем сбросе. Папку `aside/` заводит первая копия.
+///
+/// `cut` — только для проверки (в сборке без `cfg(test)` всегда `false`): во временный файл
+/// пишется половина байтов и возвращается ошибка, как у `fs::copy` на полном диске.
+fn keep_copy(dir: &Path, source: &Path, prefix: &str, cut: bool) -> Result<(), CoreError> {
+    let aside = dir.join(ASIDE_DIR);
+    fs::create_dir_all(&aside).map_err(|e| io_error("create aside dir", &e))?;
+    let name = format!("{prefix}{}", next_stamp(&aside, prefix));
+    let tmp = aside.join(format!("{name}{TMP_SUFFIX}"));
+    if let Err(error) = write_whole(source, &tmp, cut).and_then(|()| fs::rename(&tmp, aside.join(&name))) {
+        // Обрывок не должен остаться; не вышло стереть — его уберёт `prune_aside` при открытии.
+        let _ = fs::remove_file(&tmp);
+        return Err(io_error("keep aside", &error));
+    }
+    sync_dir(&aside);
+    Ok(())
 }
 
-/// Отложенные файлы, которые остаются рядом: имя до метки времени и сколько новейших.
-/// Каталог журнала уходит в Auto Backup целиком (квота 25 МБ на приложение), и копии,
+/// Байты `source` целиком в новый файл `tmp` и на диск. `cut`: половина байтов и ошибка.
+fn write_whole(source: &Path, tmp: &Path, cut: bool) -> io::Result<()> {
+    let bytes = fs::read(source)?;
+    let mut file = File::create(tmp)?;
+    if cut {
+        file.write_all(&bytes[..bytes.len() / 2])?;
+        return Err(io::Error::other("simulated: no space left on device"));
+    }
+    file.write_all(&bytes)?;
+    file.sync_all()
+}
+
+/// Метка в имени отложенного файла: после `prefix` — только цифры, и число влезает в `u64`.
+/// Остальные имена не наши, их не трогают.
+fn stamp_of(name: &str, prefix: &str) -> Option<u64> {
+    let stamp = name.strip_prefix(prefix)?;
+    if stamp.is_empty() || !stamp.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    stamp.parse().ok()
+}
+
+/// Метка новой копии: миллисекунды, но не ниже меток прежних копий того же вида в `aside` —
+/// часы могли уйти назад, а чистка сравнивает метки и не должна стереть свежую копию.
+fn next_stamp(aside: &Path, prefix: &str) -> u64 {
+    let now = u64::try_from(Timestamp::now().as_millis()).unwrap_or(0);
+    let newest = fs::read_dir(aside)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| stamp_of(entry.file_name().to_str()?, prefix))
+        .max();
+    newest.map_or(now, |newest| now.max(newest.saturating_add(1)))
+}
+
+/// Отложенные файлы, которые остаются в `aside/`: имя до метки и сколько новейших.
+/// Каталог журнала уходит в Auto Backup (квота 25 МБ на приложение), и копии,
 /// которых никто не читает, не должны копиться.
 const ASIDE_KEPT: [(&str, usize); 3] = [("snapshot.damaged-", 1), ("tail.damaged-", 2), ("tail.foreign-", 1)];
 
-/// Стирает лишние отложенные файлы: остаются новейшие по метке времени в имени.
-/// Ошибка стирания — предупреждение: чистка не должна мешать журналу.
+/// Приводит `aside/` в порядок: переносит копии сборок до Р9е из самого журнала, стирает остатки
+/// оборвавшихся копий (`<имя>.tmp`) и лишние файлы — остаются новейшие по метке в имени. Имена не
+/// по образцу не трогаются. Ошибка — предупреждение: чистка не должна мешать журналу.
 fn prune_aside(dir: &Path) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let aside = dir.join(ASIDE_DIR);
+    move_into_aside(dir, &aside);
+    let Ok(entries) = fs::read_dir(&aside) else { return };
     let names: Vec<String> =
         entries.filter_map(Result::ok).filter_map(|entry| entry.file_name().into_string().ok()).collect();
+    for name in &names {
+        let unfinished = name
+            .strip_suffix(TMP_SUFFIX)
+            .is_some_and(|copy| ASIDE_KEPT.iter().any(|(prefix, _)| stamp_of(copy, prefix).is_some()));
+        if unfinished {
+            remove_aside(&aside, name);
+        }
+    }
     for (prefix, kept) in ASIDE_KEPT {
-        let mut found: Vec<(u64, &String)> = names
-            .iter()
-            .filter_map(|name| {
-                let stamp = name.strip_prefix(prefix)?;
-                // Метка — только цифры и влезает в u64; остальные имена не наши, их не трогаем.
-                if stamp.is_empty() || !stamp.bytes().all(|byte| byte.is_ascii_digit()) {
-                    return None;
-                }
-                Some((stamp.parse().ok()?, name))
-            })
-            .collect();
+        let mut found: Vec<(u64, &String)> =
+            names.iter().filter_map(|name| Some((stamp_of(name, prefix)?, name))).collect();
         found.sort();
         let surplus = found.len().saturating_sub(kept);
         for (_, name) in &found[..surplus] {
-            if let Err(error) = fs::remove_file(dir.join(name)) {
-                log::warn!("journal: could not remove {name}: {error}");
-            }
+            remove_aside(&aside, name);
         }
+    }
+}
+
+/// Копии сборок до Р9е лежали рядом с журналом и уходили в Auto Backup: они переезжают в `aside/`.
+/// Папка заводится, только если есть что переносить; не вышло — предупреждение, копия остаётся.
+fn move_into_aside(dir: &Path, aside: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    let beside: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| ASIDE_KEPT.iter().any(|(prefix, _)| stamp_of(name, prefix).is_some()))
+        .collect();
+    if beside.is_empty() {
+        return;
+    }
+    if let Err(error) = fs::create_dir_all(aside) {
+        log::warn!("journal: could not create {ASIDE_DIR}, the copies stay beside the journal: {error}");
+        return;
+    }
+    for name in beside {
+        if let Err(error) = fs::rename(dir.join(&name), aside.join(&name)) {
+            log::warn!("journal: could not move {name} into {ASIDE_DIR}: {error}");
+        }
+    }
+}
+
+fn remove_aside(aside: &Path, name: &str) {
+    if let Err(error) = fs::remove_file(aside.join(name)) {
+        log::warn!("journal: could not remove {name}: {error}");
     }
 }
 
