@@ -5,13 +5,17 @@
   files/core/journal. База, кэш, идентификатор установки, замок и настройки
   не идут: каталог вернёт скан, а ссылки базы на новом телефоне указывали
   бы на чужие файлы (ревью №7). Облачная копия — только с шифрованием на
-  устройстве: журнал хранит историю прослушиваний.
+  устройстве: журнал хранит историю прослушиваний. Папка aside/ с копиями
+  испорченных файлов журнала (Р9е) исключена: их никто не читает, и они не
+  должны занимать квоту 25 МБ.
 -->
 <data-extraction-rules>
     <cloud-backup disableIfNoEncryptionCapabilities="true">
         <include domain="file" path="core/journal/" />
+        <exclude domain="file" path="core/journal/aside/" />
     </cloud-backup>
     <device-transfer>
         <include domain="file" path="core/journal/" />
+        <exclude domain="file" path="core/journal/aside/" />
     </device-transfer>
 </data-extraction-rules>

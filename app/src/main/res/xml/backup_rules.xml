@@ -6,8 +6,10 @@
   каталог вернёт скан, а восстановленный журнал не делает новую установку
   старой. Правило с <include> берёт только перечисленное. Копия — только
   с шифрованием на устройстве (Android 9+): журнал хранит историю
-  прослушиваний.
+  прослушиваний. Папка aside/ с копиями испорченных файлов журнала (Р9е)
+  исключена: их никто не читает, и они не должны занимать квоту 25 МБ.
 -->
 <full-backup-content>
     <include domain="file" path="core/journal/" requireFlags="clientSideEncryption" />
+    <exclude domain="file" path="core/journal/aside/" />
 </full-backup-content>

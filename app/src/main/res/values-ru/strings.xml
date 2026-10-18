@@ -266,6 +266,10 @@
     <string name="backup_restored">Данные восстановлены</string>
     <string name="backup_no_access">Plinth не получил доступ к этой папке. Выберите другую.</string>
     <string name="backup_failed">Не удалось прочитать копию. Подробности — в логе.</string>
+    <string name="backup_pending">Лайки и плейлисты были повреждены и пока не вернулись. Выберите папку с копией — Plinth предложит их восстановить.</string>
+    <string name="backup_pending_dismiss">Скрыть</string>
+    <string name="backup_unreadable">В папке есть копия, которую Plinth не может прочитать: она записана более новой версией, повреждена или слишком велика. Файл не тронут.</string>
+    <string name="backup_nothing_to_restore">В этой папке нет копии, из которой можно что-то вернуть.</string>
     <plurals name="backup_likes">
         <item quantity="one">%d лайк</item>
         <item quantity="few">%d лайка</item>
