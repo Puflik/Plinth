@@ -318,6 +318,10 @@ impl Roots {
                     encode(meta, |w| w.passport(passport))
                 })
             }
+            Op::Retire { track } => {
+                let found = open(&self.passports, &mut slots.passports, txn, meta.device);
+                remove_slots(found, txn, &track.to_string())
+            }
         };
         Ok(changed)
     }
@@ -979,6 +983,66 @@ mod tests {
         assert!(replica.write(&Op::Describe(passport(track, "Кукушка"))).unwrap());
 
         assert_eq!(replica.state().passports, vec![passport(track, "Кукушка")]);
+    }
+
+    /// `Retire` стирает паспорт; чужие паспорта остаются.
+    #[test]
+    fn retire_erases_a_passport() {
+        let replica = Replica::new();
+        let (retired, kept) = (TrackId::new(), TrackId::new());
+        replica.write(&Op::Describe(passport(retired, "Кукушка"))).unwrap();
+        replica.write(&Op::Describe(passport(kept, "Группа крови"))).unwrap();
+
+        assert!(replica.write(&Op::Retire { track: retired }).unwrap());
+
+        assert_eq!(replica.state().passports, vec![passport(kept, "Группа крови")]);
+    }
+
+    /// Трек без паспорта (или уже снятый) — `false`, документ не меняется.
+    #[test]
+    fn retiring_a_track_without_a_passport_changes_nothing() {
+        let replica = Replica::new();
+        let track = TrackId::new();
+        replica.write(&Op::Describe(passport(track, "Кукушка"))).unwrap();
+        replica.write(&Op::Retire { track }).unwrap();
+        let (state, vector) = (replica.state(), replica.doc.transact().state_vector());
+
+        assert!(!replica.write(&Op::Retire { track }).unwrap());
+        assert!(!replica.write(&Op::Retire { track: TrackId::new() }).unwrap());
+
+        assert_eq!((replica.state(), replica.doc.transact().state_vector()), (state, vector));
+    }
+
+    /// Параллельное описание другой установки паспорт возвращает: добавление побеждает
+    /// удаление, как у остальных регистров.
+    #[test]
+    fn a_concurrent_describe_beats_a_retire() {
+        let phone = Replica::new();
+        let track = TrackId::new();
+        phone.write(&Op::Describe(passport(track, "Кукушка (демо)"))).unwrap();
+        let tablet = phone.fork();
+
+        phone.write(&Op::Retire { track }).unwrap();
+        tablet.write(&Op::Describe(passport(track, "Кукушка"))).unwrap();
+        phone.sync(&tablet);
+
+        assert_eq!(phone.state().passports, vec![passport(track, "Кукушка")]);
+        assert_eq!(phone.state(), tablet.state());
+    }
+
+    /// Установка, не видевшая `Retire`, приносит старый слот, но тот остаётся стёртым.
+    #[test]
+    fn an_old_slot_does_not_bring_a_retired_passport_back() {
+        let phone = Replica::new();
+        let track = TrackId::new();
+        phone.write(&Op::Describe(passport(track, "Кукушка"))).unwrap();
+        let tablet = phone.fork();
+
+        phone.write(&Op::Retire { track }).unwrap();
+        phone.sync(&tablet);
+
+        assert!(phone.state().passports.is_empty());
+        assert_eq!(phone.state(), tablet.state());
     }
 
     #[test]

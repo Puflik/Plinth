@@ -30,8 +30,8 @@ pub struct TrackPassport {
     pub sources: Vec<OnlineSource>,
 }
 
-/// Пара, найденная [`TrackPassport::pair_up`]: индексы в `wanted` и `candidates` и
-/// сходство (`likeness`).
+/// Пара, найденная [`TrackPassport::pair_up`] или [`TrackPassport::pair_up_where`]:
+/// индексы в `wanted` и `candidates` и сходство (`likeness`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pairing {
     pub wanted: usize,
@@ -73,17 +73,16 @@ impl TrackPassport {
         Some(score)
     }
 
-    /// Лучший из подходящих `candidates`; при равенстве — первый.
-    pub fn best_match(&self, candidates: &[TrackPassport]) -> Option<usize> {
-        let mut best: Option<(u8, usize)> = None;
-        for (index, candidate) in candidates.iter().enumerate() {
-            if let Some(score) = self.likeness(candidate)
-                && best.is_none_or(|(top, _)| score > top)
-            {
-                best = Some((score, index));
-            }
+    /// Альбомы не противоречат: если известны у обоих и после нормализации различаются —
+    /// это другая песня (с другого альбома или сборника), и пары нет; неизвестен хотя бы
+    /// у одного — пара возможна, паспорт мог отстать от тегов. Слабее, чем «альбом тот же»
+    /// у двойников скана, и не вето в `likeness`: перепривязка сводит не двойников, а
+    /// установки с разными библиотеками (Р9г). Симметрично.
+    pub fn albums_agree(&self, other: &TrackPassport) -> bool {
+        match (&self.album, &other.album) {
+            (Some(a), Some(b)) => normalize(a) == normalize(b),
+            _ => true,
         }
-        best.map(|(_, index)| index)
     }
 
     /// Сводит `wanted` с `candidates`; пара — тот же ключ (`key`) и `likeness` не
@@ -99,6 +98,17 @@ impl TrackPassport {
         candidates: &[TrackPassport],
         rank: impl Fn(usize) -> R,
     ) -> Vec<Pairing> {
+        Self::pair_up_where(wanted, candidates, rank, |_, _| true)
+    }
+
+    /// [`pair_up`](Self::pair_up) с условием `allow(желающий, кандидат)`: пара, которой оно
+    /// не позволяет, не заводится и никого не занимает — оба паспорта остаются другим парам.
+    pub fn pair_up_where<R: Ord>(
+        wanted: &[TrackPassport],
+        candidates: &[TrackPassport],
+        rank: impl Fn(usize) -> R,
+        allow: impl Fn(&TrackPassport, &TrackPassport) -> bool,
+    ) -> Vec<Pairing> {
         let mut by_key: HashMap<(String, String), Vec<usize>> = HashMap::new();
         for (index, candidate) in candidates.iter().enumerate() {
             by_key.entry(candidate.key()).or_default().push(index);
@@ -106,7 +116,9 @@ impl TrackPassport {
         let mut pairs: Vec<(Pairing, R)> = Vec::new();
         for (index, passport) in wanted.iter().enumerate() {
             for &candidate in by_key.get(&passport.key()).map_or(&[][..], Vec::as_slice) {
-                if let Some(score) = passport.likeness(&candidates[candidate]) {
+                if let Some(score) = passport.likeness(&candidates[candidate])
+                    && allow(passport, &candidates[candidate])
+                {
                     pairs.push((Pairing { wanted: index, candidate, score }, rank(candidate)));
                 }
             }

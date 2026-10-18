@@ -2,11 +2,14 @@
 //! переустановки скан выдаёт файлам новые ID, журнал узнаёт по паспорту свой
 //! трек, и каталог берёт ID из журнала.
 
-use plinth_types::{CoreError, EntityId, TrackId};
+use std::collections::HashSet;
+
+use plinth_types::{Availability, CoreError, EntityId, TrackId};
 use rusqlite::{OptionalExtension, Row, params};
 
 use crate::db::Database;
-use crate::db::sql::{Storage, atomically, id, opt_duration, opt_mbid};
+use crate::db::codes::Code;
+use crate::db::sql::{Storage, atomically, first_id, id, opt_duration, opt_mbid};
 use crate::model::TrackPassport;
 
 /// Трек с его первой версией — оригиналом, если он есть, — и альбомом её.
@@ -34,6 +37,23 @@ impl Database {
     pub fn track_passports(&self) -> Result<Vec<TrackPassport>, CoreError> {
         let mut statement = self.conn().prepare(&format!("{PASSPORTS} ORDER BY t.id")).storage()?;
         statement.query_map([], read_passport).storage()?.collect::<Result<_, _>>().storage()
+    }
+
+    /// Треки, которые можно сыграть: хотя бы один источник любой версии не `unavailable`
+    /// (`Availability::is_playable`). Перепривязка отдаёт данные такому треку раньше
+    /// недоступного дубля (Р9г, №17).
+    pub fn playable_tracks(&self) -> Result<HashSet<TrackId>, CoreError> {
+        let mut statement = self
+            .conn()
+            .prepare(
+                "SELECT DISTINCT v.track FROM source s JOIN version v ON v.id = s.version WHERE s.availability <> ?1",
+            )
+            .storage()?;
+        statement
+            .query_map([Availability::Unavailable.code()], first_id::<TrackId>)
+            .storage()?
+            .collect::<Result<_, _>>()
+            .storage()
     }
 
     /// Трек `from` становится треком `to` со всеми версиями, файлами и
@@ -67,9 +87,10 @@ fn read_passport(row: &Row<'_>) -> rusqlite::Result<TrackPassport> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::time::Duration;
 
-    use plinth_types::{CoreError, TrackId};
+    use plinth_types::{Availability, CoreError, Timestamp, TrackId};
 
     use crate::db::repo::fixtures::{artist, creep, db, local_source, track, version};
     use crate::model::TrackPassport;
@@ -163,5 +184,38 @@ mod tests {
         assert!(matches!(result, Err(CoreError::Storage { .. })), "{result:?}");
         assert_eq!(db.track(creep.id).unwrap().unwrap().title, "Creep");
         assert_eq!(db.versions_of(other.id).unwrap(), [other_version]);
+    }
+
+    /// Играет трек, у которого хотя бы один файл любой версии не пропал; без файлов — нет.
+    #[test]
+    fn a_track_plays_while_one_of_its_files_is_not_gone() {
+        let db = db();
+        let singer = artist("Radiohead");
+        db.save_artist(&singer).unwrap();
+        // Версии трека, у каждой — доступность её файлов.
+        let add = |title: &str, versions: &[&[Availability]]| {
+            let track = track(title, &singer, 1_000);
+            db.save_track(&track).unwrap();
+            for (number, files) in (1_u16..).zip(versions) {
+                let version = version(&track, None, number);
+                db.save_version(&version).unwrap();
+                for (index, availability) in files.iter().enumerate() {
+                    let source = local_source(&version, &format!("/music/{title}-{number}-{index}.flac"));
+                    db.save_source(&source).unwrap();
+                    db.set_availability(source.id, *availability, Timestamp::from_millis(5)).unwrap();
+                }
+            }
+            track.id
+        };
+        let available = add("Available", &[&[Availability::Available]]);
+        let degraded = add("Degraded", &[&[Availability::Degraded]]);
+        let one_of_two = add("One of two", &[&[Availability::Unavailable, Availability::Available]]);
+        let second_version = add("Second version", &[&[Availability::Unavailable], &[Availability::Available]]);
+        add("Gone", &[&[Availability::Unavailable]]);
+        add("Both gone", &[&[Availability::Unavailable, Availability::Unavailable]]);
+        add("Without files", &[&[]]);
+        add("Without versions", &[]);
+
+        assert_eq!(db.playable_tracks().unwrap(), HashSet::from([available, degraded, one_of_two, second_version]));
     }
 }
