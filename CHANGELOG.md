@@ -62,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   duplicate's place, so its plays are no longer counted twice.
 - Restoring a backup hands each song's data to its best match at once, so a
   single no longer takes the likes of the album track.
+- After Plinth has rebuilt your likes and playlists from the library, restoring
+  from the backup folder no longer brings back the playlists, ratings and likes
+  you removed since, and the old backup is no longer offered as news. It still
+  helps the library recognize songs on a card that is not inserted.
+- Rebuilding likes and playlists from the library now takes a second even with
+  tens of thousands of plays, instead of minutes.
 
 ## [0.2.3] - 2026-10-15
 
