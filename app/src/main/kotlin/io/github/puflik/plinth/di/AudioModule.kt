@@ -19,6 +19,8 @@ import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.UnavailableRescan
 import io.github.puflik.plinth.library.permission.MediaPermission
 import io.github.puflik.plinth.queue.FileQueueStore
+import io.github.puflik.plinth.queue.LegacyUriQueueStore
+import io.github.puflik.plinth.queue.MediaStorePaths
 import io.github.puflik.plinth.queue.QueueStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -54,7 +56,11 @@ object AudioModule {
     fun provideQueueStore(
         @ApplicationContext context: Context,
         @IoDispatcher io: CoroutineDispatcher,
-    ): QueueStore = FileQueueStore(File(context.filesDir, "queue"), io)
+    ): QueueStore =
+        LegacyUriQueueStore(
+            FileQueueStore(File(context.filesDir, "queue"), io),
+            MediaStorePaths(context.contentResolver, io),
+        )
 
     /** Недоступный трек библиотеки — один скан за запуск (G3); запускает `PlinthApplication`. */
     @Provides
