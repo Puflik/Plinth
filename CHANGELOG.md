@@ -43,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that matches it best, and the one you liked or played comes first.
 - Tags edited while a restore ran during a rescan are no longer stuck: the
   scan saves them to the restored song.
+- When a like or a playlist change cannot be saved, most likely because the
+  phone is full, Plinth says so every time, not just once per launch, and at
+  most once in ten seconds.
+- A damaged playback position no longer throws away the whole saved queue:
+  the song simply starts from the beginning.
+- A very long playlist name or search no longer stops the queue from being
+  saved, and a queue that failed to save no longer gets the position of the
+  next one.
+- Songs in a queue saved by Plinth 0.1 now show their likes and history.
 
 ## [0.2.3] - 2026-10-15
 

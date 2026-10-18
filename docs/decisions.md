@@ -6407,3 +6407,16 @@ Claude из списка убран.
 - Прочее: 12 узлов кода, выписанных агентами в чанках 07–08, удалены (их даёт AST);
   `Subscription` из `tasks-v0.2.md` отброшен (коллизия ID); `cluster --force` схлопнул 75 пар
   «calls + tests»; описания `fastlane` узлов не дали; `core/Cargo.toml` не разобран (как раньше).
+
+### Р1.11в сделан (ревью Opus)
+
+- Защищённые тесты (`R111c*`, 32) не тронуты (`git diff 1c0e038` пуст), CI ветки зелёный;
+  исполнитель прогнал оба варианта юнит-тестов (красные — только четыре известных
+  `DataStore*SettingsTest`), `ktlintCheck`, `detekt`, `lintGithubDebug`, на эмуляторе —
+  `MediaStorePathsTest` 3/3, `PlinthCoreTest` 10/10, `PlayerHeartRestoreTest` 2/2.
+- Ответы исполнителю (круг 1): `MediaStorePaths` и его тест — в `library/scan/`: страж
+  `ShuffleOrderTest` не пускает Android-импорты в `queue/`, а `MediaPaths` и
+  `LegacyUriQueueStore` — чистый Kotlin и остаются там. `PlinthCoreTest:174` ждёт
+  `CoreFailed(UNAVAILABLE, saving = true)`: отказ ядра на касании сердца — тоже «правка не на
+  диске»; `STORAGE` при открытии ядра на полном диске скажет «не сохранено», `UNAVAILABLE`
+  молчит, как и раньше.
