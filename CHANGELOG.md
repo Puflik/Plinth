@@ -52,6 +52,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved, and a queue that failed to save no longer gets the position of the
   next one.
 - Songs in a queue saved by Plinth 0.1 now show their likes and history.
+- Two installations that restored each other's backups now both see the
+  likes, playlists and history of both and settle on the same song, whichever
+  of them scanned first.
+- When two copies of a song match equally well, your likes go to the copy
+  that can play rather than to a missing duplicate, and a song is never
+  matched with one from another album.
+- A song that was merged into another no longer comes back later to take a
+  duplicate's place, so its plays are no longer counted twice.
+- Restoring a backup hands each song's data to its best match at once, so a
+  single no longer takes the likes of the album track.
 
 ## [0.2.3] - 2026-10-15
 
