@@ -47,14 +47,16 @@ class MediaStorePaths(
         cursor: Cursor,
         wanted: Map<Long, List<String>>,
     ): Map<String, String> {
-        val id = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-        val data = cursor.getColumnIndexOrThrow(DATA)
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+        val dataColumn = cursor.getColumnIndexOrThrow(DATA)
         val found = HashMap<String, String>()
-        var left = wanted.size
-        while (left > 0 && cursor.moveToNext()) {
-            val uris = wanted[cursor.getLong(id)] ?: continue
-            left--
-            cursor.getString(data)?.takeIf { it.isNotBlank() }?.let { path -> uris.forEach { found[it] = path } }
+        val left = wanted.keys.toMutableSet()
+        while (left.isNotEmpty() && cursor.moveToNext()) {
+            val id = cursor.getLong(idColumn)
+            val uris = wanted[id] ?: continue
+            left.remove(id)
+            val path: String? = cursor.getString(dataColumn)
+            if (!path.isNullOrBlank()) uris.forEach { found[it] = path }
         }
         return found
     }
