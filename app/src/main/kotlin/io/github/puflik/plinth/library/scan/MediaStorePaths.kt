@@ -1,10 +1,11 @@
-package io.github.puflik.plinth.queue
+package io.github.puflik.plinth.library.scan
 
 import android.content.ContentResolver
 import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
 import io.github.puflik.plinth.diagnostics.log.AppLog
+import io.github.puflik.plinth.queue.MediaPaths
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 

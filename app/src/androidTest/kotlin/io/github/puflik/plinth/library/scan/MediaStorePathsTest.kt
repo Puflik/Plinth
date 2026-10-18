@@ -1,4 +1,4 @@
-package io.github.puflik.plinth.queue
+package io.github.puflik.plinth.library.scan
 
 import android.content.ContentUris
 import android.content.ContentValues

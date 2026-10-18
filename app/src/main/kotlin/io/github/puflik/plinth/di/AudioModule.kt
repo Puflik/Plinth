@@ -18,9 +18,9 @@ import io.github.puflik.plinth.audio.media3.Media3Engine
 import io.github.puflik.plinth.library.LibraryScan
 import io.github.puflik.plinth.library.UnavailableRescan
 import io.github.puflik.plinth.library.permission.MediaPermission
+import io.github.puflik.plinth.library.scan.MediaStorePaths
 import io.github.puflik.plinth.queue.FileQueueStore
 import io.github.puflik.plinth.queue.LegacyUriQueueStore
-import io.github.puflik.plinth.queue.MediaStorePaths
 import io.github.puflik.plinth.queue.QueueStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope

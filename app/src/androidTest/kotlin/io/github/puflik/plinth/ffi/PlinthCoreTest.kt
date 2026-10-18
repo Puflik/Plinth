@@ -171,7 +171,7 @@ class PlinthCoreTest {
                 assertThrows(CoreFailure::class.java) { second.journal.like(track()) } to reported.await()
             }
 
-        assertThat(failure.error).isEqualTo(AppError.CoreFailed(CoreProblem.UNAVAILABLE))
+        assertThat(failure.error).isEqualTo(AppError.CoreFailed(CoreProblem.UNAVAILABLE, saving = true))
         assertThat(reported).isEqualTo(failure.error)
     }
 
