@@ -145,6 +145,12 @@ impl Journal {
         self.roots.state(&self.doc.transact())
     }
 
+    /// Установки, журнал которых начат заново из базы (Р9д, `start_over`): их копии в
+    /// папке — прежние, и «Восстановить» данных из них не берёт.
+    pub fn superseded(&self) -> BTreeSet<DeviceId> {
+        self.roots.superseded(&self.doc.transact()).into_iter().collect()
+    }
+
     /// Паспорт трека (C4); нет его — `None`.
     pub fn passport(&self, track: TrackId) -> Option<TrackPassport> {
         self.roots.passport(&self.doc.transact(), track)

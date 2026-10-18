@@ -33,7 +33,8 @@ pub(crate) fn apply(db: &Database, op: &Op) -> Result<(), CoreError> {
         Op::Unblock { target } => db.unblock(*target),
         Op::Set(setting) => db.save_setting(*setting),
         // Паспорт в базу не проецируется: его читает перепривязка (C4); снимает его она же (Р9г).
-        Op::Describe(_) | Op::Retire { .. } => Ok(()),
+        // Пометка сменённой установки (Р9д) — про копии в папке, базе она не нужна.
+        Op::Describe(_) | Op::Retire { .. } | Op::Supersede { .. } => Ok(()),
     }
 }
 

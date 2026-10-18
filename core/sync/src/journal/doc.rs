@@ -5,9 +5,11 @@
 //! `map` на сущность («трек → { лайк, оценка }») нельзя: созданный
 //! параллельно на двух устройствах, один из двух затрёт другой целиком.
 //!
-//! - `likes`, `subscriptions`, `blocks` — множества: ключ есть — элемент есть.
-//!   Добавление побеждает параллельное удаление: удаление стирает только ту
-//!   запись, которую видело.
+//! - `likes`, `subscriptions`, `blocks`, `superseded` — множества: ключ есть —
+//!   элемент есть. Добавление побеждает параллельное удаление: удаление стирает
+//!   только ту запись, которую видело. `superseded` (Р9д) только пополняется:
+//!   ключ — `DeviceId` установки, чей журнал начат заново из базы, и пометку
+//!   никто не снимает.
 //! - `ratings`, `playlists`, `entries`, `settings`, `passports` — регистр на ключ:
 //!   действует запись с наибольшим временем (`OpMeta.at`), при равенстве — большей
 //!   установки. Регистр с id `K` лежит слотами: `K@<установка>` — запись этой
@@ -52,6 +54,7 @@ pub(crate) struct Roots {
     blocks: MapRef,
     settings: MapRef,
     passports: MapRef,
+    superseded: MapRef,
 }
 
 /// Всё, что лежит в журнале, — то, из чего собирается проекция (C3).
@@ -69,6 +72,8 @@ pub struct JournalState {
     pub settings: Vec<Setting>,
     /// Паспорта треков с пользовательскими данными (C4).
     pub passports: Vec<TrackPassport>,
+    /// Установки, чей журнал начат заново из базы (Р9д): их копии в папке — прежние.
+    pub superseded: Vec<DeviceId>,
     /// Записи, которые этот код не прочёл: битые или из более новой версии.
     /// В документе они остаются.
     pub unreadable: usize,
@@ -88,6 +93,7 @@ impl Roots {
             blocks: doc.get_or_insert_map("blocks"),
             settings: doc.get_or_insert_map("settings"),
             passports: doc.get_or_insert_map("passports"),
+            superseded: doc.get_or_insert_map("superseded"),
         }
     }
 
@@ -322,6 +328,7 @@ impl Roots {
                 let found = open(&self.passports, &mut slots.passports, txn, meta.device);
                 remove_slots(found, txn, &track.to_string())
             }
+            Op::Supersede { device } => add(&self.superseded, txn, device.to_string(), || encode(meta, |_| ())),
         };
         Ok(changed)
     }
@@ -393,6 +400,16 @@ impl Roots {
         removed || !doomed.is_empty()
     }
 
+    /// Сменённые установки (`Op::Supersede`) по ключу; запись, которая не читается, —
+    /// молча мимо, без подсчёта (подсчёт — в [`Roots::state`]).
+    pub(crate) fn superseded<T: ReadTxn>(&self, txn: &T) -> Vec<DeviceId> {
+        self.read_superseded(txn, &mut |_| ())
+    }
+
+    fn read_superseded<T: ReadTxn>(&self, txn: &T, skip: &mut impl FnMut(CoreError)) -> Vec<DeviceId> {
+        keyed(&self.superseded, txn, skip, |key, value| record(value, |_| Ok(())).and_then(|()| key.parse()))
+    }
+
     pub(crate) fn state<T: ReadTxn>(&self, txn: &T) -> JournalState {
         let mut state = JournalState::default();
         let mut unreadable = 0;
@@ -426,6 +443,7 @@ impl Roots {
             let track = id.parse()?;
             slot(value, |r| r.passport(track))
         });
+        state.superseded = self.read_superseded(txn, &mut skip);
         state.unreadable = unreadable;
         state
     }
@@ -434,6 +452,12 @@ impl Roots {
     #[cfg(test)]
     pub(crate) fn inject_raw_like(&self, txn: &mut TransactionMut, key: &str, bytes: Vec<u8>) {
         self.likes.insert(txn, key, buffer(bytes));
+    }
+
+    /// Для тестов: сырое значение в `superseded`, в обход кодека.
+    #[cfg(test)]
+    pub(crate) fn inject_raw_superseded(&self, txn: &mut TransactionMut, key: &str, bytes: Vec<u8>) {
+        self.superseded.insert(txn, key, buffer(bytes));
     }
 }
 
@@ -1151,6 +1175,72 @@ mod tests {
 
         assert_eq!(state.likes, vec![track]);
         assert_eq!(state.unreadable, 2);
+    }
+
+    /// Пометка сменённой установки — множество: запись — `true`, повтор — `false`, документ не меняется.
+    #[test]
+    fn supersede_writes_a_set() {
+        let replica = Replica::new();
+        let replaced = DeviceId::new();
+
+        assert!(replica.write(&Op::Supersede { device: replaced }).unwrap());
+        let (state, vector) = (replica.state(), replica.doc.transact().state_vector());
+        assert!(!replica.write(&Op::Supersede { device: replaced }).unwrap());
+
+        assert_eq!(state.superseded, vec![replaced]);
+        assert_eq!((replica.state(), replica.doc.transact().state_vector()), (state, vector));
+    }
+
+    /// `state().superseded` и `Roots::superseded` — по ключу, в одном порядке при любом порядке записи.
+    #[test]
+    fn superseded_devices_read_back_by_key() {
+        let replica = Replica::new();
+        let mut replaced = [DeviceId::new(), DeviceId::new(), DeviceId::new()];
+        for device in [replaced[2], replaced[0], replaced[1]] {
+            replica.write(&Op::Supersede { device }).unwrap();
+        }
+        replaced.sort();
+
+        assert_eq!(replica.state().superseded, replaced);
+        assert_eq!(replica.roots.superseded(&replica.doc.transact()), replaced);
+    }
+
+    /// Пометка едет с документом — форком и слиянием реплик; параллельные пометки складываются.
+    #[test]
+    fn the_marker_travels_with_the_document() {
+        let phone = Replica::new();
+        let (first, second) = (DeviceId::new(), DeviceId::new());
+        phone.write(&Op::Supersede { device: first }).unwrap();
+        let tablet = phone.fork();
+        assert_eq!(tablet.state().superseded, vec![first]);
+
+        tablet.write(&Op::Supersede { device: second }).unwrap();
+        phone.sync(&tablet);
+
+        let mut both = vec![first, second];
+        both.sort();
+        assert_eq!(phone.state().superseded, both);
+        assert_eq!(phone.state(), tablet.state());
+    }
+
+    /// Пометка, которую не прочесть, и ключ, не разбирающийся как установка, пропускаются и считаются;
+    /// читаемая остаётся.
+    #[test]
+    fn unreadable_markers_are_skipped_and_counted() {
+        let replica = Replica::new();
+        let replaced = DeviceId::new();
+        replica.write(&Op::Supersede { device: replaced }).unwrap();
+        {
+            let mut txn = replica.doc.transact_mut();
+            replica.roots.inject_raw_superseded(&mut txn, &DeviceId::new().to_string(), vec![0, 1, 2]);
+            replica.roots.inject_raw_superseded(&mut txn, "not-a-device-id", vec![1]);
+        }
+
+        let state = replica.state();
+
+        assert_eq!(state.superseded, vec![replaced]);
+        assert_eq!(state.unreadable, 2);
+        assert_eq!(replica.roots.superseded(&replica.doc.transact()), vec![replaced]);
     }
 
     /// Критерий № 1 из C1: журнал на 10 000 событий — в единицах мегабайт.

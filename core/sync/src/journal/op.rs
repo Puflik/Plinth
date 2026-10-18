@@ -6,7 +6,7 @@ use plinth_library::model::{
     BlockEntry, BlockTarget, MergeDecision, PlayEvent, Playlist, PlaylistEntry, Rating, Setting, Subscription,
     TrackPassport,
 };
-use plinth_types::{ArtistId, PlaylistEntryId, PlaylistId, Position, TrackId};
+use plinth_types::{ArtistId, DeviceId, PlaylistEntryId, PlaylistId, Position, TrackId};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
@@ -61,5 +61,10 @@ pub enum Op {
     /// его пишет сам журнал.
     Retire {
         track: TrackId,
+    },
+    /// Установка `device` сменена: журнал начат заново из базы (`start_over`), и копии той установки в
+    /// папке — прежние. Не действие пользователя — пометку пишет только `start_over`.
+    Supersede {
+        device: DeviceId,
     },
 }
