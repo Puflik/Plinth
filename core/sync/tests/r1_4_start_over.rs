@@ -211,9 +211,9 @@ fn starting_over_carries_everything_the_database_shows() {
     assert_eq!(journal.device(), device);
     assert_eq!(catch_up(&journal, &db).unwrap(), CatchUp::Rebuilt);
     assert_eq!(dump(&db), before);
-    let aside = starting_with(&dir.journal(), "snapshot.damaged-");
+    let aside = starting_with(&dir.journal().join("aside"), "snapshot.damaged-");
     assert_eq!(aside.len(), 1, "{aside:?}");
-    assert_eq!(fs::read(dir.journal().join(&aside[0])).unwrap(), damaged);
+    assert_eq!(fs::read(dir.journal().join("aside").join(&aside[0])).unwrap(), damaged);
 }
 
 /// В базе пусто — переносить нечего: журнал начинается пустым, как новый.

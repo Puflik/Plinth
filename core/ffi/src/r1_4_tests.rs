@@ -36,8 +36,9 @@ fn damage(dir: &Scratch) -> Vec<u8> {
 
 /// Отложенные в сторону снимки.
 fn aside(dir: &Scratch) -> Vec<String> {
-    fs::read_dir(dir.0.join(JOURNAL))
-        .unwrap()
+    fs::read_dir(dir.0.join(JOURNAL).join("aside"))
+        .into_iter()
+        .flatten()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .filter(|name| name.starts_with("snapshot.damaged-"))
         .collect()
@@ -74,7 +75,7 @@ fn a_damaged_journal_snapshot_no_longer_locks_the_core() {
     assert_eq!(core.playlist_items(road.id).unwrap().len(), 1);
     let kept = aside(&dir);
     assert_eq!(kept.len(), 1, "{kept:?}");
-    assert_eq!(fs::read(dir.0.join(JOURNAL).join(&kept[0])).unwrap(), damaged);
+    assert_eq!(fs::read(dir.0.join(JOURNAL).join("aside").join(&kept[0])).unwrap(), damaged);
 }
 
 /// Копия в папке, записанная до порчи, этой установке больше не своя: новые

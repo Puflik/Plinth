@@ -690,6 +690,9 @@ fn prune_aside(dir: &Path) {
 mod r9b_tests;
 
 #[cfg(test)]
+mod r9f_tests;
+
+#[cfg(test)]
 mod tests {
     use std::fs::{self, OpenOptions};
     use std::io::Write;

@@ -111,7 +111,7 @@ fn assert_cut_quietly(dir: &Scratch, first: TrackId, what: &str) {
     assert_eq!(likes, vec![first], "{what}: до оборванного кадра всё цело");
     let names: Vec<String> = listing(dir).into_iter().map(|(name, _)| name).collect();
     assert!(
-        names.iter().all(|name| !name.starts_with("tail.") && !name.starts_with("snapshot.damaged")),
+        names.iter().all(|name| !name.starts_with("tail.") && name != "aside"),
         "{what}: оборванный конец — не порча, копий рядом быть не должно: {names:?}"
     );
     assert_eq!(liked(dir), sorted(vec![first, next]), "{what}: журнал пишется дальше и переживает перезапуск");

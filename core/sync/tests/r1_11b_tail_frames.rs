@@ -87,10 +87,11 @@ fn liked(dir: &Scratch) -> Vec<TrackId> {
     sorted(open(dir).state().likes)
 }
 
-/// Копии испорченного хвоста рядом с журналом.
+/// Копии испорченного хвоста в папке копий `journal/aside/` (Р9е).
 fn kept_aside(dir: &Scratch) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = fs::read_dir(dir.journal())
-        .unwrap()
+    let mut found: Vec<PathBuf> = fs::read_dir(dir.journal().join("aside"))
+        .into_iter()
+        .flatten()
         .map(|entry| entry.unwrap().path())
         .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with("tail.damaged-"))
         .collect();

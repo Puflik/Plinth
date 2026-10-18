@@ -26,10 +26,11 @@ impl Drop for Scratch {
     }
 }
 
-/// Копии испорченного хвоста рядом.
+/// Копии испорченного хвоста в папке копий `journal/aside/` (Р9е).
 fn aside(dir: &Scratch) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = fs::read_dir(&dir.0)
-        .unwrap()
+    let mut found: Vec<PathBuf> = fs::read_dir(dir.0.join("aside"))
+        .into_iter()
+        .flatten()
         .map(|entry| entry.unwrap().path())
         .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with("tail.damaged-"))
         .collect();

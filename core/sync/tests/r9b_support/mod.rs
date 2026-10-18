@@ -56,10 +56,12 @@ pub fn spans(tail: &[u8]) -> Vec<(usize, usize)> {
     spans
 }
 
-/// Файлы каталога журнала, чьё имя начинается с `prefix`, по возрастанию имени.
+/// Файлы папки копий `journal/aside/` (Р9е), чьё имя начинается с `prefix`, по возрастанию
+/// имени; нет папки — нет и копий.
 pub fn beside(dir: &Scratch, prefix: &str) -> Vec<PathBuf> {
-    let mut found: Vec<PathBuf> = fs::read_dir(dir.journal())
-        .unwrap()
+    let mut found: Vec<PathBuf> = fs::read_dir(dir.journal().join("aside"))
+        .into_iter()
+        .flatten()
         .map(|entry| entry.unwrap().path())
         .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with(prefix))
         .collect();

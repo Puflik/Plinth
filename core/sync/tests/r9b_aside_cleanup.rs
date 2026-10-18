@@ -1,10 +1,10 @@
 //! Р9б (`docs/work/r9b.md`, «Не проверено» ревью R1, журнал): чистка отложенных
 //! файлов `*.damaged-*` и `*.foreign-*`. Их никто не стирал: каждая порча оставляла
-//! копию навсегда, а правило Auto Backup берёт весь `core/journal/` целиком (квота
-//! 25 МБ на приложение, и перебор отключает копирование совсем). Теперь рядом
-//! остаются только новейшие: `tail.damaged-` — две, `snapshot.damaged-` и
-//! `tail.foreign-` — по одной. Имя несёт время в миллисекундах: новизну решает оно.
-//! Чужие файлы каталога и имена не по образцу не трогаются.
+//! копию навсегда, а правило Auto Backup берёт `core/journal/` (квота 25 МБ на
+//! приложение, и перебор отключает копирование совсем). Теперь остаются только
+//! новейшие: `tail.damaged-` — две, `snapshot.damaged-` и `tail.foreign-` — по одной.
+//! Имя несёт время в миллисекундах: новизну решает оно. Чужие файлы папки и имена не по
+//! образцу не трогаются. С Р9е копии лежат в `journal/aside/` (`r9f_aside_folder.rs`).
 
 #![allow(clippy::unwrap_used, reason = "тест: упавший unwrap и есть упавший тест")]
 
@@ -19,8 +19,9 @@ use plinth_types::DeviceId;
 use r9b_support::{FRAME_HEADER, Pristine, spans};
 
 fn names(dir: &Scratch) -> Vec<String> {
-    let mut found: Vec<String> = fs::read_dir(dir.journal())
-        .unwrap()
+    let mut found: Vec<String> = fs::read_dir(dir.journal().join("aside"))
+        .into_iter()
+        .flatten()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     found.sort();
@@ -28,8 +29,9 @@ fn names(dir: &Scratch) -> Vec<String> {
 }
 
 fn plant(dir: &Scratch, files: &[&str]) {
+    fs::create_dir_all(dir.journal().join("aside")).unwrap();
     for name in files {
-        fs::write(dir.journal().join(name), b"aside").unwrap();
+        fs::write(dir.journal().join("aside").join(name), b"aside").unwrap();
     }
 }
 
@@ -60,9 +62,7 @@ fn only_the_newest_aside_files_stay() {
         names(&dir),
         [
             "notes.txt",
-            "snapshot",
             "snapshot.damaged-2000",
-            "tail",
             "tail.damaged",
             "tail.damaged-2000",
             "tail.damaged-3000",
@@ -88,5 +88,5 @@ fn a_new_copy_pushes_the_oldest_out() {
     assert!(copies.contains(&"tail.damaged-2000".to_owned()), "прежняя вторая осталась: {copies:?}");
     assert!(!copies.contains(&"tail.damaged-1000".to_owned()), "старейшая вытеснена: {copies:?}");
     let new = copies.iter().find(|name| name.as_str() != "tail.damaged-2000").unwrap();
-    assert_eq!(fs::read(dir.journal().join(new)).unwrap(), tail, "новая копия — испорченный хвост");
+    assert_eq!(fs::read(dir.journal().join("aside").join(new)).unwrap(), tail, "новая копия — испорченный хвост");
 }
