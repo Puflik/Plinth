@@ -713,4 +713,49 @@ fn measure() {
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко), замер, мутации._
+**Сделано всё, остановок нет.** Работал по файлу задачи; временную реализацию планировщика (патч в папке заметок)
+не открывал и не применял. Вопросов нет. Коммиты `work/r9d` после `2ad2a8a`:
+
+- `688bea8` — реализация: `relink.rs` переписан по «Алгоритму дословно», оба шага через `pair_up_where` с `albums_agree`
+  (поправка Opus, п. 9); `Op::Retire` (`op.rs`, `doc.rs` `write_one`, `apply.rs`); `Database::playable_tracks`;
+  `TrackPassport::albums_agree` и `pair_up_where` (`pair_up` зовёт его с `|_, _| true`); `best_match` удалён. Свои тесты:
+  `doc.rs` — 4 на `Retire`, `passport_repo.rs` — `playable_tracks`, `relink.rs` — 10 (`derived`: стабилен, различает запись,
+  `from` и `to`, не зависит от пути, держит версию 7 и вариант RFC 9562; `ByTrack::fold_ops`: лайк и оценка, запись
+  плейлиста, запись, которая у `to` уже есть, две записи одного плейлиста, прослушивания с пропуском повторов, пустой `from`).
+- `4b9e0c0` — `core/sync/tests/r9d_album_conflict.rs` (4 теста): шаг 2 не сливает «Intro» One с занятым «Intro» Two (`relink`
+  = 0, оба паспорта на месте, лайки порознь); шаг 1 не отдаёт ID свободному «Intro» Two; два стража — альбом известен
+  только у одного → пара, как раньше, в обоих шагах и в обе стороны.
+- `9d82975` — ADR 0007: строка `2026-10-18 (Р9г)` в «Статусе» и абзац в «Последствиях» после абзаца о переносе файла
+  (два шага, пары разом, играемый первым, меньший ID, `Op::Retire`, `derived`, «альбомы не противоречат», ограничения).
+- последний — два юнит-теста в `passport.rs` (`albums_agree`; `pair_up_where` — запрещённая пара никого не занимает) и
+  этот отчёт.
+
+**Проверки** (Windows, `CARGO_TARGET_DIR` общий):
+
+- 14 защищённых тестов: на старте 11 красных и 3 охранных зелёных (как в плане), теперь все зелёные; защищённые файлы
+  не тронуты (`git diff 3e720b3 HEAD` по ним пуст).
+- `cargo test -p plinth-sync -p plinth-library -p plinth-ffi --no-fail-fast` — 52 набора `ok`, ни одного `FAILED`
+  (`logging::tests::*` и `panic::tests::*` в этом прогоне не краснели).
+- `cargo clippy --workspace --all-targets -- -D warnings` — чисто. `cargo fmt --all -- --check` — код 1 только из-за
+  «Incorrect newline style» (CRLF рабочего дерева), настоящих `Diff in` нет; на изменённых файлах отдельно
+  `rustfmt --check --config newline_style=Auto` — чисто. `grep -rn best_match core` — пуст. Gradle не запускал.
+- `cargo check --workspace --all-targets` — чисто: арм `Op::Retire` понадобился только в `doc.rs` (`write_one`) и
+  `apply.rs`, больше нигде.
+
+**Замер** (debug, `relink`, две установки; числа планировщика — 0,15 / 0,36 / 1,0 с): 500 пар — 0,166 и 0,159 с; 1000 —
+0,389 и 0,386 с; 2000 — 1,076 и 1,066 с (A восстанавливает копию B, и наоборот). В пределах ×1,1. Файл замера удалён.
+
+**Мутации** (правка → `r9d_*` (6 файлов) → откат; рабочее дерево после чистое):
+
+| Мутация | Красные тесты |
+|---|---|
+| M2. убрать `ops.push(Op::Retire { track: from });` | оба `r9d_merged_passport`; `a_second_exchange_changes_nothing`; мой страж `a_busy_track_with_an_album_known_on_one_side_only_still_merges` |
+| M3. случайные ID вместо `derived` (прослушивание и запись плейлиста) | `independent_moves_of_the_same_data_do_not_double_it`; `a_second_exchange_changes_nothing`; `data_that_reaches_the_smallest_id_by_two_paths_is_not_doubled` |
+| M3c. в `derived` только `to` | только `data_that_reaches_the_smallest_id_by_two_paths_is_not_doubled` (`r9d_two_installations` зелёные) |
+| `albums_agree` всегда `true` (Opus, п. 9) | `busy_tracks_of_different_albums_are_not_merged` (а) и `a_free_track_of_another_album_keeps_its_own_id` (б); стражи (в) зелёные |
+
+**Чтение по ответу Opus 3** (ID прослушиваний и записей плейлистов не должны читаться как время): сортировки по ID в `core`
+— только вторичный ключ после настоящего: `ORDER BY started_at DESC, id DESC` (`history_repo.rs`), `ORDER BY position, id`
+(`playlist_repo.rs`, `query/playlists.rs`), `(position, id)` в `ordered_entries`; `keyed` в `doc.rs` сортирует по строковому
+ключу карты ради одинакового порядка состояния; `last_played_at` — `max(started_at)`; время из UUID нигде не достаётся;
+в `app/` сортировок по ID прослушиваний и записей нет. Стоп-условие не сработало.

@@ -139,3 +139,45 @@ impl TrackPassport {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn passport(album: Option<&str>) -> TrackPassport {
+        TrackPassport {
+            track: TrackId::new(),
+            title: "Intro".to_owned(),
+            artist: "Band".to_owned(),
+            album: album.map(str::to_owned),
+            duration: Some(Duration::from_secs(60)),
+            mbid: None,
+            sources: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn albums_agree_unless_both_are_known_and_differ() {
+        let (one, two, bare) = (passport(Some("One")), passport(Some("Two")), passport(None));
+
+        assert!(one.albums_agree(&passport(Some("ONE"))), "нормализация — как в likeness");
+        assert!(!one.albums_agree(&two) && !two.albums_agree(&one));
+        assert!(one.albums_agree(&bare) && bare.albums_agree(&one) && bare.albums_agree(&passport(None)));
+    }
+
+    /// Пара, которой условие не позволяет, никого не занимает: кандидат с лучшим счётом не
+    /// проходит, и паспорт достаётся тому, кто проходит.
+    #[test]
+    fn a_pair_the_condition_forbids_takes_nobody() {
+        let wanted = [passport(Some("One"))];
+        let candidates = [passport(Some("One")), passport(None)];
+
+        let pairs = TrackPassport::pair_up_where(&wanted, &candidates, |_| 0, |_, candidate| candidate.album.is_none());
+
+        assert_eq!(pairs, [Pairing { wanted: 0, candidate: 1, score: 1 }]);
+        assert_eq!(
+            TrackPassport::pair_up(&wanted, &candidates, |_| 0),
+            [Pairing { wanted: 0, candidate: 0, score: 3 }]
+        );
+    }
+}
