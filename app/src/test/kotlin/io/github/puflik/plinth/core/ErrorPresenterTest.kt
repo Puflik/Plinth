@@ -27,10 +27,11 @@ class ErrorPresenterTest {
             .isEqualTo(ErrorNotice.Skipped(gone, count = 1))
     }
 
-    /** База ядра собрана заново из журнала — сказать один раз: лайки на месте, треки вернёт скан. */
+    /** База ядра собрана заново из журнала — сказать один раз, когда показана: лайки на месте, треки вернёт скан. */
     @Test
     fun `a restored library is told once`() {
         assertThat(presenter.present(AppError.LibraryRestored)).isEqualTo(ErrorNotice.LibraryRestored)
+        presenter.shown(ErrorNotice.LibraryRestored)
         assertThat(presenter.present(AppError.LibraryRestored)).isNull()
     }
 

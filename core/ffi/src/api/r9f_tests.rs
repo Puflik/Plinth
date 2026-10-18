@@ -109,9 +109,11 @@ fn restoring_nothing_keeps_the_mark() {
     let copy = lost_journal(&dir);
     let core = Core::open(dir.path()).unwrap();
 
-    let found = core.inspect_mirror(vec![MirrorFile { name: copy.name.clone(), content: copy.content.clone() }]).unwrap();
+    let found =
+        core.inspect_mirror(vec![MirrorFile { name: copy.name.clone(), content: copy.content.clone() }]).unwrap();
     let nothing = core.restore_mirror(Vec::new()).unwrap();
-    let junk = core.restore_mirror(vec![MirrorFile { name: "notes.txt".to_owned(), content: b"hello".to_vec() }]).unwrap();
+    let junk =
+        core.restore_mirror(vec![MirrorFile { name: "notes.txt".to_owned(), content: b"hello".to_vec() }]).unwrap();
 
     assert!(found.news);
     assert_eq!((nothing.merged, junk.merged, junk.unreadable), (0, 0, 1));

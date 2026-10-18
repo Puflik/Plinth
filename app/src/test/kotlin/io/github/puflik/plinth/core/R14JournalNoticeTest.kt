@@ -15,6 +15,7 @@ class R14JournalNoticeTest {
     fun `a journal started over from the library is told once`() {
         assertThat(presenter.present(AppError.JournalStartedOver(carried = true)))
             .isEqualTo(ErrorNotice.JournalStartedOver(carried = true))
+        presenter.shown(ErrorNotice.JournalStartedOver(carried = true))
         assertThat(presenter.present(AppError.JournalStartedOver(carried = true))).isNull()
     }
 

@@ -37,6 +37,13 @@ class FakeJournalMirror(
     /** Следующая копия не получится — как отказ ядра. */
     var failNextCopy = false
 
+    private var pending = false
+
+    /** Журнал начат заново пустым, и данные не вернулись (Р9е) — как пометка `restore-pending` ядра. */
+    fun markRestorePending() {
+        pending = true
+    }
+
     override val changes: StateFlow<Long> = counter.asStateFlow()
 
     /** Файлы в фонотеку; знакомый паспорту файл получает ID из журнала. */
@@ -73,6 +80,14 @@ class FakeJournalMirror(
 
     override suspend fun restore(files: List<MirrorFile>): MirrorRestore = synchronized(this) { restoreNow(files) }
 
+    override suspend fun restorePending(): Boolean = synchronized(this) { pending }
+
+    override suspend fun dismissRestorePending(): Boolean =
+        synchronized(this) {
+            pending = false
+            true
+        }
+
     private fun copyNow(): MirrorFile? {
         if (failNextCopy) {
             failNextCopy = false
@@ -102,6 +117,7 @@ class FakeJournalMirror(
     private fun restoreNow(files: List<MirrorFile>): MirrorRestore {
         val (copies, unreadable) = read(files)
         val merged = copies.count { it.isNewsTo(this) }
+        if (merged > 0) pending = false
         for (copy in copies) {
             likes += copy.likes
             copy.playlists.forEach { (name, list) -> playlists.putIfAbsent(name, list) }

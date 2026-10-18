@@ -87,7 +87,8 @@ fn a_tail_of_another_journal_is_kept_in_the_aside_folder() {
 fn copies_made_by_older_builds_move_into_the_aside_folder() {
     let dir = Scratch::new();
     open(&dir);
-    let planted = [("tail.damaged-1000", b"a".as_slice()), ("snapshot.damaged-2000", b"b"), ("tail.foreign-3000", b"c")];
+    let planted =
+        [("tail.damaged-1000", b"a".as_slice()), ("snapshot.damaged-2000", b"b"), ("tail.foreign-3000", b"c")];
     for (name, bytes) in planted {
         fs::write(dir.journal().join(name), bytes).unwrap();
     }
@@ -96,7 +97,10 @@ fn copies_made_by_older_builds_move_into_the_aside_folder() {
 
     open(&dir);
 
-    assert_eq!(names(&dir.journal().join("aside")), ["snapshot.damaged-2000", "tail.damaged-1000", "tail.foreign-3000"]);
+    assert_eq!(
+        names(&dir.journal().join("aside")),
+        ["snapshot.damaged-2000", "tail.damaged-1000", "tail.foreign-3000"]
+    );
     for (name, bytes) in planted {
         assert_eq!(fs::read(dir.journal().join("aside").join(name)).unwrap(), bytes, "{name}");
     }

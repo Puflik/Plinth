@@ -729,10 +729,11 @@ mod tests {
         OpenOptions::new().append(true).open(dir.0.join(TAIL)).unwrap().write_all(bytes).unwrap();
     }
 
-    /// Имена файлов каталога, начинающиеся с `prefix`, по порядку.
+    /// Имена файлов папки копий `journal/aside/` (Р9е), начинающиеся с `prefix`, по порядку.
     fn aside(dir: &Scratch, prefix: &str) -> Vec<PathBuf> {
-        let mut found: Vec<PathBuf> = fs::read_dir(&dir.0)
-            .unwrap()
+        let mut found: Vec<PathBuf> = fs::read_dir(dir.0.join("aside"))
+            .into_iter()
+            .flatten()
             .map(|entry| entry.unwrap().path())
             .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with(prefix))
             .collect();
@@ -1031,11 +1032,12 @@ mod tests {
     }
 
     /// Новые отложенные файлы вытесняют старейшие по числу в имени (не по строке: 9 старше 10);
-    /// чужие имена, имена без метки и сами файлы журнала не тронуты.
+    /// чужие имена, имена без метки и сами файлы журнала не тронуты. Копии лежат в `aside/` (Р9е).
     #[test]
     fn pruning_keeps_the_newest_by_the_number_in_the_name_and_leaves_other_names_alone() {
         let dir = Scratch::new();
-        fs::create_dir_all(&dir.0).unwrap();
+        let aside = dir.0.join("aside");
+        fs::create_dir_all(&aside).unwrap();
         let pruned = [
             "tail.damaged-9",
             "tail.damaged-10",
@@ -1054,20 +1056,29 @@ mod tests {
             "tail.damaged-99999999999999999999999",
             "tail.other-1",
             "snapshot.damaged",
-            "snapshot",
-            "snapshot.tmp",
-            "tail",
-            "device",
         ];
+        let journal_files = ["snapshot", "snapshot.tmp", "tail", "device"];
         for name in pruned.iter().chain(&others) {
+            fs::write(aside.join(name), name).unwrap();
+        }
+        for name in journal_files {
             fs::write(dir.0.join(name), name).unwrap();
         }
 
         prune_aside(&dir.0);
 
-        let mut left: Vec<String> =
-            fs::read_dir(&dir.0).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
-        left.sort();
+        let listing = |path: &std::path::Path| -> Vec<String> {
+            let mut names: Vec<String> =
+                fs::read_dir(path).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
+            names.sort();
+            names
+        };
+        assert_eq!(
+            listing(&dir.0),
+            ["aside", "device", "snapshot", "snapshot.tmp", "tail"],
+            "файлы журнала не тронуты"
+        );
+        let left = listing(&aside);
         let mut expected: Vec<&str> =
             ["tail.damaged-10", "tail.damaged-100", "tail.foreign-50", "snapshot.damaged-2"].into();
         expected.extend(others);

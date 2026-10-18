@@ -257,7 +257,7 @@ fn the_old_tail_does_not_leak_into_the_new_journal() {
     assert_eq!(catch_up(&reopened, &db).unwrap(), CatchUp::UpToDate, "nothing new came from the old tail");
     assert_eq!(dump(&db), before);
     assert!(
-        !starting_with(&dir.journal(), "tail.").is_empty(),
+        !starting_with(&dir.journal().join("aside"), "tail.").is_empty(),
         "the old tail is kept aside: {:?}",
         listing(&dir.journal())
     );
