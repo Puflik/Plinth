@@ -145,3 +145,25 @@ fn a_replaced_copy_gives_back_passports_only_for_tracks_that_have_data() {
     assert_eq!(new.restore(&files).merged, 0);
     assert_eq!(new.journal.state(), state, "the second restore changed the journal");
 }
+
+/// Папка могла переименовать файл (`… (1)`): копия сменённой установки узнаётся по началу имени — так же,
+/// как своя копия в `Core`, которую восстановление пропускает.
+#[test]
+fn a_renamed_file_of_a_replaced_installation_is_still_stale() {
+    let mut old = Installation::scanned(&[SONG]);
+    let song = old.track(SONG);
+    old.like(song);
+    let road = old.list("Road", song);
+    let name = format!("{} (1)", old.name());
+    let stale = old.copy();
+    let mut new = old.started_over();
+    new.record(&Op::DeletePlaylist { playlist: road.id });
+    let before = new.journal.state();
+
+    let found = new.inspect(&[(&name, &stale)]);
+    let restored = new.restore(&[(&name, &stale)]);
+
+    assert!(!found.news, "{found:?}");
+    assert_eq!(restored.merged, 0);
+    assert_eq!(new.journal.state(), before, "the journal changed");
+}
