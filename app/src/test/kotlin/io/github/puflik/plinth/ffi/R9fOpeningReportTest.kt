@@ -17,10 +17,16 @@ import kotlin.time.Duration.Companion.seconds
 class R9fOpeningReportTest {
     private val errors = CoreErrors()
 
+    private fun opened(
+        databaseRecovered: Boolean = false,
+        restoredFromJournal: Boolean = false,
+        journalStartedOver: Boolean = false,
+    ) = errors.opened(StartupReport(databaseRecovered, restoredFromJournal, journalStartedOver))
+
     @Test
     fun `a journal started over from the library is announced`() =
         runTest {
-            errors.opened(StartupReport(databaseRecovered = false, restoredFromJournal = true, journalStartedOver = true))
+            opened(restoredFromJournal = true, journalStartedOver = true)
 
             assertThat(withTimeout(1.seconds) { errors.events.first() })
                 .isEqualTo(AppError.JournalStartedOver(carried = true))
@@ -29,7 +35,7 @@ class R9fOpeningReportTest {
     @Test
     fun `a journal started over with nothing carried says the copy is the only way back`() =
         runTest {
-            errors.opened(StartupReport(databaseRecovered = true, restoredFromJournal = false, journalStartedOver = true))
+            opened(databaseRecovered = true, journalStartedOver = true)
 
             assertThat(withTimeout(1.seconds) { errors.events.first() })
                 .isEqualTo(AppError.JournalStartedOver(carried = false))
@@ -38,7 +44,7 @@ class R9fOpeningReportTest {
     @Test
     fun `a rebuilt database is announced as a restored library`() =
         runTest {
-            errors.opened(StartupReport(databaseRecovered = true, restoredFromJournal = false, journalStartedOver = false))
+            opened(databaseRecovered = true)
 
             assertThat(withTimeout(1.seconds) { errors.events.first() }).isEqualTo(AppError.LibraryRestored)
         }
@@ -46,7 +52,7 @@ class R9fOpeningReportTest {
     @Test
     fun `a library rebuilt from the journal is announced as restored`() =
         runTest {
-            errors.opened(StartupReport(databaseRecovered = false, restoredFromJournal = true, journalStartedOver = false))
+            opened(restoredFromJournal = true)
 
             assertThat(withTimeout(1.seconds) { errors.events.first() }).isEqualTo(AppError.LibraryRestored)
         }
@@ -54,7 +60,7 @@ class R9fOpeningReportTest {
     @Test
     fun `an ordinary opening says nothing`() =
         runTest {
-            errors.opened(StartupReport(databaseRecovered = false, restoredFromJournal = false, journalStartedOver = false))
+            opened()
 
             assertThat(withTimeoutOrNull(1.seconds) { errors.events.first() }).isNull()
         }
