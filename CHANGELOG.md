@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   helps the library recognize songs on a card that is not inserted.
 - Rebuilding likes and playlists from the library now takes a second even with
   tens of thousands of plays, instead of minutes.
+- The notice that your likes and playlists were restored, or that they need
+  restoring from your backup, now appears even when Plinth opens its data on a
+  second try, and turning the screen no longer makes it disappear for good.
+  Until the data comes back, Settings → Data backup reminds you to choose the
+  folder with your copy.
+- A copy in the backup folder that Plinth can't read (written by a newer
+  version, damaged or too large) is now reported instead of looking like an
+  empty folder.
+- Copies of damaged journal files no longer count against Android's 25 MB
+  backup quota, a fresh copy is no longer deleted when the clock goes back, and
+  a copy cut short by a full disk leaves nothing behind.
+- Writing the copy to the backup folder no longer deletes the previous copy
+  before the new one is fully written.
 
 ## [0.2.3] - 2026-10-15
 
