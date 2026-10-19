@@ -41,7 +41,8 @@ impl FixtureTransport {
         let mut transport = Self::new();
         for answer in index {
             let body = read(&answer.body)?;
-            transport = transport.on(&answer.url, [Ok(HttpResponse { status: answer.status, body })]);
+            transport =
+                transport.on(&answer.url, [Ok(HttpResponse { status: answer.status, body, headers: Vec::new() })]);
         }
         Ok(transport)
     }

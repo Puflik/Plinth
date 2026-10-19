@@ -16,15 +16,27 @@ pub struct HttpRequest {
 pub struct HttpResponse {
     pub status: u16,
     pub body: Vec<u8>,
+    /// Заголовки ответа: порядок и регистр имён — как прислал сервер.
+    pub headers: Vec<(String, String)>,
 }
 
 impl HttpResponse {
     pub fn ok(body: impl Into<Vec<u8>>) -> Self {
-        Self { status: 200, body: body.into() }
+        Self { status: 200, body: body.into(), headers: Vec::new() }
     }
 
     pub fn status(status: u16) -> Self {
-        Self { status, body: Vec::new() }
+        Self { status, body: Vec::new(), headers: Vec::new() }
+    }
+
+    pub fn with_header(mut self, name: &str, value: &str) -> Self {
+        self.headers.push((name.to_owned(), value.to_owned()));
+        self
+    }
+
+    /// Значение первого заголовка с этим именем; регистр имени не важен.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers.iter().find(|(own, _)| own.eq_ignore_ascii_case(name)).map(|(_, value)| value.as_str())
     }
 }
 
@@ -33,9 +45,10 @@ impl HttpResponse {
 /// записанные ответы. Ядро само в сеть не ходит.
 ///
 /// Один запрос, без повторов — их делает [`super::HttpClient`]. Редиректы
-/// транспорт проходит сам. Статус не ошибка: 404 и 503 — ответы. Ошибка —
-/// когда ответа нет: не соединилось, таймаут, оборвалось — `Network`; тело
-/// длиннее `max_body_bytes` — `Parse`.
+/// транспорт проходит сам. Статус не ошибка: 404 и 503 — ответы, и заголовки
+/// ответа (`Retry-After`) едут вместе с ним. Ошибка — когда ответа нет: не
+/// соединилось, таймаут (`Network("timed out")`, [`super::timed_out`]),
+/// оборвалось — `Network`; тело длиннее `max_body_bytes` — `Parse`.
 pub trait HttpTransport: Send + Sync {
     fn get(&self, request: &HttpRequest) -> Result<HttpResponse, CoreError>;
 }

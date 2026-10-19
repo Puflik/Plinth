@@ -4,7 +4,12 @@ use std::time::Duration;
 
 use plinth_types::CoreError;
 
-use super::{HttpRequest, HttpTransport, Limits};
+use super::{HttpRequest, HttpTransport, Limits, check_status, is_transient, parse_retry_after, timed_out};
+
+/// Дольше этого срок сервера (`Retry-After`) не ждётся: поиск не висит минуту, а
+/// провайдер отдыхает столько, сколько просил сервер (`Health::after`). Не поле
+/// [`HttpPolicy`]: литералы `HttpPolicy { … }` есть в чужих тестах.
+const MAX_RETRY_AFTER_WAIT: Duration = Duration::from_secs(10);
 
 /// Политика запросов (E1.1). Таймаут, число попыток и пауза придут из
 /// конфига провайдера; User-Agent — от приложения: Internet Archive просит
@@ -38,8 +43,12 @@ type Pause = Arc<dyn Fn(Duration) + Send + Sync>;
 ///
 /// Повторяется то, что может пройти само: нет ответа (`Network` от
 /// транспорта), 429 и 5xx. 404 и 410 — `Unavailable` сразу: элемента нет,
-/// провайдер жив. Остальные статусы — `Network` сразу. В тексте ошибки —
-/// только статус: в адресе бывает поисковый запрос.
+/// провайдер жив. Остальные статусы — `Network` сразу. Что значит статус —
+/// решает [`check_status`], единая таблица (`status.rs`). В тексте ошибки —
+/// только статус и срок сервера: в адресе бывает поисковый запрос.
+///
+/// 429 и 5xx могут просить подождать (`Retry-After`, целые секунды): пауза перед
+/// следующей попыткой — не меньше этого срока, но не дольше десяти секунд.
 #[derive(Clone)]
 pub struct HttpClient {
     transport: Arc<dyn HttpTransport>,
@@ -71,8 +80,14 @@ impl HttpClient {
     /// одного вызова. Отменено — `Network("cancelled")`, транспорт после этого не
     /// зовётся; срок вышел до первой попытки — `Network("timed out")`; попытка просит у
     /// транспорта не больше остатка срока; пауза, которая съела бы остаток, не берётся —
-    /// возвращается последняя настоящая ошибка. Ответ, который пришёл, возвращается как
-    /// всегда, даже если отменили в это время. Без срока и отмены — это `get`.
+    /// возвращается последняя настоящая ошибка (со статусом, а не «timed out»). Ответ,
+    /// который пришёл, возвращается как всегда, даже если отменили в это время. Без срока и
+    /// отмены — это `get`.
+    ///
+    /// Срок сервера (`Retry-After`) принадлежит только попытке, на которую он пришёл:
+    /// пауза после неё — `max(наша пауза, срок)`. Просит дольше десяти секунд — не ждём и не
+    /// стучимся, возвращается ошибка с настоящим статусом и сроком (его знает здоровье
+    /// провайдера, `Health::after`).
     pub fn get_within(&self, url: &str, headers: &[(String, String)], limits: &Limits) -> Result<Vec<u8>, CoreError> {
         let mut request = self.request(url, headers);
         let attempts = self.policy.attempts.max(1);
@@ -83,22 +98,22 @@ impl HttpClient {
             }
             if limits.left() == Some(Duration::ZERO) {
                 if attempt == 0 {
-                    return Err(CoreError::network("timed out"));
+                    return Err(timed_out());
                 }
                 break;
             }
             request.timeout = limits.left().map_or(self.policy.timeout, |left| left.min(self.policy.timeout));
+            // Что сервер попросил на этой попытке; следующей он не принадлежит.
+            let mut asked = None;
             match self.transport.get(&request) {
-                Ok(response) if (200..300).contains(&response.status) => {
-                    return self.checked_body(response.body);
+                Ok(response) => {
+                    asked = response.header("Retry-After").and_then(parse_retry_after);
+                    match check_status(response.status, asked) {
+                        Ok(()) => return self.checked_body(response.body),
+                        Err(error) if is_transient(response.status) => last = error,
+                        Err(error) => return Err(error),
+                    }
                 }
-                Ok(response) if matches!(response.status, 404 | 410) => {
-                    return Err(CoreError::unavailable(format!("http {}", response.status)));
-                }
-                Ok(response) if response.status == 429 || (500..600).contains(&response.status) => {
-                    last = status_error(response.status);
-                }
-                Ok(response) => return Err(status_error(response.status)),
                 Err(error @ CoreError::Network { .. }) => last = error,
                 Err(error) => return Err(error),
             }
@@ -107,7 +122,15 @@ impl HttpClient {
                 return Err(cancelled());
             }
             if attempt + 1 < attempts {
-                let pause = self.backoff_before(attempt + 1);
+                let mut pause = self.backoff_before(attempt + 1);
+                if let Some(asked) = asked {
+                    // Сервер просит дольше предела: не ждём и не стучимся.
+                    if asked > MAX_RETRY_AFTER_WAIT {
+                        break;
+                    }
+                    // Срок сервера нашу паузу не укорачивает.
+                    pause = pause.max(asked);
+                }
                 // Пауза, которая съела бы остаток срока, не берётся: ответа за ней не будет.
                 if limits.left().is_some_and(|left| left <= pause) {
                     break;
@@ -154,21 +177,6 @@ impl HttpClient {
 /// а не по тексту, — текст нужен только логу.
 fn cancelled() -> CoreError {
     CoreError::network("cancelled")
-}
-
-/// Ответ с неудачным статусом — `Network` с текстом «http NNN». Здоровье
-/// провайдера по этому тексту отличает отказ сервера от сбоя соединения.
-fn status_error(status: u16) -> CoreError {
-    CoreError::network(format!("http {status}"))
-}
-
-/// Статус, если ошибка — ответ сервера (`status_error`); `None` — соединения
-/// не вышло вовсе (нет сети, DNS, таймаут).
-pub(crate) fn http_status(error: &CoreError) -> Option<u16> {
-    match error {
-        CoreError::Network { message } => message.strip_prefix("http ")?.parse().ok(),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

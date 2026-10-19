@@ -4,12 +4,14 @@
 mod client;
 mod header;
 mod limits;
+mod status;
 mod transport;
 mod url;
 
-pub(crate) use client::http_status;
 pub use client::{HttpClient, HttpPolicy};
 pub(crate) use header::{is_header_name, is_header_value};
 pub use limits::{Cancel, Limits};
+pub(crate) use status::is_transient;
+pub use status::{NetFailure, check_status, parse_retry_after, timed_out};
 pub use transport::{HttpRequest, HttpResponse, HttpTransport};
 pub use url::encode_component;

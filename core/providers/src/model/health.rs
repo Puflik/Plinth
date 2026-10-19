@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use plinth_types::{CoreError, Timestamp};
 
-use crate::http::http_status;
+use crate::http::{NetFailure, is_transient};
 
 /// Здоровье провайдера (E1.2, plan.md 6.4). Его считает реестр по исходам
 /// вызовов, сам провайдер о себе не докладывает: ошибка → `Degraded`,
@@ -66,20 +66,36 @@ impl Health {
 
     /// Исход вызова для здоровья. `Unavailable` — провайдер ответил «такого
     /// нет»: он жив, пропал элемент. Ответ 4xx (кроме 429) — наш запрос не
-    /// годится, провайдер ни при чём: здоровье не меняется. Нет соединения —
-    /// может быть и у телефона, и у провайдера: счёт идёт, но бан короткий
-    /// (`down_for` / 20), чтобы сеть, вернувшаяся после трёх набранных без неё
-    /// запросов, не ждала пять минут. Остальное — 5xx, 429, непонятный ответ,
-    /// ошибка в коде провайдера — его отказ.
+    /// годится, провайдер ни при чём: здоровье не меняется. Нет соединения и
+    /// «не дождались» — может быть и у телефона, и у провайдера: счёт идёт, но бан
+    /// короткий (`down_for` / 20), чтобы сеть, вернувшаяся после трёх набранных без
+    /// неё запросов, не ждала пять минут. Отказ, в котором сервер сам назвал срок
+    /// (`Retry-After` у 429 и 5xx), — пауза ровно на этот срок, но не дольше
+    /// `down_for`, с первого же отказа: сервер сказал, когда вернуться. Срок 0 — обычный
+    /// отказ. Остальное — 5xx и 429 без срока, 3xx, непонятный ответ, ошибка в коде
+    /// провайдера — его отказ.
     pub fn after(self, outcome: Result<(), &CoreError>, policy: HealthPolicy, now: Timestamp) -> Self {
         match outcome {
             Ok(()) | Err(CoreError::Unavailable { .. }) => self.after_success(),
-            Err(error @ CoreError::Network { .. }) => match http_status(error) {
-                Some(status) if status != 429 && (400..500).contains(&status) => self,
-                Some(_) => self.after_failure(policy, now),
-                None => self.after_failure_for(policy, now, policy.down_for / CONNECTION_HOLD_DIVISOR),
+            Err(error @ CoreError::Network { .. }) => match NetFailure::of(error) {
+                Some(NetFailure::Status { status, retry_after }) => self.after_status(policy, now, status, retry_after),
+                Some(NetFailure::NoConnection | NetFailure::TimedOut) | None => {
+                    self.after_failure_for(policy, now, policy.down_for / CONNECTION_HOLD_DIVISOR)
+                }
             },
             Err(_) => self.after_failure(policy, now),
+        }
+    }
+
+    /// Сервер ответил отказом `status`; `retry_after` — срок, если он его назвал.
+    fn after_status(self, policy: HealthPolicy, now: Timestamp, status: u16, retry_after: Option<Duration>) -> Self {
+        match retry_after {
+            _ if status != 429 && (400..500).contains(&status) => self,
+            // Сервер сам сказал, когда вернуться: пауза на этот срок, счёт отказов растёт как всегда.
+            Some(wait) if is_transient(status) && !wait.is_zero() => {
+                Self::Down { failures: self.failures().saturating_add(1), until: now + wait.min(policy.down_for) }
+            }
+            _ => self.after_failure(policy, now),
         }
     }
 }
