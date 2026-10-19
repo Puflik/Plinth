@@ -81,6 +81,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a copy cut short by a full disk leaves nothing behind.
 - Writing the copy to the backup folder no longer deletes the previous copy
   before the new one is fully written.
+- Copies of the library database set aside after damage or a failed upgrade no
+  longer pile up on the phone: Plinth keeps the two newest damaged copies and the
+  newest failed upgrade, and removes the rest.
+- Upgrading the library database no longer fails for lack of space because of its
+  own safety copy: when the disk is full, Plinth drops that copy and finishes the
+  upgrade.
 
 ## [0.2.3] - 2026-10-15
 
