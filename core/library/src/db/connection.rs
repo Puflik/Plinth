@@ -1,5 +1,6 @@
 //! Открытие базы (B2.1, B2.3): `PRAGMA`, схема, счётчик запусков,
-//! проверка целостности и замена файла, который не открылся.
+//! проверка целостности, замена файла, который не открылся, и чистка
+//! отложенных файлов после удавшегося открытия.
 
 use std::path::Path;
 use std::time::Duration;
@@ -7,6 +8,7 @@ use std::time::Duration;
 use plinth_types::CoreError;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
+use super::aside;
 use super::integrity::{describe, is_corruption, is_environmental, leave_mark, problems, quarantine, take_mark};
 use super::migrations::{MIGRATIONS, MigrationError, migrate};
 use super::sql::Storage;
@@ -24,7 +26,19 @@ impl Database {
     /// приложения (откат версии не поддерживается, B3), сбой среды (место,
     /// права, блокировка) — файл тогда не тронут, и следующий запуск повторит —
     /// и провал миграции на базе, созданной этим же открытием.
+    ///
+    /// После любого удавшегося открытия — и здорового, и с заменой файла —
+    /// рядом с базой остаются две новейшие отложенные `corrupt` и одна
+    /// `migration-failed` с `-wal`/`-shm`, остальные стираются (`db/aside.rs`).
+    /// Ошибка чистки — предупреждение в логе, открытие она не отменяет;
+    /// неудавшееся открытие не чистит.
     pub fn open(path: &Path, check: IntegrityCheck) -> Result<Opened, CoreError> {
+        let opened = Self::open_or_replace(path, check)?;
+        aside::prune(path);
+        Ok(opened)
+    }
+
+    fn open_or_replace(path: &Path, check: IntegrityCheck) -> Result<Opened, CoreError> {
         if let Some(reason) = take_mark(path) {
             return Self::replace(path, "corrupt", reason);
         }

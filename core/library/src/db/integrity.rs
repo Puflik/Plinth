@@ -6,8 +6,10 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use plinth_types::{CoreError, Timestamp};
+use plinth_types::CoreError;
 use rusqlite::{Connection, ErrorCode};
+
+use super::aside::next_stamp;
 
 /// Причина замены, если метка пуста или не читается.
 const MARK_WITHOUT_REASON: &str = "integrity check found damage";
@@ -43,6 +45,13 @@ pub(crate) fn is_environmental(error: &rusqlite::Error) -> bool {
                 | ErrorCode::OperationInterrupted
         )
     )
+}
+
+/// Нет места: `SQLITE_FULL`, и только он. По документации SQLite полный диск
+/// сообщается им, а не `SQLITE_IOERR_*`; прочие сбои среды стирание копии не
+/// лечит.
+pub(crate) fn is_out_of_space(error: &rusqlite::Error) -> bool {
+    error.sqlite_error_code() == Some(ErrorCode::DiskFull)
 }
 
 /// Код ошибки SQLite для лога и текста ошибки: её собственный текст бывает с
@@ -89,11 +98,13 @@ pub(crate) fn take_mark(db: &Path) -> Option<String> {
     Some(if text.trim().is_empty() { MARK_WITHOUT_REASON.to_owned() } else { text })
 }
 
-/// Откладывает файл базы вместе с `-wal` и `-shm` в `<имя>.<label>-<мс>`;
-/// `label` — `corrupt` или `migration-failed`. Не удаляет: по нему можно
-/// разобрать, что случилось.
+/// Откладывает файл базы вместе с `-wal` и `-shm` в `<имя>.<label>-<метка>`;
+/// `label` — `corrupt` или `migration-failed`. Метка — миллисекунды, но не
+/// ниже меток прежних отложенных файлов того же вида (`aside::next_stamp`).
+/// Не удаляет: по нему можно разобрать, что случилось. Лишние прежние убирает
+/// `aside::prune` на удавшемся открытии.
 pub(crate) fn quarantine(path: &Path, label: &str) -> Result<PathBuf, CoreError> {
-    let stamp = Timestamp::now().as_millis();
+    let stamp = next_stamp(path, label);
     let target = PathBuf::from(format!("{}.{label}-{stamp}", path.display()));
     std::fs::rename(path, &target).map_err(|e| CoreError::storage(format!("quarantine: {e}")))?;
     for suffix in ["-wal", "-shm"] {

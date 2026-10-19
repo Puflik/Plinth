@@ -1,12 +1,13 @@
 //! Применение миграций (B3.1, B3.3).
 
-use std::path::Path;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
 use super::Migration;
 use crate::db::backup::{BackupError, backup};
-use crate::db::integrity::is_corruption;
+use crate::db::integrity::{is_corruption, is_out_of_space};
 
 #[derive(Debug)]
 pub(crate) enum MigrationError {
@@ -34,13 +35,24 @@ pub(crate) enum MigrationError {
 /// копия (`db/backup.rs`). Копия, не снявшаяся из-за среды (место, путь,
 /// ввод-вывод), миграции не останавливает; порча, найденная копией, —
 /// [`MigrationError::Backup`].
+///
+/// Копия не должна отнимать место у самой миграции. Упала миграция на «нет
+/// места» (`SQLITE_FULL`), а копия этого открытия лежит рядом и её удалось
+/// стереть — оставшиеся миграции, начиная с упавшей, идут заново один раз, уже
+/// без копии (без неё обновление проходит, как и когда она не снялась); в итог
+/// входят версии обеих попыток. Стирается именно копия этого открытия, по
+/// пути из `backup`, а не новейшая по имени и не все: прежние копии —
+/// страховка прошлых обновлений. Повтора нет, если копии нет (не снялась, не
+/// нужна или её уже убрала ротация) и при любом другом сбое: ошибка на
+/// данных оставляет копию — это «база до обновления» (ADR 0011), а `BUSY` и
+/// ввод-вывод стирание копии не лечит. Вторая попытка тоже упёрлась в место —
+/// её ошибка возвращается как есть (копии к этому времени нет).
 pub(crate) fn migrate(
     conn: &mut Connection,
     migrations: &[Migration],
     file: Option<&Path>,
 ) -> Result<Vec<i32>, MigrationError> {
-    let mut current: i32 =
-        conn.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(MigrationError::Sqlite)?;
+    let current: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(MigrationError::Sqlite)?;
     let known = migrations.last().map_or(0, |m| m.version);
     if current > known {
         return Err(MigrationError::Newer { found: current, known });
@@ -50,14 +62,39 @@ pub(crate) fn migrate(
     // Одна на всё обновление: промежуточные версии выводятся из неё теми же
     // миграциями, а по копии на шаг вытеснили бы законченные прошлых обновлений.
     let existed = current > 0;
-    if existed
+    let copy = if existed
         && !pending.is_empty()
         && let Some(path) = file
     {
-        back_up(conn, path, current)?;
-    }
+        back_up(conn, path, current)?
+    } else {
+        None
+    };
     let mut applied = Vec::new();
-    for migration in pending {
+    let mut outcome = apply(conn, &pending, existed, &mut applied);
+    let out_of_space = matches!(&outcome, Err(MigrationError::Failed { error, .. }) if is_out_of_space(error));
+    if out_of_space
+        && let Some(copy) = &copy
+        && drop_copy(copy)
+    {
+        // Продолжаем с упавшей: прошедшие первой попыткой заново не гоним, они уже в `applied`.
+        let done = applied.last().copied().unwrap_or(current);
+        let left: Vec<&Migration> = pending.into_iter().filter(|m| m.version > done).collect();
+        outcome = apply(conn, &left, existed, &mut applied);
+    }
+    outcome.map(|()| applied)
+}
+
+/// Применяет `migrations` по порядку, каждую в своей транзакции вместе с
+/// `user_version`. Версии прошедших дописываются в `applied` — и когда
+/// следующая упала.
+fn apply(
+    conn: &mut Connection,
+    migrations: &[&Migration],
+    existed: bool,
+    applied: &mut Vec<i32>,
+) -> Result<(), MigrationError> {
+    for migration in migrations {
         let failed =
             |error| MigrationError::Failed { version: migration.version, name: migration.name, error, existed };
         // Транзакция откатывается при выходе из области без commit — и при ошибке, и при панике.
@@ -65,22 +102,43 @@ pub(crate) fn migrate(
         (migration.apply)(&tx).map_err(failed)?;
         tx.pragma_update(None, "user_version", migration.version).map_err(failed)?;
         tx.commit().map_err(failed)?;
-        current = migration.version;
-        applied.push(current);
+        applied.push(migration.version);
     }
-    Ok(applied)
+    Ok(())
 }
 
 /// Порча — ошибка: файл заменят, а копия с испорченной базы ничего не стоит.
 /// Любой другой сбой копии — предупреждение, миграции идут без неё; в лог —
-/// шаг и код, не текст ошибки: в нём полный путь (§17.3).
-fn back_up(conn: &Connection, path: &Path, from: i32) -> Result<(), MigrationError> {
+/// шаг и код, не текст ошибки: в нём полный путь (§17.3). `Some` — путь снятой
+/// копии, `None` — копия не снялась из-за среды.
+fn back_up(conn: &Connection, path: &Path, from: i32) -> Result<Option<PathBuf>, MigrationError> {
     match backup(conn, path, from) {
-        Ok(_) => Ok(()),
+        Ok(copy) => Ok(Some(copy)),
         Err(BackupError::Sqlite(error)) if is_corruption(&error) => Err(MigrationError::Backup(error)),
         Err(error) => {
             log::warn!("migrations: no backup of schema v{from}, migrating without it: {}", error.describe());
-            Ok(())
+            Ok(None)
+        }
+    }
+}
+
+/// Стирает копию этого открытия, чтобы миграция получила её место. `true` —
+/// стёрта, место прибавилось и повтор имеет смысл. `NotFound` — копии уже нет
+/// (ротация в `backup` успела убрать её сразу после снятия): места не
+/// прибавилось, это не «стёрта». Любая иная ошибка — предупреждение и тоже
+/// `false`; в лог — только `ErrorKind`, без пути (§17.3).
+fn drop_copy(copy: &Path) -> bool {
+    match std::fs::remove_file(copy) {
+        Ok(()) => {
+            log::warn!(
+                "migrations: out of space with the new copy in place; the copy is removed, migrating without it"
+            );
+            true
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+        Err(error) => {
+            log::warn!("migrations: out of space, the new copy was not removed: {:?}", error.kind());
+            false
         }
     }
 }
