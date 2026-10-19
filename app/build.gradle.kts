@@ -39,6 +39,9 @@ android {
         versionCode = 6
         versionName = "0.2.3"
 
+        // Спайк Ю3а: APK ставится рядом с обычным Plinth.
+        applicationIdSuffix = ".spike"
+
         // A2.4: четыре ABI — под них собирается Rust-ядро (плагин plinth.rust
         // берёт список отсюда). Фильтр отсекает и лишнее из зависимостей: JNA
         // несёт ещё armeabi и mips, под которые ядра нет.
@@ -82,7 +85,8 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            signingConfig = signingConfigs.findByName("release")
+            // Спайк Ю3а: release подписан отладочным ключом, чтобы встал на эмулятор.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             // R8 (H5): сжатие и обфускация; mapping.txt уходит в релиз рядом с APK.
             isMinifyEnabled = true
             isShrinkResources = true
@@ -149,6 +153,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.jna) { artifact { type = "aar" } }
+
+    // Спайк Ю3а: экстрактор YouTube (JitPack).
+    implementation(libs.newpipe.extractor)
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.hilt.work)

@@ -1,0 +1,466 @@
+package io.github.puflik.plinth.spike
+
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.net.Uri
+import android.os.Build
+import android.os.Process
+import android.os.SystemClock
+import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.TransferListener
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import org.schabi.newpipe.extractor.InfoItem
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.localization.ContentCountry
+import org.schabi.newpipe.extractor.localization.Localization
+import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
+import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
+import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
+import org.schabi.newpipe.extractor.stream.AudioStream
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import java.io.IOException
+
+/**
+ * Спайк Ю3а (одноразовый код, в `main` не идёт): гейт перед провайдером YouTube.
+ * Сценарии:
+ * - `cold`  — инициализация, первый поиск, первый поток (замер холодного старта);
+ * - `all`   — `cold` + четыре поиска + выбор потока + игра в Media3 + Mix `RD<id>`.
+ */
+class SpikeRunner(
+    private val context: Context,
+    private val report: Report,
+) {
+    private val downloader = SpikeDownloader(report)
+    private val localization = Localization.DEFAULT
+    private val processStart = Process.getStartElapsedRealtime()
+
+    private class Candidate(
+        val title: String,
+        val artist: String,
+        val url: String,
+        val durationSec: Long,
+    ) {
+        val videoId: String get() = Uri.parse(url).getQueryParameter("v").orEmpty()
+    }
+
+    private class Playable(
+        val stream: AudioStream,
+        val userAgent: String,
+    )
+
+    private class PlayResult {
+        var playedMs = 0L
+        var bytes = 0L
+        var requests = 0
+        var timedOut = false
+        val errors = ArrayList<String>()
+        val seekResumeMs = ArrayList<Long>()
+        val ok get() = errors.isEmpty() && !timedOut
+    }
+
+    suspend fun run(scenario: String) =
+        withContext(Dispatchers.IO) {
+            val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+            report.line(
+                "SCENARIO $scenario sdk=${Build.VERSION.SDK_INT} abi=${Build.SUPPORTED_ABIS.first()} " +
+                    "pkg=${context.packageName} debuggable=$debuggable runner=${SpikeRunner::class.java.name}",
+            )
+            val sinceStart = SystemClock.elapsedRealtime() - processStart
+            report.line("T process start -> SpikeRunner.run: $sinceStart ms")
+            try {
+                val t0 = SystemClock.elapsedRealtime()
+                NewPipe.init(downloader, localization, ContentCountry.DEFAULT)
+                report.line("T NewPipe.init: ${SystemClock.elapsedRealtime() - t0} ms")
+
+                val first = coldPath()
+                if (scenario == "cold" || first == null) return@withContext
+                searchMatrix()
+                playChecks(first.first, first.second)
+                mix(first.first)
+                warmPath()
+            } catch (t: Throwable) {
+                report.error("run", t)
+            } finally {
+                report.line("DONE $scenario")
+            }
+        }
+
+    /** Первый поиск и первый поток после холодного старта. */
+    private fun coldPath(): Pair<Candidate, Playable>? {
+        val t0 = SystemClock.elapsedRealtime()
+        val songs = search("Daft Punk Get Lucky", YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)
+        val tSearch = SystemClock.elapsedRealtime() - t0
+        report.line("T FIRST SEARCH (music_songs, latin): $tSearch ms; since process start ${SystemClock.elapsedRealtime() - processStart} ms")
+        printItems("songs/latin", songs)
+        val candidates = songs.filterIsInstance<StreamInfoItem>().filter { it.duration in MIN_SEC..MAX_SEC }
+        for (item in candidates.take(3)) {
+            val candidate = Candidate(item.name, item.uploaderName.orEmpty(), item.url, item.duration)
+            try {
+                val t1 = SystemClock.elapsedRealtime()
+                val playable = loadStream(candidate)
+                report.line(
+                    "T FIRST STREAM (fetchPage + audioStreams): ${SystemClock.elapsedRealtime() - t1} ms; " +
+                        "since process start ${SystemClock.elapsedRealtime() - processStart} ms",
+                )
+                return candidate to (playable ?: continue)
+            } catch (t: Throwable) {
+                report.error("first stream for ${candidate.videoId}", t)
+            }
+        }
+        return null
+    }
+
+    private fun search(
+        query: String,
+        filter: String,
+    ): List<InfoItem> {
+        val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf(filter), "")
+        extractor.fetchPage()
+        return extractor.initialPage.items
+    }
+
+    private fun printItems(
+        label: String,
+        items: List<InfoItem>,
+    ) {
+        var withAll = 0
+        for (item in items) {
+            when (item) {
+                is StreamInfoItem -> if (item.name.isNotBlank() && !item.uploaderName.isNullOrBlank() && item.duration > 0) withAll++
+                is PlaylistInfoItem -> if (item.name.isNotBlank() && !item.uploaderName.isNullOrBlank()) withAll++
+                else -> {}
+            }
+        }
+        report.line("SEARCH $label: ${items.size} items, $withAll with name+artist(+duration for songs)")
+        items.take(SHOWN).forEachIndexed { i, item ->
+            when (item) {
+                is StreamInfoItem -> report.line("  #$i song '${item.name}' / '${item.uploaderName}' / ${item.duration}s / ${item.url.substringAfter("watch?v=")}")
+                is PlaylistInfoItem ->
+                    report.line(
+                        "  #$i album '${item.name}' / '${item.uploaderName}' / tracks=${item.streamCount} / ${item.url.substringAfter("list=")}",
+                    )
+                else -> report.line("  #$i ${item.javaClass.simpleName} '${item.name}'")
+            }
+        }
+    }
+
+    private fun searchMatrix() {
+        val matrix =
+            listOf(
+                Triple("songs/cyrillic", "Кино Звезда по имени Солнце", YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
+                Triple("albums/latin", "Daft Punk Random Access Memories", YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS),
+                Triple("albums/cyrillic", "Кино Группа крови", YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS),
+            )
+        for ((label, query, filter) in matrix) {
+            try {
+                val t = SystemClock.elapsedRealtime()
+                val items = search(query, filter)
+                report.line("T search $label: ${SystemClock.elapsedRealtime() - t} ms")
+                printItems(label, items)
+            } catch (t: Throwable) {
+                report.error("search $label", t)
+            }
+        }
+    }
+
+    /** Поток для трека: Opus 251, иначе AAC 140, иначе лучший по битрейту. */
+    private fun loadStream(candidate: Candidate): Playable? {
+        val extractor = ServiceList.YouTube.getStreamExtractor(candidate.url)
+        extractor.fetchPage()
+        val streams = extractor.audioStreams
+        report.line("STREAMS for ${candidate.videoId} '${extractor.name}' len=${extractor.length}s: ${streams.size} audio")
+        for (s in streams) {
+            val url = s.content
+            val uri = Uri.parse(url)
+            val expireIn = uri.getQueryParameter("expire")?.toLongOrNull()?.let { it - System.currentTimeMillis() / 1000 }
+            report.line(
+                "  itag=${s.itag} fmt=${s.format} avg=${s.averageBitrate}kbps bitrate=${s.bitrate} codec=${s.codec} " +
+                    "delivery=${s.deliveryMethod} track=${s.audioTrackId}/${s.audioTrackType} " +
+                    "clen=${uri.getQueryParameter("clen")} c=${uri.getQueryParameter("c")} host=${uri.host?.substringAfter('.')} " +
+                    "expireIn=${expireIn?.let { "${it / 60}min" }}",
+            )
+        }
+        val picked =
+            streams.firstOrNull { it.itag == ITAG_OPUS }
+                ?: streams.firstOrNull { it.itag == ITAG_AAC }
+                ?: streams.maxByOrNull { it.averageBitrate }
+                ?: return null
+        report.line("PICKED itag=${picked.itag} fmt=${picked.format} avg=${picked.averageBitrate}kbps")
+        return Playable(picked, userAgentFor(picked.content))
+    }
+
+    private fun userAgentFor(url: String): String =
+        when {
+            YoutubeParsingHelper.isVisionOsStreamingUrl(url) -> YoutubeParsingHelper.getVisionOsUserAgent(localization)
+            YoutubeParsingHelper.isIosStreamingUrl(url) -> YoutubeParsingHelper.getIosUserAgent(localization)
+            YoutubeParsingHelper.isAndroidStreamingUrl(url) -> YoutubeParsingHelper.getAndroidUserAgent(localization)
+            else -> "Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0"
+        }
+
+    /** Игра в Media3: сначала как есть в Plinth (свой User-Agent), потом с User-Agent клиента. */
+    private suspend fun playChecks(
+        candidate: Candidate,
+        playable: Playable,
+    ) {
+        val url = playable.stream.content
+        report.line("UA of client = '${playable.userAgent}'")
+        val stock = playOnce("stock UA 'Plinth'", url, "Plinth", 8_000, withSeeks = false)
+        report.line("PLAY RESULT stock UA: ok=${stock.ok} played=${stock.playedMs}ms errors=${stock.errors}")
+        val main = playOnce("client UA, main format itag=${playable.stream.itag}", url, playable.userAgent, 60_000, withSeeks = true)
+        report.line(
+            "PLAY RESULT main itag=${playable.stream.itag}: ok=${main.ok} played=${main.playedMs}ms bytes=${main.bytes} " +
+                "requests=${main.requests} seekResume=${main.seekResumeMs} errors=${main.errors}",
+        )
+        try {
+            alternateCheck(candidate, playable)
+        } catch (t: Throwable) {
+            report.error("alternate format", t)
+        }
+    }
+
+    /** Второй формат (AAC, если выбран Opus, и наоборот) — 20 с с одной перемоткой. */
+    private suspend fun alternateCheck(
+        candidate: Candidate,
+        picked: Playable,
+    ) {
+        val extractor = ServiceList.YouTube.getStreamExtractor(candidate.url)
+        extractor.fetchPage()
+        val other =
+            extractor.audioStreams.firstOrNull { it.itag == if (picked.stream.itag == ITAG_OPUS) ITAG_AAC else ITAG_OPUS }
+        if (other == null) {
+            report.line("ALT format: none available (picked itag=${picked.stream.itag})")
+            return
+        }
+        val result = playOnce("alt format itag=${other.itag}", other.content, userAgentFor(other.content), 20_000, withSeeks = true)
+        report.line("PLAY RESULT alt itag=${other.itag}: ok=${result.ok} played=${result.playedMs}ms seekResume=${result.seekResumeMs} errors=${result.errors}")
+    }
+
+    @OptIn(UnstableApi::class)
+    private suspend fun playOnce(
+        label: String,
+        url: String,
+        userAgent: String,
+        targetPlayedMs: Long,
+        withSeeks: Boolean,
+    ): PlayResult =
+        withContext(Dispatchers.Main) {
+            report.line("PLAY START $label (target ${targetPlayedMs}ms, seeks=$withSeeks)")
+            val result = PlayResult()
+            val transfers =
+                object : TransferListener {
+                    override fun onTransferInitializing(
+                        source: DataSource,
+                        dataSpec: DataSpec,
+                        isNetwork: Boolean,
+                    ) = Unit
+
+                    override fun onTransferStart(
+                        source: DataSource,
+                        dataSpec: DataSpec,
+                        isNetwork: Boolean,
+                    ) {
+                        result.requests++
+                        report.line("  REQ #${result.requests} pos=${dataSpec.position} len=${dataSpec.length} range-header=${dataSpec.httpRequestHeaders["Range"]}")
+                    }
+
+                    override fun onBytesTransferred(
+                        source: DataSource,
+                        dataSpec: DataSpec,
+                        isNetwork: Boolean,
+                        bytesTransferred: Int,
+                    ) {
+                        result.bytes += bytesTransferred
+                    }
+
+                    override fun onTransferEnd(
+                        source: DataSource,
+                        dataSpec: DataSpec,
+                        isNetwork: Boolean,
+                    ) = Unit
+                }
+            val http =
+                DefaultHttpDataSource
+                    .Factory()
+                    .setUserAgent(userAgent)
+                    .setTransferListener(transfers)
+            val player =
+                ExoPlayer
+                    .Builder(context)
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
+                    .setAudioAttributes(MUSIC, true)
+                    .build()
+            player.addListener(
+                object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        val cause = error.cause
+                        val code = (cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                        val text = "${error.errorCodeName} cause=${cause?.javaClass?.simpleName} http=$code msg=${cause?.message}"
+                        result.errors += text
+                        report.line("  PLAYER ERROR $text")
+                    }
+
+                    override fun onPlaybackStateChanged(state: Int) {
+                        report.line("  state=$state pos=${player.currentPosition}")
+                    }
+
+                    override fun onPlayWhenReadyChanged(
+                        playWhenReady: Boolean,
+                        reason: Int,
+                    ) {
+                        report.line("  playWhenReady=$playWhenReady reason=$reason")
+                    }
+                },
+            )
+            player.addAnalyticsListener(
+                object : AnalyticsListener {
+                    override fun onLoadError(
+                        eventTime: AnalyticsListener.EventTime,
+                        loadEventInfo: LoadEventInfo,
+                        mediaLoadData: MediaLoadData,
+                        error: IOException,
+                        wasCanceled: Boolean,
+                    ) {
+                        val code = (error as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                        report.line("  LOAD ERROR ${error.javaClass.simpleName} http=$code canceled=$wasCanceled msg=${error.message}")
+                    }
+                },
+            )
+            player.setMediaItem(MediaItem.fromUri(url))
+            player.prepare()
+            player.playWhenReady = true
+
+            val plan =
+                listOf<Pair<Long, (Long) -> Long>>(
+                    10_000L to { d -> if (d > 0) d * 35 / 100 else 30_000 },
+                    22_000L to { d -> if (d > 0) (d - 40_000).coerceAtLeast(0) else 60_000 },
+                    34_000L to { _ -> 5_000 },
+                    46_000L to { d -> if (d > 0) d * 60 / 100 else 90_000 },
+                )
+            val started = SystemClock.elapsedRealtime()
+            var last = started
+            var played = 0L
+            var nextSeek = 0
+            var pendingTarget = -1L
+            var pendingAt = 0L
+            var lastLog = started
+            while (true) {
+                delay(POLL_MS)
+                val now = SystemClock.elapsedRealtime()
+                val playing = player.isPlaying
+                if (playing) played += now - last
+                last = now
+                if (pendingTarget >= 0 && playing && player.currentPosition >= pendingTarget + 300) {
+                    result.seekResumeMs += now - pendingAt
+                    report.line("  seek to ${pendingTarget}ms resumed after ${now - pendingAt}ms")
+                    pendingTarget = -1
+                }
+                if (withSeeks && pendingTarget < 0 && nextSeek < plan.size && played >= plan[nextSeek].first) {
+                    val target = plan[nextSeek].second(player.duration.takeIf { it != C.TIME_UNSET } ?: -1)
+                    report.line("  SEEK #${nextSeek + 1} to ${target}ms (duration=${player.duration}ms, played=${played}ms)")
+                    player.seekTo(target)
+                    pendingTarget = target
+                    pendingAt = now
+                    nextSeek++
+                }
+                if (now - lastLog >= LOG_EVERY_MS) {
+                    lastLog = now
+                    report.line(
+                        "  wall=${now - started}ms played=${played}ms pos=${player.currentPosition} buffered=${player.bufferedPosition} " +
+                            "state=${player.playbackState} playing=$playing bytes=${result.bytes}",
+                    )
+                }
+                if (result.errors.isNotEmpty()) break
+                if (played >= targetPlayedMs && pendingTarget < 0) break
+                if (now - started > targetPlayedMs + TIMEOUT_EXTRA_MS) {
+                    result.timedOut = true
+                    report.line("  TIMEOUT: wall=${now - started}ms played=${played}ms")
+                    break
+                }
+            }
+            result.playedMs = played
+            player.release()
+            result
+        }
+
+    /** Mix `RD<id>` — радио: длина, продолжение, поля. */
+    private fun mix(seed: Candidate) {
+        val url = "https://www.youtube.com/watch?v=${seed.videoId}&list=RD${seed.videoId}"
+        try {
+            val t = SystemClock.elapsedRealtime()
+            val extractor = ServiceList.YouTube.getPlaylistExtractor(url)
+            extractor.fetchPage()
+            val page1 = extractor.initialPage
+            report.line("T mix fetch: ${SystemClock.elapsedRealtime() - t} ms")
+            val items = page1.items
+            val streams = items.filterIsInstance<StreamInfoItem>()
+            report.line(
+                "MIX RD${seed.videoId} (${extractor.javaClass.simpleName}) name='${extractor.name}': page1=${items.size} items " +
+                    "(${streams.size} streams, ${streams.count { it.duration > 0 }} with duration, " +
+                    "${streams.count { !it.uploaderName.isNullOrBlank() }} with artist), hasNext=${page1.hasNextPage()}",
+            )
+            streams.take(SHOWN).forEachIndexed { i, s ->
+                report.line("  #$i '${s.name}' / '${s.uploaderName}' / ${s.duration}s / ${s.url.substringAfter("watch?v=").substringBefore('&')}")
+            }
+            report.line("  first item is seed: ${streams.firstOrNull()?.url?.contains(seed.videoId)}")
+            if (page1.hasNextPage()) {
+                val t2 = SystemClock.elapsedRealtime()
+                val page2 = extractor.getPage(page1.nextPage)
+                report.line("MIX page2: ${page2.items.size} items hasNext=${page2.hasNextPage()} (${SystemClock.elapsedRealtime() - t2} ms)")
+            }
+        } catch (t: Throwable) {
+            report.error("mix", t)
+        }
+    }
+
+    /** Тёплые замеры: второй поиск и второй поток в том же процессе. */
+    private fun warmPath() {
+        try {
+            val t = SystemClock.elapsedRealtime()
+            val items = search("Radiohead Creep", YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)
+            report.line("T WARM SEARCH: ${SystemClock.elapsedRealtime() - t} ms (${items.size} items)")
+            val song = items.filterIsInstance<StreamInfoItem>().firstOrNull { it.duration in MIN_SEC..MAX_SEC } ?: return
+            val t1 = SystemClock.elapsedRealtime()
+            loadStream(Candidate(song.name, song.uploaderName.orEmpty(), song.url, song.duration))
+            report.line("T WARM STREAM: ${SystemClock.elapsedRealtime() - t1} ms")
+        } catch (t: Throwable) {
+            report.error("warm", t)
+        }
+    }
+
+    private companion object {
+        const val ITAG_OPUS = 251
+        const val ITAG_AAC = 140
+        const val MIN_SEC = 120L
+        const val MAX_SEC = 600L
+        const val SHOWN = 5
+        const val POLL_MS = 200L
+        const val LOG_EVERY_MS = 5_000L
+        const val TIMEOUT_EXTRA_MS = 90_000L
+
+        val MUSIC: AudioAttributes =
+            AudioAttributes
+                .Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build()
+    }
+}

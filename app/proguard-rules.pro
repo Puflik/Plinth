@@ -23,3 +23,20 @@
 -keep class io.github.puflik.plinth.ffi.generated.** { *; }
 # JNA ссылается на AWT, которого на Android нет, — эти ветки не исполняются.
 -dontwarn java.awt.**
+
+# Спайк Ю3а: NewPipeExtractor, правила как у NewPipe (app/proguard-rules.pro),
+# без -dontobfuscate: Plinth обфусцирует.
+-keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+-keep class org.mozilla.javascript.* { *; }
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.mozilla.javascript.engine.** { *; }
+-keep class org.mozilla.classfile.ClassFileWriter
+-dontwarn org.mozilla.javascript.JavaToJSONConverters
+-dontwarn org.mozilla.javascript.tools.**
+-keep class javax.script.** { *; }
+-dontwarn javax.script.**
+-keep class jdk.dynalink.** { *; }
+-dontwarn jdk.dynalink.**
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
+    <fields>;
+}

@@ -65,6 +65,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Спайк Ю3а: отладочный экран, запускается через adb. В main не идёт. -->
+        <activity
+            android:name=".spike.SpikeActivity"
+            android:exported="true" />
+
         <!--
           Фоновое воспроизведение (B3.1). exported — чтобы к сессии могли
           подключиться системные пульты: уведомление, Bluetooth, экран блокировки.
