@@ -24,12 +24,14 @@ class TinyHttpServer(
     /**
      * @property length слать ли `Content-Length`; нет — тело до закрытия соединения.
      * @property silent не отвечать вовсе — для таймаута.
+     * @property headers заголовки ответа по порядку, повторяющееся имя — отдельными строками.
      */
     class Reply(
         val status: Int = 200,
         val body: ByteArray = ByteArray(0),
         val length: Boolean = true,
         val silent: Boolean = false,
+        val headers: List<Pair<String, String>> = emptyList(),
     )
 
     private val socket = ServerSocket(0, BACKLOG, InetAddress.getLoopbackAddress())
@@ -70,6 +72,7 @@ class TinyHttpServer(
             buildString {
                 append("HTTP/1.1 ${answer.status} Status\r\n")
                 if (answer.length) append("Content-Length: ${answer.body.size}\r\n")
+                answer.headers.forEach { (name, value) -> append("$name: $value\r\n") }
                 append("Connection: close\r\n\r\n")
             }
         client.getOutputStream().apply {

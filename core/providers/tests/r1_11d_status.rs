@@ -202,6 +202,19 @@ fn the_time_belongs_to_the_answer_that_named_it() {
 }
 
 #[test]
+fn a_time_named_once_is_not_applied_to_a_later_failure_without_an_answer() {
+    let transport = Arc::new(FixtureTransport::new().on(
+        URL,
+        [Ok(with_retry_after(503, 3)), Err(CoreError::network("ConnectException")), Ok(HttpResponse::ok("[]"))],
+    ));
+    let (client, pauses) = client(transport);
+
+    assert_eq!(client.get(URL, &[]), Ok(b"[]".to_vec()));
+    // Вторая пауза — наша: сервер называл срок для другой попытки, а этой он не отвечал вовсе.
+    assert_eq!(*pauses.lock().unwrap(), [seconds(3), Duration::from_millis(200)]);
+}
+
+#[test]
 fn without_retry_after_a_429_is_retried_as_before() {
     let transport = Arc::new(FixtureTransport::new().on(URL, [Ok(HttpResponse::status(429))]));
     let (client, pauses) = client(transport.clone());

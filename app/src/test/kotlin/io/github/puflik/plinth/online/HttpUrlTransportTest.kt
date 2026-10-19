@@ -83,13 +83,13 @@ class HttpUrlTransportTest {
     }
 
     @Test
-    fun `a silent server is no answer after the timeout`() {
+    fun `a silent server is a timeout after the limit`() {
         val server = serve { TinyHttpServer.Reply(silent = true) }
         val started = System.nanoTime()
 
         val answer = transport.get(request("${server.url}/slow", timeout = 300.milliseconds))
 
-        assertThat(answer).isEqualTo(NetAnswer.NoAnswer("SocketTimeoutException"))
+        assertThat(answer).isEqualTo(NetAnswer.TimedOut)
         assertThat((System.nanoTime() - started).nanoseconds).isLessThan(3.seconds)
     }
 

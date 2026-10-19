@@ -41,7 +41,7 @@ class HttpUrlTransportDeadlineTest {
 
         val answer = transport.get(request(server.url, timeout = 600.milliseconds))
 
-        assertThat(answer).isEqualTo(NetAnswer.NoAnswer("SocketTimeoutException"))
+        assertThat(answer).isEqualTo(NetAnswer.TimedOut)
         assertThat(since(started)).isLessThan(2.seconds)
     }
 
@@ -53,7 +53,7 @@ class HttpUrlTransportDeadlineTest {
 
         val answer = transport.get(request(server.url, timeout = 600.milliseconds))
 
-        assertThat(answer).isEqualTo(NetAnswer.NoAnswer("SocketTimeoutException"))
+        assertThat(answer).isEqualTo(NetAnswer.TimedOut)
         assertThat(since(started)).isLessThan(2.seconds)
     }
 
