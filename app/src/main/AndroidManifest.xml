@@ -65,6 +65,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Спайк Ю3а: игра в фоне при выключенном экране (сценарий bg). -->
+        <service
+            android:name=".spike.SpikePlayService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- Спайк Ю3а: отладочный экран, запускается через adb. В main не идёт. -->
         <activity
             android:name=".spike.SpikeActivity"

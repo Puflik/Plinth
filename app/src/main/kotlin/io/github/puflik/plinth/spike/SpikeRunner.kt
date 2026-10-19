@@ -108,6 +108,10 @@ class SpikeRunner(
                         rhino(first.first.videoId)
                         return@withContext
                     }
+                    "net" -> {
+                        netDiag(first.second.stream.content)
+                        return@withContext
+                    }
                 }
                 searchMatrix()
                 playChecks(first.first, first.second)
@@ -339,6 +343,7 @@ class SpikeRunner(
                     .setMediaSourceFactory(DefaultMediaSourceFactory(dataFactory))
                     .setAudioAttributes(MUSIC, true)
                     .build()
+            player.volume = 0.15f
             player.addListener(
                 object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
@@ -544,6 +549,64 @@ class SpikeRunner(
             report.line("T RHINO signature FIRST: ${SystemClock.elapsedRealtime() - t3} ms -> len=${sig.length}")
         } catch (t: Throwable) {
             report.error("rhino", t)
+        }
+    }
+
+    /** Для службы: инициализация, поиск, поток; возвращает (адрес, User-Agent) или null. */
+    fun prepareForService(): Pair<String, String>? {
+        NewPipe.init(downloader, localization, ContentCountry.DEFAULT)
+        val first = coldPath() ?: return null
+        return first.second.stream.content to first.second.userAgent
+    }
+
+    /** Сеть: тип, адреса, DNS, подключение по IPv4 и IPv6 к хостам YouTube и к хосту потока. */
+    private fun netDiag(streamUrl: String) {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val net = cm.activeNetwork
+        val caps = net?.let { cm.getNetworkCapabilities(it) }
+        val lp = net?.let { cm.getLinkProperties(it) }
+        val transports =
+            listOf(
+                "CELLULAR" to android.net.NetworkCapabilities.TRANSPORT_CELLULAR,
+                "WIFI" to android.net.NetworkCapabilities.TRANSPORT_WIFI,
+                "VPN" to android.net.NetworkCapabilities.TRANSPORT_VPN,
+                "ETHERNET" to android.net.NetworkCapabilities.TRANSPORT_ETHERNET,
+            ).filter { caps?.hasTransport(it.second) == true }.map { it.first }
+        report.line(
+            "NET active transports=$transports validated=${caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)} " +
+                "notVpn=${caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN)} " +
+                "notMetered=${caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)}",
+        )
+        report.line(
+            "NET link iface=${lp?.interfaceName} v4addrs=${lp?.linkAddresses?.count { it.address is java.net.Inet4Address }} " +
+                "v6addrs=${lp?.linkAddresses?.count { it.address is java.net.Inet6Address }} dns=${lp?.dnsServers?.joinToString { it.hostAddress.orEmpty() }} " +
+                "defaultRoutes(v4/v6)=${lp?.routes?.count { it.isDefaultRoute && it.gateway is java.net.Inet4Address }}/${lp?.routes?.count { it.isDefaultRoute && it.gateway is java.net.Inet6Address }}",
+        )
+        val hosts = listOfNotNull("music.youtube.com", "www.youtube.com", "youtubei.googleapis.com", Uri.parse(streamUrl).host)
+        for (h in hosts) {
+            val short = h.substringBefore('.')
+            val t0 = SystemClock.elapsedRealtime()
+            val addrs =
+                try {
+                    java.net.InetAddress.getAllByName(h).toList()
+                } catch (e: Exception) {
+                    report.line("NET DNS $short.. FAILED ${e.javaClass.simpleName}: ${e.message}")
+                    continue
+                }
+            report.line(
+                "NET DNS $short.. -> ${addrs.size} addrs, order=${addrs.joinToString("") { if (it is java.net.Inet6Address) "6" else "4" }} " +
+                    "in ${SystemClock.elapsedRealtime() - t0} ms",
+            )
+            for (a in addrs.take(6)) {
+                val t1 = SystemClock.elapsedRealtime()
+                val family = if (a is java.net.Inet6Address) "v6" else "v4"
+                try {
+                    java.net.Socket().use { it.connect(java.net.InetSocketAddress(a, 443), 5_000) }
+                    report.line("NET connect $short.. $family ok in ${SystemClock.elapsedRealtime() - t1} ms")
+                } catch (e: Exception) {
+                    report.line("NET connect $short.. $family FAILED ${e.javaClass.simpleName}: ${e.message} after ${SystemClock.elapsedRealtime() - t1} ms")
+                }
+            }
         }
     }
 
