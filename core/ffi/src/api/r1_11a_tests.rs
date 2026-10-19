@@ -84,7 +84,7 @@ impl NetTransport for Torn {
                 cancel.cancel();
                 no_answer("SocketException")
             }
-            None => NetAnswer::Response { status: 200, body: SEARCH_JSON.as_bytes().to_vec() },
+            None => NetAnswer::Response { status: 200, body: SEARCH_JSON.as_bytes().to_vec(), headers: Vec::new() },
         }
     }
 }
