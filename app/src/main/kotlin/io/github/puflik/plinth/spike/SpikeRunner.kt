@@ -33,6 +33,7 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.localization.ContentCountry
 import org.schabi.newpipe.extractor.localization.Localization
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
+import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.stream.AudioStream
@@ -93,6 +94,16 @@ class SpikeRunner(
 
                 val first = coldPath()
                 if (scenario == "cold" || first == null) return@withContext
+                when (scenario) {
+                    "probe" -> {
+                        probe(first.second)
+                        return@withContext
+                    }
+                    "rhino" -> {
+                        rhino(first.first.videoId)
+                        return@withContext
+                    }
+                }
                 searchMatrix()
                 playChecks(first.first, first.second)
                 mix(first.first)
@@ -400,6 +411,104 @@ class SpikeRunner(
             player.release()
             result
         }
+
+    /** Какие параметры у адреса потока (только имена) и есть ли `n` — нужен ли Rhino. */
+    private fun urlShape(url: String): String {
+        val uri = Uri.parse(url)
+        return uri.queryParameterNames.sorted().joinToString(",")
+    }
+
+    /** Скорость чтения одного и того же адреса при разных видах Range (HttpURLConnection, как у DefaultHttpDataSource). */
+    private fun probe(playable: Playable) {
+        val url = playable.stream.content
+        report.line("PROBE url params: ${urlShape(url)}")
+        report.line("PROBE host: ${Uri.parse(url).host?.substringBefore('.')}")
+        fun fetch(
+            label: String,
+            ua: String,
+            range: String?,
+            extra: String = "",
+            maxMs: Long = 8_000,
+            maxBytes: Long = 6_000_000,
+        ) {
+            val t0 = SystemClock.elapsedRealtime()
+            try {
+                val connection = java.net.URL(url + extra).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 15_000
+                connection.setRequestProperty("User-Agent", ua)
+                connection.setRequestProperty("Accept-Encoding", "identity")
+                if (range != null) connection.setRequestProperty("Range", range)
+                val code = connection.responseCode
+                val ttfb = SystemClock.elapsedRealtime() - t0
+                val contentRange = connection.getHeaderField("Content-Range")
+                val length = connection.getHeaderField("Content-Length")
+                var total = 0L
+                var firstSecond = 0L
+                var error: String? = null
+                try {
+                    val stream = if (code >= 400) connection.errorStream else connection.inputStream
+                    val buffer = ByteArray(64 * 1024)
+                    stream?.use {
+                        while (true) {
+                            val now = SystemClock.elapsedRealtime()
+                            if (now - t0 > maxMs || total >= maxBytes) break
+                            val n = it.read(buffer)
+                            if (n < 0) break
+                            total += n
+                            if (SystemClock.elapsedRealtime() - t0 <= ttfb + 1_000) firstSecond = total
+                        }
+                    }
+                } catch (e: IOException) {
+                    error = "${e.javaClass.simpleName}: ${e.message}"
+                }
+                val ms = SystemClock.elapsedRealtime() - t0
+                val readMs = (ms - ttfb).coerceAtLeast(1)
+                report.line(
+                    "PROBE $label: code=$code ttfb=${ttfb}ms contentRange=$contentRange contentLength=$length " +
+                        "bytes=$total in ${readMs}ms = ${total * 1000 / readMs / 1024} KiB/s (first second after headers: ${firstSecond / 1024} KiB)" +
+                        (error?.let { " ERROR $it" } ?: ""),
+                )
+                connection.disconnect()
+            } catch (e: IOException) {
+                report.line("PROBE $label: FAILED ${e.javaClass.simpleName}: ${e.message} after ${SystemClock.elapsedRealtime() - t0}ms")
+            }
+        }
+        val ua = playable.userAgent
+        fetch("A open-ended bytes=0-   (client UA)", ua, "bytes=0-")
+        fetch("B closed bytes=0-1048575 (client UA)", ua, "bytes=0-1048575")
+        fetch("C url &range=0-1048575, no Range header", ua, null, "&range=0-1048575")
+        fetch("D open-ended bytes=2000000- (client UA)", ua, "bytes=2000000-")
+        fetch("E open-ended bytes=0-   (second time)", ua, "bytes=0-")
+        fetch("F open-ended bytes=0-   (UA 'Plinth')", "Plinth", "bytes=0-")
+        fetch("G no Range header at all (client UA)", ua, null)
+        fetch("H url &range=0-  (open, client UA)", ua, null, "&range=0-")
+    }
+
+    /** Явно гоняем Rhino: адрес с `n` и подпись - так, как их разбирал бы экстрактор у клиента с шифром. */
+    private fun rhino(videoId: String) {
+        try {
+            val t0 = SystemClock.elapsedRealtime()
+            val ts = YoutubeJavaScriptPlayerManager.getSignatureTimestamp(videoId)
+            report.line("T RHINO getSignatureTimestamp (player JS download+parse): ${SystemClock.elapsedRealtime() - t0} ms -> $ts")
+            val n = "AbCdEfGhIjKlMnOpQr"
+            val fake = "https://rr1---sn-test.googlevideo.com/videoplayback?expire=1999999999&itag=251&n=$n"
+            val t1 = SystemClock.elapsedRealtime()
+            val out = YoutubeJavaScriptPlayerManager.getUrlWithThrottlingParameterDeobfuscated(videoId, fake)
+            report.line(
+                "T RHINO n-param FIRST (extract function + Rhino compile + run): ${SystemClock.elapsedRealtime() - t1} ms; " +
+                    "changed=${!out.contains("n=$n")} newN=${Uri.parse(out).getQueryParameter("n")}",
+            )
+            val t2 = SystemClock.elapsedRealtime()
+            val out2 = YoutubeJavaScriptPlayerManager.getUrlWithThrottlingParameterDeobfuscated(videoId, fake.replace(n, "ZyXwVuTsRqPoNmLkJi"))
+            report.line("T RHINO n-param SECOND (cached function): ${SystemClock.elapsedRealtime() - t2} ms; newN=${Uri.parse(out2).getQueryParameter("n")}")
+            val t3 = SystemClock.elapsedRealtime()
+            val sig = YoutubeJavaScriptPlayerManager.deobfuscateSignature(videoId, "A".repeat(10) + "0123456789abcdefghijklmnopqrstuvwxyz".repeat(3))
+            report.line("T RHINO signature FIRST: ${SystemClock.elapsedRealtime() - t3} ms -> len=${sig.length}")
+        } catch (t: Throwable) {
+            report.error("rhino", t)
+        }
+    }
 
     /** Mix `RD<id>` — радио: длина, продолжение, поля. */
     private fun mix(seed: Candidate) {
