@@ -1,0 +1,25 @@
+# Маршруты проигрывателя записей. Столбцы через табуляцию:
+# имя  метод  хост  путь  что должно встретиться в запросе (через ';;')  файлы ответа (через '|': 1-й, 2-й и т. д. вызов, дальше — последний)
+suggest	POST	music.youtube.com	/youtubei/v1/music/get_search_suggestions		bootstrap/suggest.json
+visitor.android	POST	youtubei.googleapis.com	/youtubei/v1/visitor_id	"clientName":"ANDROID"	bootstrap/visitor-android.json
+visitor.visionos	POST	www.youtube.com	/youtubei/v1/visitor_id	"clientName":"VISIONOS"	bootstrap/visitor-visionos.json
+visitor.web	POST	www.youtube.com	/youtubei/v1/visitor_id	"clientName":"WEB"	bootstrap/visitor-web.json
+sw	GET	www.youtube.com	/sw.js		bootstrap/sw.js
+search.songs.ram	POST	music.youtube.com	/youtubei/v1/search	"query":"Daft Punk Random Access Memories";;Eg-KAQwIARAAGAAgACgAMABqChAEEAUQAxAKEAk%3D	search/songs-ram.json
+search.songs.kino	POST	music.youtube.com	/youtubei/v1/search	"query":"Кино Группа крови";;Eg-KAQwIARAAGAAgACgAMABqChAEEAUQAxAKEAk%3D	search/songs-kino.json
+search.songs.empty	POST	music.youtube.com	/youtubei/v1/search	"query":"zzz nothing here";;Eg-KAQwIARAAGAAgACgAMABqChAEEAUQAxAKEAk%3D	search/empty.json
+search.albums.ram	POST	music.youtube.com	/youtubei/v1/search	"query":"Daft Punk Random Access Memories";;Eg-KAQwIABAAGAEgACgAMABqChAEEAUQAxAKEAk%3D	search/albums-ram.json
+search.albums.kino	POST	music.youtube.com	/youtubei/v1/search	"query":"Кино Группа крови";;Eg-KAQwIABAAGAEgACgAMABqChAEEAUQAxAKEAk%3D	search/albums-kino.json
+search.albums.empty	POST	music.youtube.com	/youtubei/v1/search	"query":"zzz nothing here";;Eg-KAQwIABAAGAEgACgAMABqChAEEAUQAxAKEAk%3D	search/empty.json
+reel.lucky	POST	youtubei.googleapis.com	/youtubei/v1/reel/reel_item_watch	id=4D7u5KF7SP8	stream/reel-lucky.json
+player.lucky	POST	youtubei.googleapis.com	/youtubei/v1/player	"videoId":"4D7u5KF7SP8"	stream/player-lucky.json|stream/player-lucky-b.json
+player.web.lucky	POST	www.youtube.com	/youtubei/v1/player	"videoId":"4D7u5KF7SP8"	stream/player-web-lucky.json
+next.lucky	POST	www.youtube.com	/youtubei/v1/next	"videoId":"4D7u5KF7SP8"	stream/next-lucky.json
+reel.krovi	POST	youtubei.googleapis.com	/youtubei/v1/reel/reel_item_watch	id=xtxjm7ciwmc	stream/reel-krovi.json
+player.krovi	POST	youtubei.googleapis.com	/youtubei/v1/player	"videoId":"xtxjm7ciwmc"	stream/player-krovi.json
+player.web.krovi	POST	www.youtube.com	/youtubei/v1/player	"videoId":"xtxjm7ciwmc"	stream/player-web-krovi.json
+next.krovi	POST	www.youtube.com	/youtubei/v1/next	"videoId":"xtxjm7ciwmc"	stream/next-krovi.json
+album.header.ram	POST	www.youtube.com	/youtubei/v1/browse	"browseId":"VLOLAK5uy_kNhM2yaBTOVwrcZJepB1C9P3-n5_Sfy5c"	album/header-ram.json
+album.items.ram	POST	www.youtube.com	/youtubei/v1/browse	"continuation":"4qmFsgJrEitWTE9MQUs1dXlfa05oTTJ5YUJUT1Z3cmNa	album/items-ram.json
+album.header.kino	POST	www.youtube.com	/youtubei/v1/browse	"browseId":"VLOLAK5uy_nRndsUhiMCq2wRW3JCnDgDwD33CUalJZU"	album/header-kino.json
+album.items.kino	POST	www.youtube.com	/youtubei/v1/browse	"continuation":"4qmFsgJrEitWTE9MQUs1dXlfblJuZHNVaGlNQ3Eyd1JX	album/items-kino.json
