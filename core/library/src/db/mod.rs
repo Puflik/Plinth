@@ -9,6 +9,8 @@ mod migrations;
 pub mod query;
 #[cfg(test)]
 mod r1_5_tests;
+#[cfg(test)]
+mod r9g_tests;
 pub mod repo;
 mod sql;
 
