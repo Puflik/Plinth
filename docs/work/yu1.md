@@ -5,9 +5,9 @@
 > остальные документы не менялись; всё, что здесь сказано о внешнем мире, взято из сети в
 > этот день, ссылки — в тексте. То, что не проверено, помечено «не проверено» или «оценка».
 >
-> **Состояние файла: часть 1 из 3 — вывод и таблица.** Части 2 (риски, что сломается первым,
-> архитектура) и 3 (оценка Ю2–Ю5, порядок, вопросы автору) дописываются ниже; если их нет —
-> см. раздел «Что не успел» в конце файла.
+> **Состояние файла: части 1–2 из 3 — вывод, таблица, изменения в Plinth, риски.** Часть 3
+> (оценка Ю2–Ю5, порядок, вопросы автору) дописывается ниже; если её нет — см. раздел
+> «Что не успел» в конце файла.
 
 ## 1. Вывод
 
@@ -42,10 +42,10 @@
 | 1 | Лицензия, AGPL-3.0 | GPL-3.0 ([crates.io](https://crates.io/crates/rustypipe), [Codeberg](https://codeberg.org/ThetaDev/rustypipe)) — совместима: GPLv3 §13 разрешает объединять с AGPLv3, ADR 0003 «GPLv3 — да» | GPL-3.0-or-later ([README](https://github.com/TeamNewPipe/NewPipeExtractor), метаданные NewPipe в [fdroiddata](https://gitlab.com/fdroid/fdroiddata/-/blob/master/metadata/org.schabi.newpipe.yml)) — совместима так же | ничья |
 | 2 | Живость, 12 мес. | Релизов **0**: `0.11.4` — 2025-04-23 ([версии](https://crates.io/crates/rustypipe/versions)). Кодовых коммитов после 2025-06-18 нет; единственный позже (2026-08-03) — смена записи лицензии, CI на нём красный. Один мейнтейнер. Открыто 15 issue | Релизов **9**: v0.25.0 (2026-01-11) … v0.26.5 (2026-08-15), в среднем раз в ~27 дней ([лента релизов](https://github.com/TeamNewPipe/NewPipeExtractor/releases.atom)); коммиты до 2026-10-13 ([dev](https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev)); 2,0k★, 620 форков | NewPipeExtractor, решающе |
 | 3 | Скорость починок | Сломанный разбор подписи — [issue 75](https://codeberg.org/ThetaDev/rustypipe/issues/75) («could not extract sig fn name», 2026-03-07): без ответа и без починки больше семи месяцев. SABR и PoToken в issue не упоминаются | v0.25.1 вышел через 17 дней после v0.25.0 (убрал клиент TVHTML5, починил nsig); обход SABR — [v0.26.3](https://github.com/TeamNewPipe/NewPipeExtractor/releases/tag/v0.26.3) (2026-06-09), в приложении — NewPipe 0.28.8 (2026-06-11, [F-Droid](https://f-droid.org/en/packages/org.schabi.newpipe/)). Оговорка: между v0.24.8 (2025-07-31) и v0.25.0 тегов нет 164 дня — приложение брало коммиты `dev` | NewPipeExtractor |
-| 4 | PoToken, BotGuard, подпись, n-параметр | PoToken — только внешняя программа [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard) (MIT; `deno_core` + V8 + JSDOM; Android не заявлен). Подать токен снаружи нельзя: у [`RustyPipeBuilder`](https://docs.rs/rustypipe/0.11.4/rustypipe/client/struct.RustyPipeBuilder.html) есть только `botguard_bin`, `no_botguard`, `botguard_snapshot_file`, `po_token_cache`. Подпись и n — JS-движок внутри крейта (по [issue 39](https://codeberg.org/ThetaDev/rustypipe/issues) это `rquickjs`; не проверено) | Интерфейс [`PoTokenProvider`](https://github.com/TeamNewPipe/NewPipeExtractor/blob/dev/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/PoTokenProvider.java) (`getWebClientPoToken(videoId)`), реализует приложение: NewPipe — на WebView, [5 файлов `util/potoken`](https://github.com/TeamNewPipe/NewPipe/tree/dev/app/src/main/java/org/schabi/newpipe/util/potoken) (GPL, переносимы). Подпись и n — Rhino внутри экстрактора (по правилам ProGuard; не проверено глубже). После SABR-обхода экстрактор берёт другой клиент плеера (какой — [PR 1508](https://github.com/TeamNewPipe/NewPipeExtractor/pull/1508), не читал) | NewPipeExtractor |
+| 4 | PoToken, BotGuard, подпись, n-параметр | PoToken — только внешняя программа [`rustypipe-botguard`](https://codeberg.org/ThetaDev/rustypipe-botguard) (MIT; `deno_core` + V8 + JSDOM; Android не заявлен). Подать токен снаружи нельзя: у [`RustyPipeBuilder`](https://docs.rs/rustypipe/0.11.4/rustypipe/client/struct.RustyPipeBuilder.html) есть только `botguard_bin`, `no_botguard`, `botguard_snapshot_file`, `po_token_cache`. Подпись и n — JS-движок QuickJS: `rquickjs 0.9` — единственный движок в [Cargo.toml](https://codeberg.org/ThetaDev/rustypipe/src/branch/main/Cargo.toml) (что именно он исполняет — по названию зависимости, прямо не проверено) | Интерфейс [`PoTokenProvider`](https://github.com/TeamNewPipe/NewPipeExtractor/blob/dev/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/PoTokenProvider.java) (`getWebClientPoToken(videoId)`), реализует приложение: NewPipe — на WebView, [5 файлов `util/potoken`](https://github.com/TeamNewPipe/NewPipe/tree/dev/app/src/main/java/org/schabi/newpipe/util/potoken) (GPL, переносимы). Подпись и n — Rhino: в [`build.gradle.kts`](https://github.com/TeamNewPipe/NewPipeExtractor/blob/dev/extractor/build.gradle.kts) зависимости `rhino-core` и `rhino-engine`, плеер JS кэшируется, а сама функция исполняется через обёртку `JavaScript` ([`YoutubeJavaScriptPlayerManager`](https://github.com/TeamNewPipe/NewPipeExtractor/blob/dev/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/YoutubeJavaScriptPlayerManager.java)). Обход SABR — [PR 1508](https://github.com/TeamNewPipe/NewPipeExtractor/pull/1508) (открыт 2026-06-08, влит 2026-06-09): с `ANDROID_VR`, попавшего под принуждение, экстрактор перешёл на клиент `VISIONOS`, «ещё не задетый»; PoToken он не требует — это сказано в связанном коммите форка, не в самом PR. Не поддержаны ролики «для детей» | NewPipeExtractor |
 | 5 | YouTube Music | Первоклассный: поиск, альбом, плейлист, артист, **радио**, детали трека, тексты ([README](https://codeberg.org/ThetaDev/rustypipe)) | Поиск с фильтрами `music_songs`, `music_albums`, `music_playlists` через `music.youtube.com/search` ([код](https://github.com/TeamNewPipe/NewPipeExtractor/blob/dev/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/linkHandler/YoutubeSearchQueryHandlerFactory.java)); альбом открывается как плейлист; отдельного «радио YTM» не нашёл — есть Mix-плейлисты `RD…`, для Ю4 возможен свой запрос `next` поверх `Downloader` | `rustypipe` по API |
 | 6 | Форматы аудио | Список аудиопотоков с кодеком и битрейтом | То же (`AudioStream`) | ничья. Opus ≈160 (itag 251) без входа есть; AAC 256 (itag 141), по общим сведениям, только у Premium — **проверить в спайке Ю3** |
-| 7 | Прирост APK, arm64 | Оценка: +4…8 МБ в `.so` (`reqwest`, `rustls`, `tokio`, QuickJS) без botguard; с V8 — +20…30 МБ (не годится) | Оценка: +2…4 МБ в dex после R8 (экстрактор, Rhino, jsoup, protobuf-javalite, nanojson). Верхняя планка — весь APK NewPipe, 10 МиБ ([F-Droid](https://f-droid.org/en/packages/org.schabi.newpipe/)). Обе цифры — оценка, мерить в спайке | ничья (без botguard), иначе NewPipeExtractor |
+| 7 | Прирост APK, arm64 | Оценка: +3…6 МБ в `.so` на каждую архитектуру (`reqwest`, TLS, `tokio`, QuickJS; профиль ядра уже `opt-level = "z"`, `lto`, `strip`); в `app/build.gradle.kts` ABI четыре (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`), в универсальном APK прирост умножается. С V8 для botguard — ещё +20…30 МБ на архитектуру (не годится) | Оценка: +2…4 МБ в dex после R8, один раз для всех архитектур (экстрактор, Rhino, jsoup, protobuf-javalite, nanojson — [зависимости](https://github.com/TeamNewPipe/NewPipeExtractor/blob/dev/extractor/build.gradle.kts)). Верхняя планка — весь APK NewPipe, 10 МиБ ([F-Droid](https://f-droid.org/en/packages/org.schabi.newpipe/)). Обе цифры — оценка без сборки, мерить в спайке | NewPipeExtractor |
 | 8 | Сборка `fdroid` из исходников, метка NonFreeNet | Крейт собирается из исходников, но botguard тянет готовый V8 — F-Droid такое не принимает; без botguard PoToken нет | NewPipe собирается в F-Droid обычным `gradle` без `prebuild`, метка `NonFreeNet`, лицензия GPL-3.0-or-later (fdroiddata, ссылка выше). Метка YouTube-провайдеру нужна при любом выборе | NewPipeExtractor |
 | 9 | Живые клиенты | В живых Android-клиентах не нашёл; на crates.io 48 тыс. загрузок за всё время | NewPipe (F-Droid, 0.29.1 от 2026-08-21), его форки; Piped использует его же (не проверено). [Metrolist](https://github.com/MetrolistGroup/Metrolist) (13,6k★, GPL-3.0, режим «только починки», IzzyOnDroid): свой модуль `innertube`; InnerTune, OuterTune, RiMusic/ViMusic — тоже свои `innertube` на Kotlin (по памяти, не проверено). [LibreTube](https://github.com/libre-tube/LibreTube): внешние API Piped | NewPipeExtractor |
 | 10 | Устройство Plinth | `reqwest` внутри; снаружи только `build_with_client(ClientBuilder)` — подменить транспорт нельзя. Значит либо сеть и TLS в ядро (против [ADR 0008](../adr/0008-provider-trait.md): «TLS и сетевого кода в ядре нет»), либо форк | Экстрактор сам в сеть не ходит: потребитель даёт `Downloader` — Kotlin-транспорт, на котором уже стоит `HttpUrlTransport`. Но провайдер получается в Kotlin: нужен мост в `trait Provider` (часть 2) | NewPipeExtractor, с ценой |
@@ -54,4 +54,77 @@
 критериям — NewPipeExtractor, и именно эти семь определяют, будет ли YouTube играть через
 месяц после выпуска.
 
-<!-- Части 2 и 3 — ниже -->
+## 3. Что придётся менять в Plinth
+
+Как устроено сейчас (прочитано в коде): `trait Provider` в `core/providers/src/provider.rs` —
+синхронный; сети в ядре нет, её делает платформа через `NetTransport`
+(`core/ffi/src/api/online_api.rs`) — **один GET**; `connect_online(transport)` собирает
+`Registry` с Internet Archive; Media3 берёт адрес потока из `StreamRequest` в `OnlineResolver`
+перед каждой загрузкой; `Format` уже знает `Opus` и `Aac`; сборки — `github` и `fdroid`, ABI —
+все четыре.
+
+### 3.1. Рекомендуемый путь — NewPipeExtractor в Kotlin
+
+| # | Что | Где | Размер |
+|---|---|---|---|
+| 1 | Зависимость `com.github.TeamNewPipe:NewPipeExtractor:<тег>` (JitPack) с `includeGroup` в `settings.gradle.kts`; правила R8 для Rhino и экстрактора (взять у NewPipe) | `settings.gradle.kts`, `app/build.gradle.kts` | мало |
+| 2 | `Downloader` на Kotlin: GET **и POST** (запросы InnerTube — POST с JSON, а `NetTransport` умеет только GET, так что через него нельзя), gzip, куки согласия, `User-Agent` клиента, разбор 429 и `Retry-After` | новый пакет `…/youtube` | средне |
+| 3 | `YoutubeSource` — узкий интерфейс (`search`, `resolve`, `stream`) и единственное место, знающее про экстрактор; исключения экстрактора → `Network` / `Parse` / `Unavailable` | там же | средне |
+| 4 | Внешний `trait` в ядре (`#[uniffi::export(with_foreign)]`, как `NetTransport`, `ScanApi` и `Logging`) и Rust-адаптер, реализующий `Provider`; `connect_online` принимает внешних провайдеров; `provider_contract!` гоняется на фейковом внешнем провайдере | `core/ffi/src/api/online_api.rs`, `core/providers` | средне |
+| 5 | Воспроизведение: `OnlineResolver` уже отдаёт `url + headers`; у YouTube `User-Agent` должен совпасть с клиентом, выдавшим ссылку, ссылки живут часы, а запросы иногда нужно резать на куски `range=` (у NewPipe для этого свой `DataSource`) — хватит ли `DefaultHttpDataSource`, **не проверено** | `audio/media3/*` | мало…средне |
+| 6 | PoToken — только если спайк покажет, что без него не играет: порт пяти файлов `util/potoken` из NewPipe (GPL → AGPL допустимо при сохранении копирайта и пометке в заголовках файлов) | новый пакет | +5…8 ч |
+| 7 | Обе сборки получают YouTube; метка `NonFreeNet` — в метаданных F-Droid (как у NewPipe); переключатель «Онлайн-источники» становится по-провайдерным | `app/…`, настройки | мало |
+| 8 | Ю2: разбор 403/429/503 нужен и в `HttpClient` ядра, и в Kotlin-`Downloader`; чтобы не писать дважды, в Ю2 вынести таблицу «статус → ошибка» в одно место (Kotlin или данные, общие для обоих) | `core/providers/src/http`, Kotlin | входит в Ю2 |
+
+Не меняется: `Registry` (порядок, здоровье, срок поиска), `SearchResult` / `RemoteTrack` /
+`SourceOption`, каталог `Track` / `Version` / `Source`, лайки и «В плейлист…» для сетевых
+треков, `playback_order`.
+
+Следствие для плана: провайдер YouTube не проверяется одним `cargo test` — экстрактор в
+JVM. Тесты — на записанных ответах через подставной `Downloader` (JUnit) плюс ручная
+проверка на телефоне (Ю6). Раздел 6.3 `docs/plan/06-providers.md` предполагал удалённый
+конфиг с шаблонами разбора; к NewPipeExtractor это не прикладывается — разбор зашит в Java.
+В v1.0 (эпики B–C) конфиг сможет нести только флаги: выключатель провайдера и выбор клиента.
+
+### 3.2. Для сравнения — `rustypipe` в ядре
+
+1. Новый крейт с `rustypipe`, `reqwest`, `tokio`, `rquickjs`: `plinth-providers` по ADR 0008
+   зависит только от `plinth-types`. В ядре появляется сеть и TLS — [ADR 0008](../adr/0008-provider-trait.md)
+   надо пересматривать (`HttpClient`, срок и отмена поиска, `FixtureTransport` на этот провайдер
+   не распространяются).
+2. У `reqwest` в `rustypipe` TLS по умолчанию нативный (`default = ["default-tls"]`): для NDK нужен
+   признак `rustls-tls-*`, `tokio` — внутри синхронного `trait` (блокировать текущим потоком).
+3. PoToken — без botguard остаются клиенты, которым он не нужен; какие из них `rustypipe` ещё
+   умеет, не проверено. Подпись (issue 75) — чинить самим, в форке.
+4. Плюс: один язык, `cargo test` на записях, радио YouTube Music и альбомы «из коробки».
+
+## 4. Что сломается первым и как чинится
+
+Удалённого конфига нет: любая починка — **новая версия экстрактора → сборка → APK**. Версия
+экстрактора лежит в одном месте (`gradle/libs.versions.toml`), и это единственное, что меняется
+в типовом случае.
+
+| # | Что ломается | Признак | Чинится | Срок после выхода починки |
+|---|---|---|---|---|
+| 1 | **Клиент плеера попадает под принуждение** (SABR / PoToken). Уже было: `ANDROID_VR` → в v0.26.3 перешли на `VISIONOS`; ранее убирали `TVHTML5` (v0.25.1), а 2026-08-06 — `ANDROID`, `IOS`, `WEB_EMBEDDED_PLAYER` ([dev](https://github.com/TeamNewPipe/NewPipeExtractor/commits/dev)) | Нет аудио или только 360p, 403 на потоке | Поднять тег экстрактора | Выход тега — дни после поломки (PR 1508: открыт 06-08, влит 06-09, тег v0.26.3 — 06-09); `github` — сразу, `fdroid` — по циклу сборки F-Droid (у NewPipe 0.28.8 с обходом SABR появился в [F-Droid](https://f-droid.org/en/packages/org.schabi.newpipe/) 06-11, через два дня после тега; у Plinth срок не измерен: дни…недели) |
+| 2 | Разбор страницы плеера (сигнатура, n-параметр) | «deobfuscation error», 403 | Поднять тег; v0.25.1 — через 17 дней после v0.25.0 | дни…недели |
+| 3 | Разметка выдачи YouTube Music (lockup view models и т. п.) | Пустой или кривой поиск, `Parse` | Поднять тег (v0.26.1–0.26.2 — такие) | дни…недели |
+| 4 | **PoToken** на выбранном клиенте | 403 при чтении потока | Включить порт генератора на WebView; формат вызовов BotGuard меняется, порт обновлять по NewPipe | недели, если порта ещё нет |
+| 5 | Отказ по сети: 429, «подтвердите, что вы не бот» на мобильной сети, VPN или с адреса дата-центра | 403/429 при исправном экстракторе | Кодом не лечится; Ю2 показывает «сервер отказал», а не «нет сети», и уважает `Retry-After` | — |
+| 6 | Экстрактор перестанет выходить (все добровольцы NewPipe) | Нет тегов 2–3 месяца при живых поломках | Запасные пути (раздел 5) | недели |
+
+Что сделать заранее, чтобы поломка не была неожиданностью: (а) версию экстрактора и клиента держать
+в одном файле; (б) ручной скрипт «живой YouTube» (поиск → поток → 206 на первом диапазоне) — гонять
+перед выпуском и по желанию автора в ночной задаче CI; (в) в «О приложении» показывать версию
+экстрактора, чтобы отчёт о сбое её нёс.
+
+## 5. Запасные пути
+
+1. Свой слой InnerTube на Kotlin за тем же `YoutubeSource` — как у Metrolist, InnerTune и RiMusic
+   (модули `innertube`, GPL-3.0, код можно брать с сохранением копирайта). Работа: недели, но
+   интерфейс остаётся.
+2. `rustypipe`, если проект оживёт или Plinth возьмёт форк: он на Rust, так что это второй
+   путь (раздел 3.2) с пересмотром ADR 0008, а не замена за `YoutubeSource`.
+3. Отказаться от YouTube в `fdroid`, оставить в `github` (решение автора, вопрос 2 ниже).
+
+<!-- Часть 3 — ниже -->
