@@ -16,7 +16,9 @@ use std::time::Duration;
 
 use plinth_library::model::AudioSpec;
 use plinth_library::model::{OnlineSource, OnlineTrack};
-use plinth_providers::http::{Cancel, HttpRequest, HttpResponse, HttpTransport, Limits};
+use plinth_providers::http::{
+    Cancel, HttpRequest, HttpResponse, HttpTransport, Limits, NetFailure, check_status, parse_retry_after, timed_out,
+};
 use plinth_providers::model::{
     ExternalId, HealthPolicy, Network, RemoteTrack, ResultKind, SearchQuery, SourceOption, playback_order,
 };
@@ -27,8 +29,9 @@ use crate::panic;
 use crate::session::Core;
 
 /// Сеть платформы: один GET без повторов. Ответ с любым статусом —
-/// `Response`; ответа нет (нет сети, таймаут, оборвалось) — `NoAnswer`
-/// с причиной без адреса; тело длиннее `max_body_bytes` — `TooLarge`.
+/// `Response`, с заголовками (`Retry-After`); соединения не вышло (нет сети,
+/// оборвалось) — `NoAnswer` с причиной без адреса; не дождались ответа —
+/// `TimedOut`; тело длиннее `max_body_bytes` — `TooLarge`.
 #[uniffi::export(with_foreign)]
 pub trait NetTransport: Send + Sync {
     fn get(&self, request: NetRequest) -> NetAnswer;
@@ -50,8 +53,9 @@ pub struct NetHeader {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum NetAnswer {
-    Response { status: u16, body: Vec<u8> },
+    Response { status: u16, body: Vec<u8>, headers: Vec<NetHeader> },
     NoAnswer { reason: String },
+    TimedOut,
     TooLarge,
 }
 
@@ -85,12 +89,16 @@ pub struct OnlineResult {
     pub duration_ms: Option<u64>,
 }
 
-/// Почему секции провайдера нечего показать: нет сети; провайдер недоступен
-/// (не ответил несколько раз подряд — пауза, plan.md 6.4); ответ не понять.
+/// Почему секции провайдера (и экрану альбома) нечего показать. Три разные беды:
+/// соединения не вышло (нет сети, DNS) — `NoNetwork`, и только тогда говорят «нет
+/// сети»; сервер отказал статусом, не дождались ответа или провайдер в паузе
+/// (не отвечал несколько раз подряд, plan.md 6.4) — `ProviderDown`; сервер просит
+/// подождать (429) — `RateLimited`; ответ не понять — `Broken`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum OnlineProblem {
     NoNetwork,
     ProviderDown,
+    RateLimited,
     Broken,
 }
 
@@ -99,6 +107,14 @@ pub enum OnlineProblem {
 pub struct OnlineSearch {
     pub provider: String,
     pub results: Vec<OnlineResult>,
+    pub problem: Option<OnlineProblem>,
+}
+
+/// Экран альбома: треки собрания или беда (`tracks` пуст, когда `problem` есть).
+/// Провайдер, который не ответил, — это ответ экрану, а не ошибка вызова.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct OnlineAlbumReply {
+    pub tracks: Vec<OnlineTrackInfo>,
     pub problem: Option<OnlineProblem>,
 }
 
@@ -164,12 +180,23 @@ impl Core {
         self.online_search_within(query, limit, &cancel, SEARCH_BUDGET)
     }
 
-    /// Треки собрания `item` провайдера `provider` (экран альбома).
-    pub fn online_album(&self, provider: String, item: String) -> Result<Vec<OnlineTrackInfo>, CoreError> {
+    /// Треки собрания `item` провайдера `provider` (экран альбома). Провайдер,
+    /// который не ответил (`Network`, `Unavailable`, `Parse`), — `problem` в ответе, а не
+    /// ошибка, как в секции поиска. Источники выключены, неверный ID, `Internal`, `Storage` —
+    /// ошибка вызова.
+    pub fn online_album(&self, provider: String, item: String) -> Result<OnlineAlbumReply, CoreError> {
         panic::guard(|| {
             let registry = self.online().ok_or_else(off)?;
-            let tracks = registry.resolve(&ProviderId::new(&provider)?, &ExternalId::new(&item)?, Timestamp::now())?;
-            Ok(tracks.into_iter().map(track_info).collect())
+            let answer = registry.resolve(&ProviderId::new(&provider)?, &ExternalId::new(&item)?, Timestamp::now());
+            match answer {
+                Ok(tracks) => {
+                    Ok(OnlineAlbumReply { tracks: tracks.into_iter().map(track_info).collect(), problem: None })
+                }
+                Err(error @ (CoreError::Network { .. } | CoreError::Unavailable { .. } | CoreError::Parse { .. })) => {
+                    Ok(OnlineAlbumReply { tracks: Vec::new(), problem: Some(problem_of(&error)) })
+                }
+                Err(error) => Err(error),
+            }
         })
     }
 
@@ -299,8 +326,16 @@ fn off() -> CoreError {
     CoreError::unavailable("online sources are off")
 }
 
+/// Таблица «статус HTTP → ошибка» ядра (`plinth_providers::http::check_status`) для
+/// Kotlin: второй таблицы нет. `retry_after` — значение заголовка `Retry-After`, как
+/// прислал сервер; не целое число секунд (дата, мусор) срока не даёт.
+#[uniffi::export]
+pub fn check_http_status(status: u16, retry_after: Option<String>) -> Result<(), CoreError> {
+    panic::guard(|| check_status(status, retry_after.as_deref().and_then(parse_retry_after)))
+}
+
 /// Транспорт Kotlin как транспорт ядра.
-struct PlatformTransport(Arc<dyn NetTransport>);
+pub(crate) struct PlatformTransport(pub(crate) Arc<dyn NetTransport>);
 
 impl HttpTransport for PlatformTransport {
     fn get(&self, request: &HttpRequest) -> Result<HttpResponse, CoreError> {
@@ -315,8 +350,13 @@ impl HttpTransport for PlatformTransport {
             max_body_bytes: request.max_body_bytes,
         };
         match self.0.get(request) {
-            NetAnswer::Response { status, body } => Ok(HttpResponse { status, body }),
+            NetAnswer::Response { status, body, headers } => Ok(HttpResponse {
+                status,
+                body,
+                headers: headers.into_iter().map(|NetHeader { name, value }| (name, value)).collect(),
+            }),
             NetAnswer::NoAnswer { reason } => Err(CoreError::network(reason)),
+            NetAnswer::TimedOut => Err(timed_out()),
             NetAnswer::TooLarge => Err(CoreError::parse("response is too large")),
         }
     }
@@ -326,14 +366,23 @@ fn section(search: ProviderSearch) -> OnlineSearch {
     let provider = search.provider.to_string();
     match search.outcome {
         Ok(results) => OnlineSearch { provider, results: results.into_iter().map(result).collect(), problem: None },
-        Err(error) => {
-            let problem = match error {
-                CoreError::Network { .. } => OnlineProblem::NoNetwork,
-                CoreError::Unavailable { .. } => OnlineProblem::ProviderDown,
-                _ => OnlineProblem::Broken,
-            };
-            OnlineSearch { provider, results: Vec::new(), problem: Some(problem) }
-        }
+        Err(error) => OnlineSearch { provider, results: Vec::new(), problem: Some(problem_of(&error)) },
+    }
+}
+
+/// Беда секции поиска и экрана альбома — одна для обоих. Что случилось с сетевым вызовом,
+/// читает `NetFailure::of`: отказ статусом и «не дождались» — провайдер не отвечает (429 —
+/// просит подождать), «нет сети» — только когда соединения не вышло. `Unavailable` — провайдер
+/// в паузе или элемента нет; остальное — ответ не понять.
+fn problem_of(error: &CoreError) -> OnlineProblem {
+    match NetFailure::of(error) {
+        Some(NetFailure::Status { status: 429, .. }) => OnlineProblem::RateLimited,
+        Some(NetFailure::Status { .. } | NetFailure::TimedOut) => OnlineProblem::ProviderDown,
+        Some(NetFailure::NoConnection) => OnlineProblem::NoNetwork,
+        None => match error {
+            CoreError::Unavailable { .. } => OnlineProblem::ProviderDown,
+            _ => OnlineProblem::Broken,
+        },
     }
 }
 
@@ -424,7 +473,8 @@ mod tests {
     use plinth_types::{CoreError, Format};
 
     use super::{
-        NetAnswer, NetRequest, NetTransport, OnlineCancel, OnlineKind, OnlineProblem, PlatformTransport, registry,
+        NetAnswer, NetHeader, NetRequest, NetTransport, OnlineCancel, OnlineKind, OnlineProblem, PlatformTransport,
+        registry,
     };
     use crate::session::{Core, DATABASE, JOURNAL};
     use crate::testing::Scratch;
@@ -441,7 +491,11 @@ mod tests {
                 max_body_bytes: request.max_body_bytes,
             };
             match self.0.get(&request) {
-                Ok(response) => NetAnswer::Response { status: response.status, body: response.body },
+                Ok(response) => NetAnswer::Response {
+                    status: response.status,
+                    body: response.body,
+                    headers: response.headers.into_iter().map(|(name, value)| NetHeader { name, value }).collect(),
+                },
                 Err(error) => NetAnswer::NoAnswer { reason: error.to_string() },
             }
         }
@@ -484,7 +538,7 @@ mod tests {
     fn switched_off_there_are_no_sections_and_no_streams() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
-        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap();
+        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap().tracks;
         let ids = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
 
         core.disconnect_online().unwrap();
@@ -519,7 +573,7 @@ mod tests {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
 
-        let tracks = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap();
+        let tracks = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap().tracks;
 
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].title, "\"OH DOCTOR\"");
@@ -532,7 +586,7 @@ mod tests {
     fn added_tracks_play_flac_on_wifi_and_mp3_on_cellular() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
-        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap();
+        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap().tracks;
 
         let ids = core.add_online_tracks("archive.org".to_owned(), album.clone()).unwrap();
         let again = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
@@ -551,7 +605,7 @@ mod tests {
     fn a_format_without_a_decoder_is_not_picked_while_there_is_another() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
-        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap();
+        let album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap().tracks;
         let ids = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
 
         let wifi = core.online_stream(ids[0], false, vec![Format::Flac]).unwrap();
@@ -563,7 +617,7 @@ mod tests {
     fn known_tracks_are_found_without_adding_the_rest() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
-        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap();
+        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap().tracks;
         let added = core.add_online_tracks("archive.org".to_owned(), vec![album[1].clone()]).unwrap();
 
         let known = core.known_online_tracks("archive.org".to_owned(), album.clone()).unwrap();
@@ -579,7 +633,7 @@ mod tests {
     fn added_tracks_are_liked_and_listed_like_local_ones() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
-        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap();
+        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap().tracks;
         let ids = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
 
         core.like(ids[1]).unwrap();
@@ -595,7 +649,7 @@ mod tests {
     /// Сетевой трек альбома MIXG031 в «Любимом» — установка, которую дальше портят.
     fn liked_online_track(dir: &Scratch) {
         let core = online(dir, recorded());
-        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap();
+        let album = core.online_album("archive.org".to_owned(), "MIXG031".to_owned()).unwrap().tracks;
         let ids = core.add_online_tracks("archive.org".to_owned(), album).unwrap();
         core.like(ids[1]).unwrap();
     }
@@ -664,7 +718,7 @@ mod tests {
     fn broken_tracks_from_kotlin_are_refused() {
         let dir = Scratch::new();
         let core = online(&dir, recorded());
-        let mut album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap();
+        let mut album = core.online_album("archive.org".to_owned(), RECORD.to_owned()).unwrap().tracks;
         album[0].title = "  ".to_owned();
 
         assert!(matches!(core.add_online_tracks("archive.org".to_owned(), album), Err(CoreError::Parse { .. })));
