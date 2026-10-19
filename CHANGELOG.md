@@ -87,6 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgrading the library database no longer fails for lack of space because of its
   own safety copy: when the disk is full, Plinth drops that copy and finishes the
   upgrade.
+- Online search no longer says "No network" when the server itself refused or
+  was busy: a server that asks to wait says so, and Plinth waits as long as it
+  asked before trying it again. Every online section with a problem now has a
+  Retry button, and coming back from an album no longer runs the search again.
+- Searching or playing online right after Plinth starts no longer fails before
+  the online sources are switched on.
 
 ## [0.2.3] - 2026-10-15
 
