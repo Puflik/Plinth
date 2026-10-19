@@ -4,8 +4,10 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import io.github.puflik.plinth.ffi.generated.Format as RustFormat
 import io.github.puflik.plinth.ffi.generated.NetAnswer as RustNetAnswer
+import io.github.puflik.plinth.ffi.generated.NetHeader as RustNetHeader
 import io.github.puflik.plinth.ffi.generated.NetRequest as RustNetRequest
 import io.github.puflik.plinth.ffi.generated.NetTransport as RustNetTransport
+import io.github.puflik.plinth.ffi.generated.OnlineAlbumReply as RustOnlineAlbumReply
 import io.github.puflik.plinth.ffi.generated.OnlineCancel as RustOnlineCancel
 import io.github.puflik.plinth.ffi.generated.OnlineKind as RustOnlineKind
 import io.github.puflik.plinth.ffi.generated.OnlineProblem as RustOnlineProblem
@@ -48,11 +50,14 @@ class CoreOnline internal constructor(
         return core.call { rust -> rust.onlineSearch(query, limit.toUInt(), cancel.rust).map { it.toApp() } }
     }
 
-    /** Треки собрания [item] провайдера [provider]; выключено, нет сети, пропало — [CoreFailure]. */
+    /**
+     * Треки собрания [item] провайдера [provider] — или беда провайдера ([OnlineAlbumReply.problem]):
+     * нет сети, не отвечает, просит подождать, ответ не понять. Выключено или неверный ID — [CoreFailure].
+     */
     fun album(
         provider: String,
         item: String,
-    ): List<OnlineTrack> = core.quietCall { rust -> rust.onlineAlbum(provider, item).map { it.toApp() } }
+    ): OnlineAlbumReply = core.quietCall { rust -> rust.onlineAlbum(provider, item).toApp() }
 
     /** Какие из [tracks] уже в каталоге — ID или `null`, в том же порядке; каталог не меняется. */
     fun known(
@@ -98,7 +103,10 @@ class OnlineCancel {
     fun cancel() = rust.cancel()
 }
 
-/** Сеть платформы для ядра: один GET без повторов, ответ с любым статусом — [NetAnswer.Response]. */
+/**
+ * Сеть платформы для ядра: один GET без повторов, ответ с любым статусом — [NetAnswer.Response]
+ * (вместе с заголовками: из `Retry-After` ядро узнаёт, сколько просят подождать).
+ */
 fun interface NetTransport {
     fun get(request: NetRequest): NetAnswer
 }
@@ -115,15 +123,20 @@ data class NetRequest(
 )
 
 sealed interface NetAnswer {
+    /** Ответ с любым статусом; [headers] — пары как пришли, повторное имя — по паре на значение. */
     class Response(
         val status: Int,
         val body: ByteArray,
+        val headers: List<Pair<String, String>> = emptyList(),
     ) : NetAnswer
 
-    /** Ответа нет: нет сети, таймаут, оборвалось. [reason] — без адреса: в нём бывает запрос. */
+    /** Соединения не вышло: нет сети, DNS, оборвалось. [reason] — без адреса: в нём бывает запрос. */
     data class NoAnswer(
         val reason: String,
     ) : NetAnswer
+
+    /** Не дождались ответа: срок вышел. Это не «нет сети» — сеть могла быть, но сервер молчал. */
+    data object TimedOut : NetAnswer
 
     data object TooLarge : NetAnswer
 }
@@ -136,14 +149,23 @@ enum class OnlineKind {
 }
 
 /**
- * Почему секции нечего показать: нет сети; провайдер не ответил несколько
- * раз подряд и отдыхает; ответ не понять.
+ * Почему секции (или альбому) нечего показать. Три разные беды: соединения не вышло —
+ * [NO_NETWORK], и только тогда говорят «нет сети»; сервер отказал, не дождались ответа или
+ * провайдер не отвечал несколько раз подряд и отдыхает — [PROVIDER_DOWN]; сервер просит
+ * подождать — [RATE_LIMITED]; ответ не понять — [BROKEN].
  */
 enum class OnlineProblem {
     NO_NETWORK,
     PROVIDER_DOWN,
+    RATE_LIMITED,
     BROKEN,
 }
+
+/** Ответ на просьбу открыть альбом: треки — или беда провайдера (тогда [tracks] пуст). */
+data class OnlineAlbumReply(
+    val tracks: List<OnlineTrack>,
+    val problem: OnlineProblem?,
+)
 
 /** Секция поиска: провайдер и его результаты — или беда. */
 data class OnlineSection(
@@ -224,12 +246,16 @@ private fun RustNetRequest.toApp() =
 
 private fun NetAnswer.toRust(): RustNetAnswer =
     when (this) {
-        is NetAnswer.Response -> RustNetAnswer.Response(status.toUShort(), body)
+        is NetAnswer.Response ->
+            RustNetAnswer.Response(status.toUShort(), body, headers.map { (name, value) -> RustNetHeader(name, value) })
         is NetAnswer.NoAnswer -> RustNetAnswer.NoAnswer(reason)
+        NetAnswer.TimedOut -> RustNetAnswer.TimedOut
         NetAnswer.TooLarge -> RustNetAnswer.TooLarge
     }
 
 internal fun RustOnlineSearch.toApp() = OnlineSection(provider, results.map { it.toApp() }, problem?.toApp())
+
+internal fun RustOnlineAlbumReply.toApp() = OnlineAlbumReply(tracks.map { it.toApp() }, problem?.toApp())
 
 private fun RustOnlineResult.toApp() =
     OnlineResult(
@@ -249,6 +275,7 @@ private fun RustOnlineProblem.toApp() =
     when (this) {
         RustOnlineProblem.NO_NETWORK -> OnlineProblem.NO_NETWORK
         RustOnlineProblem.PROVIDER_DOWN -> OnlineProblem.PROVIDER_DOWN
+        RustOnlineProblem.RATE_LIMITED -> OnlineProblem.RATE_LIMITED
         RustOnlineProblem.BROKEN -> OnlineProblem.BROKEN
     }
 

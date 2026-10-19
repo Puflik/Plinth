@@ -56,7 +56,9 @@ fun OnlineAlbumScreen(
             when {
                 state.loading -> item(key = STATUS_KEY) { Loading() }
                 state.problem != null ->
-                    item(key = STATUS_KEY) { Problem(checkNotNull(state.problem), viewModel::onRetry) }
+                    item(key = STATUS_KEY) {
+                        Problem(checkNotNull(state.problem), providerName(album.provider), viewModel::onRetry)
+                    }
             }
             itemsIndexed(state.tracks, key = { _, track -> track.track.external }) { index, track ->
                 TrackRow(
@@ -113,9 +115,11 @@ private fun Loading() {
     }
 }
 
+/** «Нет сети» — только когда соединения не вышло (с подсказкой про прошивку); «просит подождать» — 429. */
 @Composable
 private fun Problem(
     problem: OnlineProblem,
+    provider: String,
     onRetry: () -> Unit,
 ) {
     Column(
@@ -125,15 +129,11 @@ private fun Problem(
     ) {
         Text(
             text =
-                stringResource(
-                    if (problem ==
-                        OnlineProblem.NO_NETWORK
-                    ) {
-                        R.string.online_no_network
-                    } else {
-                        R.string.online_album_unavailable
-                    },
-                ),
+                when (problem) {
+                    OnlineProblem.NO_NETWORK -> stringResource(R.string.online_no_network)
+                    OnlineProblem.RATE_LIMITED -> stringResource(R.string.online_rate_limited, provider)
+                    else -> stringResource(R.string.online_album_unavailable)
+                },
             style = MaterialTheme.typography.bodyLarge,
         )
         if (problem == OnlineProblem.NO_NETWORK && rememberFirmwareNetworkBlock()) FirmwareNetworkNote()

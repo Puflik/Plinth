@@ -67,7 +67,8 @@ class CoreOnlineRepository(
     ): OnlineAlbum =
         withContext(io) {
             try {
-                OnlineAlbum.Tracks(core.online.album(provider, item))
+                val reply = core.online.album(provider, item)
+                reply.problem?.let { OnlineAlbum.Failed(it) } ?: OnlineAlbum.Tracks(reply.tracks)
             } catch (failure: CoreFailure) {
                 AppLog.w(TAG, "album failed", failure)
                 OnlineAlbum.Failed(failure.problem())

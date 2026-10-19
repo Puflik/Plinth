@@ -21,12 +21,13 @@ import kotlin.time.Duration
  * ответ, сочащийся по байту, держал бы запрос сколько захочет сервер. Срок
  * проверяется между чтениями тела, а таймауты соединения и чтения не больше
  * остатка; один блок чтения может пережить срок, но не дольше самого срока.
- * Вышел срок — [NetAnswer.NoAnswer] с `SocketTimeoutException`, как и при
- * таймауте чтения.
+ * Вышел срок, как и при таймауте соединения или чтения, — [NetAnswer.TimedOut]:
+ * не дождались, а не «нет сети» (R1 №13).
  *
- * Ответ с любым статусом — [NetAnswer.Response]: 404 и 429 ядро понимает
- * само. Тело длиннее предела не дочитывается — [NetAnswer.TooLarge]. Нет
- * ответа — [NetAnswer.NoAnswer] с именем исключения: его текст знает адрес,
+ * Ответ с любым статусом — [NetAnswer.Response] вместе с заголовками (из
+ * `Retry-After` ядро узнаёт, сколько просят подождать): 404 и 429 ядро понимает
+ * само. Тело длиннее предела не дочитывается — [NetAnswer.TooLarge]. Соединения
+ * не вышло — [NetAnswer.NoAnswer] с именем исключения: его текст знает адрес,
  * а в адресе бывает поисковый запрос.
  */
 class HttpUrlTransport : NetTransport {
@@ -49,13 +50,16 @@ class HttpUrlTransport : NetTransport {
             if (connection.contentLengthLong > request.maxBodyBytes) {
                 NetAnswer.TooLarge
             } else {
+                val headers = connection.responseHeaders()
                 // Тело ответа с ошибкой — в errorStream, и его может не быть вовсе.
                 val failed = status >= HttpURLConnection.HTTP_BAD_REQUEST
                 val stream = if (failed) connection.errorStream else connection.inputStream
                 val body =
                     if (stream == null) ByteArray(0) else stream.use { it.readAtMost(request.maxBodyBytes, deadline) }
-                body?.let { NetAnswer.Response(status, it) } ?: NetAnswer.TooLarge
+                body?.let { NetAnswer.Response(status, it, headers) } ?: NetAnswer.TooLarge
             }
+        } catch (expected: SocketTimeoutException) {
+            NetAnswer.TimedOut
         } catch (e: IOException) {
             NetAnswer.NoAnswer(e.javaClass.simpleName)
         } finally {
@@ -81,6 +85,13 @@ class HttpUrlTransport : NetTransport {
             body.write(buffer, 0, read)
         }
     }
+
+    /**
+     * Заголовки ответа парами: повторённое имя — по паре на значение; ключ `null` — строка
+     * статуса, она не заголовок.
+     */
+    private fun HttpURLConnection.responseHeaders(): List<Pair<String, String>> =
+        headerFields.flatMap { (name, values) -> if (name == null) emptyList() else values.map { name to it } }
 
     // Таймаут 0 у HttpURLConnection — «ждать вечно»; срок не должен стать вечным.
     private fun Long.toTimeout(): Int = coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()

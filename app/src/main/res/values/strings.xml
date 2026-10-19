@@ -270,6 +270,7 @@
     <string name="online_firmware_block">The phone is online, but its firmware seems to keep Plinth off the network. In Phone Master → Network management, allow Plinth both Wi-Fi and mobile data; if they are already on, turn them off and on again.</string>
     <string name="online_firmware_block_open">Open network settings</string>
     <string name="online_provider_down">%1$s is not responding. Try again later.</string>
+    <string name="online_rate_limited">%1$s asks to wait a little. Try again in a moment.</string>
     <string name="online_broken">%1$s sent an answer Plinth does not understand.</string>
     <string name="online_retry">Retry</string>
     <string name="online_album_play">Play</string>

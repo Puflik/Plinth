@@ -13,6 +13,7 @@ import io.github.puflik.plinth.ffi.PlinthCore
 import io.github.puflik.plinth.online.CoreOnlineRepository
 import io.github.puflik.plinth.online.DataStoreOnlineSettings
 import io.github.puflik.plinth.online.DeviceDecoders
+import io.github.puflik.plinth.online.GatedOnlineRepository
 import io.github.puflik.plinth.online.HttpUrlTransport
 import io.github.puflik.plinth.online.MeteredNetwork
 import io.github.puflik.plinth.online.OnlineRepository
@@ -27,12 +28,16 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object OnlineModule {
+    /**
+     * Поиск, альбом и поток ждут первого применения переключателя ([GatedOnlineRepository]): на холодном
+     * старте они идут в ядро одновременно с ним. Переключатель получает этот же репозиторий.
+     */
     @Provides
     @Singleton
     fun provideOnlineRepository(
         core: PlinthCore,
         @IoDispatcher io: CoroutineDispatcher,
-    ): OnlineRepository = CoreOnlineRepository(core, HttpUrlTransport(), io)
+    ): OnlineRepository = GatedOnlineRepository(CoreOnlineRepository(core, HttpUrlTransport(), io))
 
     @Provides
     fun provideOnlineSettings(store: DataStore<Preferences>): OnlineSettings = DataStoreOnlineSettings(store)

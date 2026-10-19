@@ -18,6 +18,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -83,7 +84,7 @@ fun SearchScreen(
             state.online != OnlineResults.None ->
                 LazyColumn {
                     library(state.results, onTrack)
-                    online(state.online, onOpenAlbum)
+                    online(state.online, onOpenAlbum, viewModel::onRetryOnline)
                 }
             state.results.isNotEmpty() -> LazyColumn { tracks(state.results, onTrack) }
             state.searched -> Message(stringResource(R.string.search_nothing_found))
@@ -115,23 +116,25 @@ private fun LazyListScope.tracks(
 private fun LazyListScope.online(
     online: OnlineResults,
     onOpenAlbum: (OnlineAlbumHeader) -> Unit,
+    onRetry: () -> Unit,
 ) {
     when (online) {
         OnlineResults.None -> Unit
         OnlineResults.Searching -> item(key = SEARCHING_KEY) { Searching() }
-        is OnlineResults.Found -> online.sections.forEach { section(it, onOpenAlbum) }
+        is OnlineResults.Found -> online.sections.forEach { section(it, onOpenAlbum, onRetry) }
     }
 }
 
 private fun LazyListScope.section(
     section: OnlineSection,
     onOpenAlbum: (OnlineAlbumHeader) -> Unit,
+    onRetry: () -> Unit,
 ) {
     val name = providerName(section.provider)
     item(key = "section-${section.provider}") { SectionTitle(name) }
     val problem = section.problem
     when {
-        problem != null -> item(key = "problem-${section.provider}") { ProblemNote(problem, name) }
+        problem != null -> item(key = "problem-${section.provider}") { ProblemNote(problem, name, onRetry) }
         section.results.isEmpty() ->
             item(key = "empty-${section.provider}") { Note(stringResource(R.string.search_nothing_found)) }
         else ->
@@ -162,16 +165,25 @@ private fun ResultRow(
     )
 }
 
-/** «Нет сети» при живой сети на телефоне Transsion — где прошивка её закрыла (Н7). */
+/**
+ * Беда секции и «Повторить» под ней — для любой беды (R1 №15). «Нет сети» при живой сети на телефоне
+ * Transsion — где прошивка её закрыла (Н7) — с подсказкой про прошивку; она только для `NO_NETWORK`.
+ */
 @Composable
 private fun ProblemNote(
     problem: OnlineProblem,
     provider: String,
+    onRetry: () -> Unit,
 ) {
-    if (problem == OnlineProblem.NO_NETWORK && rememberFirmwareNetworkBlock()) {
-        FirmwareNetworkNote(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-    } else {
-        Note(problemText(problem, provider))
+    Column {
+        if (problem == OnlineProblem.NO_NETWORK && rememberFirmwareNetworkBlock()) {
+            FirmwareNetworkNote(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        } else {
+            Note(problemText(problem, provider))
+        }
+        OutlinedButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 16.dp)) {
+            Text(stringResource(R.string.online_retry))
+        }
     }
 }
 
@@ -183,6 +195,7 @@ private fun problemText(
     when (problem) {
         OnlineProblem.NO_NETWORK -> stringResource(R.string.online_no_network)
         OnlineProblem.PROVIDER_DOWN -> stringResource(R.string.online_provider_down, provider)
+        OnlineProblem.RATE_LIMITED -> stringResource(R.string.online_rate_limited, provider)
         OnlineProblem.BROKEN -> stringResource(R.string.online_broken, provider)
     }
 

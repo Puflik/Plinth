@@ -24,8 +24,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 /**
@@ -62,6 +64,13 @@ sealed interface OnlineResults {
  * сразу. Библиотека отвечает сразу, провайдеры — своей секцией ниже, когда
  * ответит сеть (ответ автора E3). Касание трека включает его, как в
  * библиотеке; альбом провайдера открывается своим экраном.
+ *
+ * Последний ответ сети помнится здесь же (R1 №14): пока текст тот же, сеть не спрашивают
+ * заново — ни при возврате с экрана альбома, ни после ухода дольше пяти секунд, когда
+ * `WhileSubscribed` уже остановил поток. Вернувшийся экран видит прежнее состояние первым
+ * кадром, а не пустое: иначе список уходит из композиции и теряет прокрутку. Ответ с бедой
+ * помнится так же — заменить его может «Повторить» ([onRetryOnline]) или новый текст. Уход
+ * дольше пяти секунд по-прежнему отменяет идущий запрос (Р1.11а).
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -75,6 +84,16 @@ class SearchViewModel
     ) : ViewModel() {
         private val query = MutableStateFlow("")
 
+        // Сколько раз нажали «Повторить»: новое число — тот же текст спрашивается заново.
+        private val retries = MutableStateFlow(0)
+
+        // Что показано сейчас: поток, начатый заново, стартует с этого, а не с пустого.
+        private var shownFound = NOTHING
+        private var shownOnline: OnlineResults = OnlineResults.None
+
+        // Последний ответ сети — одна запись; viewModelScope и все потоки ниже живут на одном потоке.
+        private var answer: Answer? = null
+
         private val settled: Flow<String> =
             query
                 .debounce { if (it.isBlank()) 0L else DEBOUNCE_MS }
@@ -85,23 +104,17 @@ class SearchViewModel
             settled
                 .flatMapLatest { text ->
                     if (text.isEmpty()) flowOf(NOTHING) else library.search(text).map { Found(it, searched = true) }
-                }
-                // Экран готов сразу, ещё до первого поиска.
-                .onStart { emit(NOTHING) }
+                }.onEach { shownFound = it }
+                // Экран готов сразу, ещё до первого поиска; вернувшийся — с тем, что видел.
+                .onStart { emit(shownFound) }
 
         private val inNetwork: Flow<OnlineResults> =
-            combine(settled, onlineSettings.enabled) { text, enabled -> text.takeIf { enabled } }
-                .distinctUntilChanged()
-                .flatMapLatest { text ->
-                    if (text.isNullOrEmpty()) {
-                        flowOf<OnlineResults>(OnlineResults.None)
-                    } else {
-                        flow {
-                            emit(OnlineResults.Searching)
-                            emit(OnlineResults.Found(online.search(text)))
-                        }
-                    }
-                }.onStart { emit(OnlineResults.None) }
+            combine(settled, onlineSettings.enabled, retries) { text, enabled, attempt ->
+                text.takeIf { enabled && it.isNotEmpty() }?.let { Asked(it, attempt) }
+            }.distinctUntilChanged()
+                .flatMapLatest(::answerTo)
+                .onEach { shownOnline = it }
+                .onStart { emit(shownOnline) }
 
         val uiState: StateFlow<SearchUiState> =
             combine(found, inNetwork) { found, online ->
@@ -113,6 +126,14 @@ class SearchViewModel
             query.value = text
         }
 
+        /**
+         * «Повторить» в секции сети: тот же устоявшийся текст спрашивается заново (`Searching`, потом
+         * ответ). Текста нет или источники выключены — ничего: спрашивать нечего.
+         */
+        fun onRetryOnline() {
+            retries.update { it + 1 }
+        }
+
         /** Найденный трек: контекст — результаты поиска. */
         fun onTrack(
             track: LibraryTrack,
@@ -121,9 +142,43 @@ class SearchViewModel
             actions.act(action, QueueContext.Search(query.value.trim()), uiState.value.results, track)
         }
 
+        /**
+         * Ответ сети на [asked]: из памяти, если на этот же вопрос уже отвечали, иначе `Searching` и
+         * запрос. Нет вопроса (пустой текст или источники выключены) — секций нет, и память пуста:
+         * потом тот же текст спросят заново.
+         */
+        private fun answerTo(asked: Asked?): Flow<OnlineResults> {
+            if (asked == null) {
+                answer = null
+                return flowOf(OnlineResults.None)
+            }
+            val known = answer?.takeIf { it.asked == asked }
+            return flow {
+                if (known != null) {
+                    emit(known.found)
+                } else {
+                    emit(OnlineResults.Searching)
+                    val found = OnlineResults.Found(online.search(asked.text))
+                    answer = Answer(asked, found)
+                    emit(found)
+                }
+            }
+        }
+
         private data class Found(
             val results: List<LibraryTrack>,
             val searched: Boolean,
+        )
+
+        // О чём спросили сеть: устоявшийся текст и номер «Повторить».
+        private data class Asked(
+            val text: String,
+            val attempt: Int,
+        )
+
+        private class Answer(
+            val asked: Asked,
+            val found: OnlineResults.Found,
         )
 
         companion object {
