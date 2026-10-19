@@ -18,6 +18,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -38,6 +39,7 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.utils.JavaScript
 import java.io.IOException
 
 /**
@@ -73,6 +75,9 @@ class SpikeRunner(
         var bytes = 0L
         var requests = 0
         var timedOut = false
+        var startMs = -1L
+        var stalls = 0
+        var stallMs = 0L
         val errors = ArrayList<String>()
         val seekResumeMs = ArrayList<Long>()
         val ok get() = errors.isEmpty() && !timedOut
@@ -234,12 +239,15 @@ class SpikeRunner(
     ) {
         val url = playable.stream.content
         report.line("UA of client = '${playable.userAgent}'")
-        val stock = playOnce("stock UA 'Plinth'", url, "Plinth", 8_000, withSeeks = false)
-        report.line("PLAY RESULT stock UA: ok=${stock.ok} played=${stock.playedMs}ms errors=${stock.errors}")
-        val main = playOnce("client UA, main format itag=${playable.stream.itag}", url, playable.userAgent, 60_000, withSeeks = true)
+        val stock = playOnce("STOCK: as in Plinth now (no Range on first request), UA 'Plinth'", url, "Plinth", 15_000, withSeeks = false, rangeFix = false)
         report.line(
-            "PLAY RESULT main itag=${playable.stream.itag}: ok=${main.ok} played=${main.playedMs}ms bytes=${main.bytes} " +
-                "requests=${main.requests} seekResume=${main.seekResumeMs} errors=${main.errors}",
+            "PLAY RESULT stock: ok=${stock.ok} played=${stock.playedMs}ms startMs=${stock.startMs} stalls=${stock.stalls}/${stock.stallMs}ms " +
+                "bytes=${stock.bytes} errors=${stock.errors}",
+        )
+        val main = playOnce("FIX: Range bytes=0- added, client UA, itag=${playable.stream.itag}", url, playable.userAgent, 60_000, withSeeks = true, rangeFix = true)
+        report.line(
+            "PLAY RESULT fix itag=${playable.stream.itag}: ok=${main.ok} played=${main.playedMs}ms startMs=${main.startMs} " +
+                "stalls=${main.stalls}/${main.stallMs}ms bytes=${main.bytes} requests=${main.requests} seekResume=${main.seekResumeMs} errors=${main.errors}",
         )
         try {
             alternateCheck(candidate, playable)
@@ -261,8 +269,11 @@ class SpikeRunner(
             report.line("ALT format: none available (picked itag=${picked.stream.itag})")
             return
         }
-        val result = playOnce("alt format itag=${other.itag}", other.content, userAgentFor(other.content), 20_000, withSeeks = true)
-        report.line("PLAY RESULT alt itag=${other.itag}: ok=${result.ok} played=${result.playedMs}ms seekResume=${result.seekResumeMs} errors=${result.errors}")
+        val result = playOnce("alt format itag=${other.itag}", other.content, userAgentFor(other.content), 20_000, withSeeks = true, rangeFix = true)
+        report.line(
+            "PLAY RESULT alt itag=${other.itag}: ok=${result.ok} played=${result.playedMs}ms startMs=${result.startMs} " +
+                "stalls=${result.stalls}/${result.stallMs}ms seekResume=${result.seekResumeMs} errors=${result.errors}",
+        )
     }
 
     @OptIn(UnstableApi::class)
@@ -272,6 +283,7 @@ class SpikeRunner(
         userAgent: String,
         targetPlayedMs: Long,
         withSeeks: Boolean,
+        rangeFix: Boolean,
     ): PlayResult =
         withContext(Dispatchers.Main) {
             report.line("PLAY START $label (target ${targetPlayedMs}ms, seeks=$withSeeks)")
@@ -313,10 +325,20 @@ class SpikeRunner(
                     .Factory()
                     .setUserAgent(userAgent)
                     .setTransferListener(transfers)
+            // Как в Plinth: ResolvingDataSource над DefaultDataSource. С rangeFix добавляет Range: bytes=0-
+            // (DefaultHttpDataSource сам шлёт Range только если позиция не 0 или длина известна).
+            val dataFactory: DataSource.Factory =
+                if (rangeFix) {
+                    ResolvingDataSource.Factory(DefaultDataSource.Factory(context, http)) { spec ->
+                        spec.buildUpon().setHttpRequestHeaders(spec.httpRequestHeaders + mapOf("Range" to "bytes=0-")).build()
+                    }
+                } else {
+                    DefaultDataSource.Factory(context, http)
+                }
             val player =
                 ExoPlayer
                     .Builder(context)
-                    .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(dataFactory))
                     .setAudioAttributes(MUSIC, true)
                     .build()
             player.addListener(
@@ -373,10 +395,19 @@ class SpikeRunner(
             var pendingTarget = -1L
             var pendingAt = 0L
             var lastLog = started
+            var stalling = false
             while (true) {
                 delay(POLL_MS)
                 val now = SystemClock.elapsedRealtime()
                 val playing = player.isPlaying
+                if (playing && result.startMs < 0) result.startMs = now - started
+                if (!playing && result.startMs >= 0 && pendingTarget < 0 && player.playbackState == Player.STATE_BUFFERING) {
+                    result.stallMs += now - last
+                    if (!stalling) result.stalls++
+                    stalling = true
+                } else {
+                    stalling = false
+                }
                 if (playing) played += now - last
                 last = now
                 if (pendingTarget >= 0 && playing && player.currentPosition >= pendingTarget + 300) {
@@ -488,6 +519,14 @@ class SpikeRunner(
     /** Явно гоняем Rhino: адрес с `n` и подпись - так, как их разбирал бы экстрактор у клиента с шифром. */
     private fun rhino(videoId: String) {
         try {
+            val js = "function f(a){var o=[];for(var i=0;i<a.length;i++){o.push(a.charCodeAt(i)+1);}return o.join(',');}"
+            val js2 = "function g(a){return JSON.stringify({x:a.replace(/b/g,'B'),n:[1,2,3].map(function(v){return v*2;}),d:new Date(0).getTime(),s:'x'.padStart(3,'-')});}"
+            val tj = SystemClock.elapsedRealtime()
+            val r1 = JavaScript.run(js, "f", "abc")
+            report.line("T RHINO direct JavaScript.run #1 (Rhino init+compile+run): ${SystemClock.elapsedRealtime() - tj} ms -> '$r1' (want 98,99,100)")
+            val tk = SystemClock.elapsedRealtime()
+            val r2 = JavaScript.run(js2, "g", "abc")
+            report.line("T RHINO direct JavaScript.run #2 (regex, JSON, map, Date, padStart): ${SystemClock.elapsedRealtime() - tk} ms -> $r2")
             val t0 = SystemClock.elapsedRealtime()
             val ts = YoutubeJavaScriptPlayerManager.getSignatureTimestamp(videoId)
             report.line("T RHINO getSignatureTimestamp (player JS download+parse): ${SystemClock.elapsedRealtime() - t0} ms -> $ts")
