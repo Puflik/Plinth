@@ -20,5 +20,7 @@ mod r1_7_tests;
 mod r9e_tests;
 #[cfg(test)]
 mod r9f_tests;
+#[cfg(test)]
+mod yu3v_tests;
 mod scan_api;
 mod test_api;
