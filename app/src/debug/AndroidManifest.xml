@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Только debug (Ю3в): HTTP к 127.0.0.1 для инструментальных тестов, см. xml/network_security_config.xml. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+
+</manifest>

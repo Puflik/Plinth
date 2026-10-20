@@ -15,8 +15,11 @@ fn header(name: &str, value: &str) -> (String, String) {
 }
 
 fn request() -> StreamRequest {
-    StreamRequest::new("https://rr1---sn-test.googlevideo.com/videoplayback?expire=1", vec![header("Range", "bytes=0-")])
-        .unwrap()
+    StreamRequest::new(
+        "https://rr1---sn-test.googlevideo.com/videoplayback?expire=1",
+        vec![header("Range", "bytes=0-")],
+    )
+    .unwrap()
 }
 
 #[test]

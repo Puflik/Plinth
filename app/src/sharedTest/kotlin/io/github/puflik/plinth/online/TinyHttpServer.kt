@@ -34,7 +34,7 @@ class TinyHttpServer(
         val headers: List<Pair<String, String>> = emptyList(),
     )
 
-    private val socket = ServerSocket(0, BACKLOG, InetAddress.getLoopbackAddress())
+    private val socket = ServerSocket(0, BACKLOG, InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
     val requests = CopyOnWriteArrayList<Request>()
     val url: String get() = "http://127.0.0.1:${socket.localPort}"
 

@@ -136,6 +136,7 @@ class CoreOnlineMappingTest {
             RustStreamAddress(
                 "https://archive.org/download/x/a.mp3",
                 listOf(RustNetHeader("Authorization", "t")),
+                null,
             ).toApp()
 
         assertThat(address).isEqualTo(

@@ -132,7 +132,8 @@ impl Provider for ExternalAdapter { … }
 ```rust
 pub fn connect_online(&self, transport: Arc<dyn NetTransport>, providers: Vec<Arc<dyn ExternalProvider>>) -> Result<(), CoreError>
 pub(crate) fn registry_with(transport: Arc<dyn HttpTransport>, pause: Option<fn(Duration)>, external: Vec<Arc<dyn Provider>>) -> Result<Registry, CoreError>
-// registry(transport, pause) остаётся и зовёт registry_with(.., Vec::new()): старые тесты его используют.
+// registry(transport, pause) остаётся для старых тестов: `#[cfg(test)]` и вызов registry_with(.., Vec::new()) —
+// без `#[cfg(test)]` clippy -D warnings падает на «function `registry` is never used» (в коде приложения её больше никто не зовёт).
 pub struct StreamAddress { pub url: String, pub headers: Vec<NetHeader>, pub valid_for_ms: Option<u64> }   // новое поле
 ```
 
@@ -253,6 +254,8 @@ internal fun OnlineProvider.toRust(): <сгенерированный ExternalPr
 - Смены формата после отказа (AAC после Opus) нет: повтор — тот же вариант со свежей ссылкой.
 - Срок ссылки по часам устройства; страховка — 403. Предзагрузки нет (ExoPlayer готовит следующий элемент сам, `KEPT_LOADS = 4`).
 - Ядро не передаёт провайдеру `Limits` (срок и отмену): `YoutubeSource` держит свои сроки (поиск 10 с, извлечение 25 с, меньше 15 с срока поиска ядра).
+- Поиск идёт по провайдерам **по очереди** (ADR 0008, «Последствия»): Internet Archive первым, и если он ушёл на весь срок поиска (15 с) — YouTube получит секцию
+  «не отвечает» без попытки. Параллельный опрос — отдельная задача; здесь не трогать (`Registry`).
 - В поиске YouTube пока называется «youtube», а его песни — строками-альбомами (экран альбома с одним треком): название и вид — Ю5.
 
 ### Отвергнуто
@@ -290,7 +293,8 @@ internal fun OnlineProvider.toRust(): <сгенерированный ExternalPr
   - `core/ffi/src/api/yu3v_tests.rs` (и строка `mod yu3v_tests;` в `api/mod.rs`; правка вызова в `r1_11a_tests.rs`)
   - `core/providers/tests/yu3v_stream_validity.rs`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/YoutubeProviderTest.kt`, `OnlineProvidersTest.kt`
-  - `app/src/test/kotlin/io/github/puflik/plinth/ffi/ExternalProviderMappingTest.kt`
+  - `app/src/test/kotlin/io/github/puflik/plinth/ffi/ExternalProviderMappingTest.kt`; одна строка в старом `CoreOnlineMappingTest.kt` (`RustStreamAddress(…, null)`:
+    у сгенерированной записи появилось поле `validForMs`)
   - `app/src/androidTest/kotlin/io/github/puflik/plinth/ffi/ExternalProviderCoreTest.kt`
   - `app/src/androidTest/kotlin/io/github/puflik/plinth/audio/media3/OnlineResolverExpiryTest.kt`, `ReResolvingDataSourceTest.kt`, `OnlineStreamPathTest.kt`,
     `ExoPlayerStreamTest.kt`, помощник `RangedReply.kt`
@@ -302,7 +306,7 @@ internal fun OnlineProvider.toRust(): <сгенерированный ExternalPr
 На базовом коде **не собираются** — задача вводит новый API (сигнатуры — выше): Rust — нет `external_api`, `with_valid_for`; Kotlin — нет
 `OnlineProvider`, `YoutubeProvider`, `onlineProviders`, `OnlineResolver(clock, …)`, `ReResolvingDataSource`.
 
-**`core/ffi/src/api/yu3v_tests.rs`** (56 тестов; платформа — `Platform` в памяти с ручками «отказ», «паника», «свой ответ»; Internet Archive — записанные ответы):
+**`core/ffi/src/api/yu3v_tests.rs`** (52 теста; платформа — `Platform` в памяти с ручками «отказ», «паника», «свой ответ»; Internet Archive — записанные ответы):
 - контракт `provider_contract!` (10 правил) на `ExternalAdapter` над фейковым внешним провайдером, в том числе «без сети — `Network`»;
 - поиск: все поля результата, идентификаторы дословно (`-a_B9xYz01q`, кириллица), обрезка названия, пустые подписи/год 0 — `None`; пустой запрос не доходит до
   платформы; платформа получает обрезанный текст и лимит 1..=100; лишнее сверх лимита отрезается; треки: поля, варианты в порядке платформы, нули — `None`, плохой MBID
@@ -381,7 +385,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"; $env:CARGO_TARGE
 
 - защищённый тест кажется неверным; UniFFI называет сгенерированные типы иначе, чем `ExternalProvider`, `ExternalSearch.Found/Failed`, `ExternalFailure.Network/…/Internal`, `QualityTier.STANDARD/…`;
 - для решения нужно менять файл вне списка «Менять» (в том числе `online/youtube/**`, `Registry`, `core/library`);
-- `vec![Arc<dyn ExternalProvider>]` как аргумент UniFFI не принимается или исключение Kotlin в `id()` не становится паникой, которую ловит `guard`;
+- `Vec<Arc<dyn ExternalProvider>>` как аргумент `connect_online` UniFFI не принимает (на эталоне принимал: UniFFI 0.32.2);
 - `minifyGithubReleaseWithR8` просит больше, чем `-dontwarn`;
 - проверки упали дважды подряд (одна попытка исправить, потом стоп).
 

@@ -495,7 +495,10 @@ fn a_track_arrives_with_its_variants_in_the_platforms_order() {
     let sources: Vec<_> = track.sources.iter().map(|s| (s.external.as_str(), s.format, s.bitrate)).collect();
     assert_eq!(
         sources,
-        [("dQw4w9WgXcQ/251", Format::Opus, Some(Bitrate::kbps(160))), ("dQw4w9WgXcQ/140", Format::Aac, Some(Bitrate::kbps(128)))]
+        [
+            ("dQw4w9WgXcQ/251", Format::Opus, Some(Bitrate::kbps(160))),
+            ("dQw4w9WgXcQ/140", Format::Aac, Some(Bitrate::kbps(128)))
+        ]
     );
 }
 
@@ -608,7 +611,8 @@ fn broken_tracks_are_refused_without_quoting_them() {
 
 #[test]
 fn broken_streams_are_refused_without_quoting_them() {
-    let address = |url: &str, headers: Vec<NetHeader>| StreamAddress { url: url.to_owned(), headers, valid_for_ms: None };
+    let address =
+        |url: &str, headers: Vec<NetHeader>| StreamAddress { url: url.to_owned(), headers, valid_for_ms: None };
     let broken = [
         address("ftp://secret.example/SECRET", Vec::new()),
         address("file:///SECRET", Vec::new()),
