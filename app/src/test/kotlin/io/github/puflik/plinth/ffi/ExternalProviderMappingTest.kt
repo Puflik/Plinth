@@ -65,9 +65,9 @@ class ExternalProviderMappingTest {
             )
         }
 
-        val answer = rust.search("piano", 20u)
+        val answer = rust.search("piano", 7u)
 
-        assertThat(provider.searches).containsExactly("piano" to 20)
+        assertThat(provider.searches).containsExactly("piano" to 7)
         assertThat(answer)
             .isEqualTo(
                 RustSearch.Found(
