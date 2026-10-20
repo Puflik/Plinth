@@ -4,8 +4,8 @@
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
 
 - **Ветка:** `work/yu3v` · **Ворктри:** `C:\claude\Plinth-yu3v`
-- **Основа:** `main` на `f678d68` (Ю2 и Ю3б в `main`). **Коммиты тестов:** `<A>` (Rust) и `<B>` (Kotlin) — защищённые
-  тесты лежат в них; `<C>` — этот файл в окончательном виде.
+- **Основа:** `main` на `f678d68` (Ю2 и Ю3б в `main`). **Коммиты тестов:** `a51f0ef` (Rust), `4bd51b1` (Kotlin, плюс `rustfmt` Rust-тестов) и
+  `5176622` (один тест усилен после мутации) — защищённые тесты лежат в них; сверять с последним (`5176622`).
 - **Откуда:** `tasks.md`, строка 389 (Ю3); `docs/work/yu1.md`, разделы 3.1 (п. 4–5) и 6; `docs/work/yu3a.md`, разделы 3.3, 4,
   5 (п. 10) и 8; `docs/work/yu3b.md`, «Осталось Ю3в» в отчёте исполнителя.
 - **Данные пользователя трогает.** Сетевые треки YouTube попадают в каталог и журнал (лайки, «В плейлист…»), а имя
@@ -289,7 +289,7 @@ internal fun OnlineProvider.toRust(): <сгенерированный ExternalPr
   `…/online/youtube/**` (Ю3б — ни строчки); `FakeOnlineRepository`, `OnlineStreams`, `GatedOnlineRepository`, `OnlineSwitch`, `DeviceDecoders`; `ui/**`,
   `strings.xml`; `app/src/main/AndroidManifest.xml`, `build.gradle.kts`, `libs.versions.toml`, `settings.gradle.kts`; `CHANGELOG.md`, `tasks*.md`,
   `docs/decisions.md`, `CLAUDE.md`, план; чужие тесты.
-- **Защищённые тесты** (из коммитов тестов `<A>`, `<B>`; не менять, не удалять, не глушить):
+- **Защищённые тесты** (из коммитов тестов `a51f0ef`, `4bd51b1`, `5176622`; не менять, не удалять, не глушить):
   - `core/ffi/src/api/yu3v_tests.rs` (и строка `mod yu3v_tests;` в `api/mod.rs`; правка вызова в `r1_11a_tests.rs`)
   - `core/providers/tests/yu3v_stream_validity.rs`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/YoutubeProviderTest.kt`, `OnlineProvidersTest.kt`
@@ -371,7 +371,12 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"; $env:CARGO_TARGE
 только сборка (`compileGithubDebugAndroidTestKotlin`), прогон оставить Opus.
 Известное: на Windows падают 4 теста `DataStore*SettingsTest` — не из-за задачи; в CI на Linux проходят. Подводные камни: строка не длиннее 120 (ktlint/detekt, в том числе комментарии);
 `ThrowsCount` — не больше двух `throw` в функции; `catch (e: Exception)` — только с `@Suppress("TooGenericExceptionCaught")` и пояснением; `unwrap`/`expect`/`panic!` в коде ядра запрещены (clippy).
-`cargo fmt` без `--check` правит CRLF по всему крейту — не запускать; свои файлы — `rustfmt --check <файл>`.
+`cargo fmt` без `--check` правит CRLF по всему крейту — не запускать; свои файлы — `rustfmt --check --edition 2024 <файл>`.
+Подводные камни, найденные на временной реализации: (1) `registry()` без `#[cfg(test)]` — clippy `dead_code`; (2) `DefaultDataSource.open` требует закрытого предыдущего
+чтения (`checkState`), поэтому `ReResolvingDataSource` закрывает `upstream` перед повтором, а тест закрывает источник между двумя `open`; (3) `catch` с возвращаемым
+значением по умолчанию — detekt `SwallowedException`: `@Suppress("TooGenericExceptionCaught", "SwallowedException")` с пояснением; (4) ktlint `chain-method-continuation`:
+цепочка из трёх и более вызовов — по строке на вызов; (5) порядок импортов в `CoreOnlineRepository.kt`; (6) `InetAddress.getLoopbackAddress()` на эмуляторе — `::1`,
+поэтому сервер в тестах слушает `127.0.0.1` явно (уже в `TinyHttpServer`).
 
 ## Готово, когда
 
@@ -411,7 +416,21 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"; $env:CARGO_TARGE
 ## Временная реализация и мутации
 
 Реализация нужна была только для проверки тестов: **в репозиторий не коммитилась**. Патч — в заметках планировщика (`C:\Users\User\AppData\Roaming\Claude\side-session-notes\local_6a10ff5e-f13f-4d35-84fc-3a8758d8fb83\yu3v-reference-implementation.patch`);
-исполнитель его не видит и пишет своё по разделу «Решение»; Opus при ревью может сверить. <ИТОГИ>
+исполнитель его не видит и пишет своё по разделу «Решение»; Opus при ревью может сверить.
+
+**На патче зелёные:** `cargo test -p plinth-ffi --lib yu3v` (52) и `-p plinth-providers --test yu3v_stream_validity` (4); `cargo clippy --workspace --all-targets -- -D warnings`;
+`ktlintCheck`, `detekt`, `lintGithubDebug`, `compileGithubDebugAndroidTestKotlin`; `testGithubDebugUnitTest` целиком (красные только четыре известных `DataStore*SettingsTest`);
+на эмуляторе `audio.media3` — 103 теста, `ffi` — 31, `online` — 17, без падений. Патч — 14 файлов (6 новых, 8 существующих), ложится на `main` `f678d68`; временное
+сужение `abiFilters` в `app/build.gradle.kts` (только эмулятор) в него не входит.
+
+**Мутации — 113, все пойманы:** Rust — 54 (`yu3v-mutate-rust.py`: срок адреса, поиск и лимит, поля результатов и треков, нули и пустые подписи, порядок вариантов и заголовков,
+вид и текст бед, паника в каждом вызове, имя и возможности, регистр идентификаторов, порядок реестра, замена подключения), Kotlin JVM — 52 (`yu3v-mutate-kotlin.py`: имя/виды/качество,
+поля и варианты, идентификаторы, срок ссылки — запас, потолок, умолчание, часы, `expire=`, бедa и её причина, `toRust()`, провода DI), эмулятор — 7 (`yu3v-mutate-instrumented.py`:
+`setUserAgent` вместо умолчания — **найденный дефект**, нет умолчания, повтор на любой статус, повтор без предела, метка отказа не переживает замену адреса, срок игнорируется, старый
+стек в `ExoPlayerFactory`). На первом прогоне выжили и закрыты тестами: паника при вопросе об имени и о возможностях (`connect_online` прятала её собственным `guard` — добавлен тест
+на прямой `ExternalAdapter::new`) и жёсткий лимит 20 в `toRust()` (тест просил ровно 20 — теперь 7). Не прогонялось на патче (это «Проверки» исполнителя): `testFdroidDebugUnitTest`,
+`minifyGithubReleaseWithR8` (п. К), `cargo test --workspace` целиком; остальные инструментальные мутации (повтор без `close`, метка в `refused`, срок `<=`, чужая ссылка) оставлены Opus
+по желанию — скрипт в заметках.
 
 ## Отчёт исполнителя
 
