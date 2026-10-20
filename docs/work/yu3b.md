@@ -356,4 +356,51 @@ Opus при ревью может сверить. На патче: `ktlintCheck`
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко), результат `minifyGithubReleaseWithR8`._
+_Исполнитель: Sonnet 5.5, 2026-10-20. Ворктри `C:\claude\Plinth-yu3b`, ветка `work/yu3b`, основа `ce39035`._
+
+**Сделано — всё по разделу «Решение», вопросов к плану не возникло.**
+
+- `app/src/main/kotlin/.../online/youtube/`: `YoutubeSource.kt` (интерфейс и типы дословно), `HttpStatusTable.kt`, `CallBudget.kt`
+  (`CallBudget` на `ThreadLocal` + `YoutubeBudgets`), `YoutubeDownloader.kt` (загрузчик + `HttpRefused`), `NewPipeYoutubeSource.kt`
+  (поиск с четвертью мест альбомам, `resolve` видео и альбома, `stream`, заготовка потоков `StreamStash`, `Budgeted`-обёртка
+  загрузчика, перевод бед `failureOf`/`classify`). `ffi/CoreHttpStatusTable.kt` — `object` над `checkHttpStatus` и `verdictOf`.
+- Gradle: JitPack с `includeGroup("com.github.TeamNewPipe")` в `settings.gradle.kts`; `newpipeExtractor = "v0.26.5"` и
+  `desugarJdkLibs = "2.1.5"` с библиотеками в `libs.versions.toml`; `isCoreLibraryDesugaringEnabled`, `implementation(libs.newpipe.extractor)`,
+  `coreLibraryDesugaring(libs.desugar.jdk.libs.nio)` в `app/build.gradle.kts`. JitPack отдал `v0.26.5` без хлопот.
+- Не трогал: `proguard-rules.pro`, `core/**`, `di/**`, `audio/**`, `online/*.kt`, `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `CLAUDE.md`, защищённые тесты.
+
+**Коммиты:** `59e1e1c` — реализация и Gradle; `6da2743` — версия экстрактора только в `libs.versions.toml` (из комментария убрана); следом — этот отчёт.
+
+**Проверки** (JDK 21.0.8, своя `CARGO_TARGET_DIR`):
+
+- Красный старт: `compileGithubDebugUnitTestKotlin` на `ce39035` не собирается (нет `NewPipeYoutubeSource`, `YoutubeException`, `YoutubeVariant`, …) — как и должно.
+- `ktlintCheck detekt` — зелёные. `lintGithubDebug` — без ошибок, в новых файлах и новых зависимостях замечаний нет (23 старых предупреждения).
+- `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` — по 792 теста, упали те же 4 (`DataStoreFolder/Sort/OnboardingSettingsTest`,
+  `IOException` в `FileStorage.kt:114`, Windows). Тесты Ю3б — 56 из 56: Search 10, Resolve 9, Stream 11, Errors 9, Downloader 10, Boundary 4, `CoreHttpStatusVerdictTest` 3.
+- `compileGithubDebugAndroidTestKotlin` — собирается.
+- Эмулятор `emulator-5554` (`Medium_Phone_API_36.0`): `connectedGithubDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.package=io.github.puflik.plinth.ffi"` —
+  22 теста по XML, 0 падений, среди них все 4 `CoreHttpStatusTableTest` на настоящем ядре (в том числе `Retry-After` доходит до ядра).
+- **R8:** `.\gradlew.bat minifyGithubReleaseWithR8` — `BUILD SUCCESSFUL` за 1 мин 12 с **без единого нового правила** (`-dontwarn` не понадобился, `-keep` не добавлял).
+  Единственное предупреждение R8: `Unexpected reference to missing service class: META-INF/services/javax.script.ScriptEngineFactory` (ресурс Rhino; не ошибка).
+- `grep -rn "org.schabi" app/src/main` — только `online/youtube/`; `grep -rn '"http ' app/src/main` — пусто; версии экстрактора и десугаринга в сборке — только `libs.versions.toml`
+  (в комментарии защищённого `YoutubeSearchTest.kt` ещё есть «v0.26.5» — не трогал).
+- `git diff 908840c HEAD -- <защищённые тесты, записи, tools/youtube-record>` — пуст.
+
+**Решения сверх плана** (мелкие, плана не нарушают; Opus при ревью может отбросить):
+
+1. Два текста `Parse` разведены так: `no audio streams` — экстрактор не отдал ни одного аудиопотока; `no supported audio stream` — отдал, но среди них нет прямой ссылки
+   (`isUrl`, `PROGRESSIVE_HTTP`) с itag 251 или 140. При нескольких потоках с одним itag (дорожки на разных языках) берётся первый.
+2. `stream` видео без аудио вовсе даёт `Unavailable("variant")`, а не `Parse` (план про это молчит; «нет такого у видео»); пустая заготовка при этом кладётся — второй вариант ответит без сети.
+3. Защитные ветки, которые настоящая таблица не задевает и тесты не покрывают: `HttpRefused(Fine)` бросает `IllegalStateException` при создании; если таблица на 429 (капча/«бот»)
+   вернёт `Fine`, это `Parse("status table")`; код ответа < 0 (`getResponseCode()` = -1, не HTTP) и `openConnection()` не `HttpURLConnection` — `IOException` до таблицы
+   (иначе `toUShort()` обернул бы -1 в 65535).
+4. В поиске идентификатор, не подходящий под шаблон (11 знаков / `OLAK5uy_…`), считается «нет id» — элемент пропускается, `resolve` всё равно отказал бы ему.
+5. `CallBudget.within` вложенный срок не сужает, а заменяет и возвращает прежний (как в плане «возвращает прежний/снимает»); вложенных вызовов в коде нет.
+6. `YoutubeBudgets` лежит в `CallBudget.kt`, `HttpRefused` — в `YoutubeDownloader.kt` (план место не назначал); других новых файлов нет.
+
+**Не проверено / чем не воспроизвелось:** живой YouTube (только записи; ручной скрипт — Ю3г); 403 на чтении потока на телефоне и «другой формат после отказа» в плеере (телефона нет; Ю3в/Ю6);
+десугаринг на Android 8–12 (`Plinth_API_26`, `Plinth_API_30` не запускал — до выпуска); правила R8 на подключённом пакете (пока он ни к чему не подключён, R8 вырезает его целиком — Ю3г).
+Инструментальные тесты гонялись только по пакету `ffi`, остальные пакеты на эмуляторе не запускались.
+
+**Осталось Ю3в:** внешний `trait` ядра и адаптер `Provider`, `connect_online`, DI (`CoreHttpStatusTable` и `NewPipeYoutubeSource(CoreHttpStatusTable)` ни к чему не подключены), заголовки потока и `Range`
+в `StreamRequest`/Media3, минута игры, перехват 403 и один повтор, ADR. Ю3г — flavor, `NonFreeNet`, переключатель, правила R8, `NOTICE`, заголовки лицензий.
