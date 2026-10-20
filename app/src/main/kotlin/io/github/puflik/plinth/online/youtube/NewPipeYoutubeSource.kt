@@ -26,7 +26,8 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * [YoutubeSource] на NewPipeExtractor `v0.26.5` (Ю3б): единственное место приложения, которое знает экстрактор.
+ * [YoutubeSource] на NewPipeExtractor (Ю3б; версия — в `libs.versions.toml`, больше нигде): единственное место
+ * приложения, которое знает экстрактор.
  *
  * Состояние экстрактора глобально (`NewPipe.init`), поэтому загрузчик ставится в начале каждого вызова, а не в
  * конструкторе: источники, созданные подряд, работают каждый со своим. Два источника одновременно не рассчитаны.
