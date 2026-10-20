@@ -105,6 +105,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Ю3б: экстрактор YouTube зовёт API 33 (URLEncoder.encode с Charset, Collectors.toUnmodifiableList);
+        // десугаринг библиотек закрывает их для API 26–32.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     // B1.4: контрактные тесты и FakeAudioEngine лежат в общем наборе исходников.
@@ -149,6 +152,10 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.jna) { artifact { type = "aar" } }
+
+    // Ю3б: экстрактор YouTube (JitPack) и десугаринг библиотек под него.
+    implementation(libs.newpipe.extractor)
+    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
 
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.hilt.work)

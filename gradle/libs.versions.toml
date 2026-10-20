@@ -32,6 +32,8 @@ truth = "1.4.5"
 jna = "5.19.1"
 detekt = "2.0.0-alpha.6"
 ktlint = "14.2.0"
+newpipeExtractor = "v0.26.5"
+desugarJdkLibs = "2.1.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -75,6 +77,11 @@ jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+
+# Экстрактор YouTube (Ю3б): JitPack, версия — тег. Знает о нём только пакет online/youtube.
+newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
+# Десугаринг библиотек: экстрактор зовёт API 33 (URLEncoder.encode с Charset, Collectors.toUnmodifiableList), minSdk 26.
+desugar-jdk-libs-nio = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugarJdkLibs" }
 
 # API плагина Android для build-logic (convention-плагин plinth.rust).
 android-gradle-api = { group = "com.android.tools.build", name = "gradle-api", version.ref = "agp" }

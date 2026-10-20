@@ -13,6 +13,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // NewPipeExtractor и его nanojson живут только на JitPack (Ю3б): репозиторий
+        // отвечает за одну группу, остальное берётся из Google и Maven Central.
+        maven("https://jitpack.io") {
+            content { includeGroup("com.github.TeamNewPipe") }
+        }
     }
 }
 
