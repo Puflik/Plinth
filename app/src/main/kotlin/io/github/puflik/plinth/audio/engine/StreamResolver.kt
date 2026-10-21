@@ -1,5 +1,7 @@
 package io.github.puflik.plinth.audio.engine
 
+import kotlin.time.Duration
+
 /**
  * Адрес сетевого трека ([AudioSource.Online]) в момент загрузки (E3):
  * движок спрашивает его, когда начинает читать поток, — по типу сети и
@@ -13,9 +15,14 @@ fun interface StreamResolver {
 
 /** Что ответил [StreamResolver]; от ответа зависит, пропустит ли очередь трек (G3). */
 sealed interface StreamLookup {
+    /**
+     * [validFor] — сколько адрес годен с получения (у YouTube — часы): дольше загрузка его не держит и спрашивает
+     * заново; `null` — не стареет. Заголовки — по порядку, как их назвал провайдер.
+     */
     data class Found(
         val url: String,
         val headers: Map<String, String> = emptyMap(),
+        val validFor: Duration? = null,
     ) : StreamLookup
 
     /** Играть нечем: источники выключены или у трека нет сетевых вариантов — как пропавший файл. */

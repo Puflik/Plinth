@@ -454,4 +454,35 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"; $env:CARGO_TARGE
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+**Остановлено по времени** (автор дал 10 + 10 минут), а не из-за упавших проверок. Сделаны Б–Ж и И; не сделаны З, К и полные
+проверки — список ниже. Сомнений в плане и в защищённых тестах не возникло.
+
+**Коммиты** (`work/yu3v`, после `36efb07`): `8c0982c` — ядро (Б–Г); второй — Kotlin (Д–Ж), ADR (И) и этот отчёт.
+
+**Сделано**
+- Ядро (Б–Г): `core/ffi/src/api/external_api.rs` — `ExternalProvider` (`with_foreign`), `ExternalCapabilities`, `ExternalFailure`,
+  `ExternalSearch/Resolve/Stream`, `QualityTier` (remote), `ExternalAdapter`: имя и возможности спрашиваются один раз, каждый вызов
+  платформы под `panic::guard`, чужие данные проверяются. `ProviderId::new` кладёт имя в текст ошибки, поэтому для имени платформы
+  ошибка своя («the name is not allowed»). `connect_online(transport, providers)` + `registry_with` (старый `registry` — `#[cfg(test)]`),
+  `StreamAddress.valid_for_ms`, `StreamRequest::with_valid_for/valid_for`.
+- Kotlin (Д–Ж): `ffi/CoreOnlineProvider.kt` (`OnlineProvider`, `OnlineQuality`, `ProviderException`, `toRust()` — исключение через границу не идёт,
+  чужое исключение — `Internal(<имя класса без пакета>)`, сообщение не берётся), `ffi/CoreOnline.kt` (`connect(transport, providers)`,
+  `StreamAddress.validFor`), `online/YoutubeProvider.kt` (варианты как в источнике, срок по `expire=`), `online/OnlineProviders.kt`,
+  `StreamLookup.Found.validFor`, `CoreOnlineRepository(…, providers)`, `OnlineModule` (`onlineProviders()` один раз).
+- ADR 0008 (И): новый пункт в «Решении» и строка в «Последствиях».
+
+**Проверки** (Windows, своя папка сборки `core\target`)
+- `cargo test -p plinth-ffi -p plinth-providers` — зелёное: ffi 153 (из них `yu3v_tests` 52), `yu3v_stream_validity` 4;
+  `cargo clippy --workspace --all-targets -- -D warnings` — чисто; `rustfmt --check` по моим файлам — без «Diff in» (только «Incorrect newline style» из-за CRLF рабочей копии).
+- `testGithubDebugUnitTest` с фильтром по классам: `YoutubeProviderTest` 13, `ExternalProviderMappingTest` 10, `OnlineProvidersTest` 3,
+  `FfiBoundaryTest` 2, `YoutubeBoundaryTest` 4 — зелёное. `ktlintCheck detekt` — зелёное (одна правка по ходу: `OnlineModule.kt`, тело в строку сигнатуры).
+
+**Не сделано и не проверено**
+- З — плеер: `OnlineResolver(clock, streams)` со сроком и `refused`, `ReResolvingDataSource`, `OnlineDataSources.kt`, `ExoPlayerFactory`
+  (убрать `setUserAgent`, `setDefaultRequestProperties`). Защищённые инструментальные тесты (`OnlineResolverExpiryTest`, `ReResolvingDataSourceTest`,
+  `OnlineStreamPathTest`, `ExoPlayerStreamTest`) пока не собираются — нужного API нет. `ExternalProviderCoreTest` на эмуляторе не гонялся.
+- К — `minifyGithubReleaseWithR8` не запускался, `-dontwarn` не добавлялись.
+- Остальные «Проверки»: `cargo test --workspace` целиком, `cargo fmt --all -- --check`, `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` целиком,
+  `lintGithubDebug`, `compileGithubDebugAndroidTestKotlin`, инструментальные тесты по пакетам `audio.media3`, `ffi`, `online`.
+
+**Что дальше** (по порядку): З → К → остальные «Проверки» → дописать этот отчёт (что с R8, что осталось Ю3г).

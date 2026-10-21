@@ -8,6 +8,7 @@ import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.ffi.NetTransport
 import io.github.puflik.plinth.ffi.OnlineCancel
 import io.github.puflik.plinth.ffi.OnlineProblem
+import io.github.puflik.plinth.ffi.OnlineProvider
 import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.ffi.OnlineTrack
 import io.github.puflik.plinth.ffi.PlinthCore
@@ -23,20 +24,21 @@ import kotlinx.coroutines.withContext
 
 /**
  * Онлайн-источники поверх ядра (E3b). Требования — `OnlineRepositoryContractTest`.
- * Сеть ядру даёт [transport]; вызовы ядра блокирующие и идут в [io], кроме
- * [stream] — его зовёт загрузчик плеера из своего потока.
+ * Сеть ядру даёт [transport], а [providers] — провайдеры приложения (YouTube) рядом с Internet Archive;
+ * вызовы ядра блокирующие и идут в [io], кроме [stream] — его зовёт загрузчик плеера из своего потока.
  */
 class CoreOnlineRepository(
     private val core: PlinthCore,
     private val transport: NetTransport,
     private val io: CoroutineDispatcher,
+    private val providers: List<OnlineProvider> = emptyList(),
 ) : OnlineRepository {
     // Вызовы поиска, пережившие отмену своей корутины: их доживает ядро, а не вызывающий.
     private val calls = CoroutineScope(SupervisorJob() + io)
 
     override suspend fun setEnabled(enabled: Boolean) {
         attempt(io, TAG, if (enabled) "connect" else "disconnect") {
-            if (enabled) core.online.connect(transport) else core.online.disconnect()
+            if (enabled) core.online.connect(transport, providers) else core.online.disconnect()
         }
     }
 
@@ -92,7 +94,7 @@ class CoreOnlineRepository(
     ): StreamLookup =
         try {
             val address = core.online.stream(track, metered, undecodable)
-            StreamLookup.Found(address.url, address.headers.toMap())
+            StreamLookup.Found(address.url, address.headers.toMap(), address.validFor)
         } catch (failure: CoreFailure) {
             when (failure.error.problem) {
                 CoreProblem.UNAVAILABLE -> StreamLookup.Unavailable

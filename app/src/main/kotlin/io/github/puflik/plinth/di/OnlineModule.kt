@@ -20,6 +20,7 @@ import io.github.puflik.plinth.online.OnlineRepository
 import io.github.puflik.plinth.online.OnlineSettings
 import io.github.puflik.plinth.online.OnlineStreams
 import io.github.puflik.plinth.online.OnlineSwitch
+import io.github.puflik.plinth.online.onlineProviders
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import javax.inject.Singleton
@@ -30,14 +31,15 @@ import javax.inject.Singleton
 object OnlineModule {
     /**
      * Поиск, альбом и поток ждут первого применения переключателя ([GatedOnlineRepository]): на холодном
-     * старте они идут в ядро одновременно с ним. Переключатель получает этот же репозиторий.
+     * старте они идут в ядро одновременно с ним. Переключатель получает этот же репозиторий. Провайдеры
+     * приложения (YouTube) берутся один раз: источник держит заготовку потоков между `resolve` и `stream`.
      */
     @Provides
     @Singleton
     fun provideOnlineRepository(
         core: PlinthCore,
         @IoDispatcher io: CoroutineDispatcher,
-    ): OnlineRepository = GatedOnlineRepository(CoreOnlineRepository(core, HttpUrlTransport(), io))
+    ): OnlineRepository = GatedOnlineRepository(CoreOnlineRepository(core, HttpUrlTransport(), io, onlineProviders()))
 
     @Provides
     fun provideOnlineSettings(store: DataStore<Preferences>): OnlineSettings = DataStoreOnlineSettings(store)

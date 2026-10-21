@@ -29,8 +29,15 @@ import io.github.puflik.plinth.ffi.generated.StreamAddress as RustStreamAddress
 class CoreOnline internal constructor(
     private val core: PlinthCore,
 ) {
-    /** Включает источники поверх [transport]; повторный вызов сбрасывает здоровье провайдеров. */
-    fun connect(transport: NetTransport) = core.call { it.connectOnline(transport.toRust()) }
+    /**
+     * Включает источники поверх [transport]: Internet Archive и [providers] приложения (YouTube) в порядке списка.
+     * Повторный вызов заменяет транспорт и провайдеров и сбрасывает здоровье. Негодный провайдер (имя, пустой
+     * `finds`, повтор имени) — [CoreFailure], и прежнее подключение остаётся.
+     */
+    fun connect(
+        transport: NetTransport,
+        providers: List<OnlineProvider> = emptyList(),
+    ) = core.call { it.connectOnline(transport.toRust(), providers.map(OnlineProvider::toRust)) }
 
     fun disconnect() = core.call { it.disconnectOnline() }
 
@@ -215,10 +222,14 @@ data class OnlineTrack(
     val variants: List<OnlineVariant>,
 )
 
-/** Что отдать плееру: адрес и заголовки. */
+/**
+ * Что отдать плееру: адрес, заголовки и сколько адрес годен с получения ([validFor]; у YouTube — часы, `null` —
+ * не стареет, нуль — уже негоден).
+ */
 data class StreamAddress(
     val url: String,
     val headers: List<Pair<String, String>> = emptyList(),
+    val validFor: Duration? = null,
 )
 
 /**
@@ -305,7 +316,8 @@ internal fun OnlineTrack.toRust() =
         variants = variants.map { RustOnlineVariant(it.external, it.format.toRust(), it.bitrateKbps?.toUInt()) },
     )
 
-internal fun RustStreamAddress.toApp() = StreamAddress(url, headers.map { it.name to it.value })
+internal fun RustStreamAddress.toApp() =
+    StreamAddress(url, headers.map { it.name to it.value }, validForMs?.toLong()?.milliseconds)
 
 internal fun AudioFormat.toRust() =
     when (this) {
