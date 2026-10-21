@@ -1,14 +1,18 @@
+use std::time::Duration;
+
 use plinth_types::CoreError;
 
 use crate::http::{is_header_name, is_header_value};
 
 /// Что отдать плееру (plan.md 6.1: URL + заголовки): Media3 сам качает
 /// поток по адресу. Адрес берётся перед каждым воспроизведением и нигде не
-/// хранится — у YouTube он живёт часы.
+/// хранится — у YouTube он живёт часы, и провайдер называет срок
+/// (`valid_for`): дольше плеер ссылку не держит.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamRequest {
     url: String,
     headers: Vec<(String, String)>,
+    valid_for: Option<Duration>,
 }
 
 impl StreamRequest {
@@ -24,7 +28,14 @@ impl StreamRequest {
             let shown = if is_header_name(name) { name.as_str() } else { "?" };
             return Err(CoreError::parse(format!("stream header {shown}: not allowed")));
         }
-        Ok(Self { url: url.to_owned(), headers })
+        Ok(Self { url: url.to_owned(), headers, valid_for: None })
+    }
+
+    /// Тот же запрос со сроком: адрес годен столько после получения. Без срока
+    /// адрес не стареет (Internet Archive, домашний сервер).
+    #[must_use]
+    pub fn with_valid_for(self, valid_for: Duration) -> Self {
+        Self { valid_for: Some(valid_for), ..self }
     }
 
     pub fn url(&self) -> &str {
@@ -33,6 +44,11 @@ impl StreamRequest {
 
     pub fn headers(&self) -> &[(String, String)] {
         &self.headers
+    }
+
+    /// Сколько адрес годен с момента получения; `None` — не стареет.
+    pub fn valid_for(&self) -> Option<Duration> {
+        self.valid_for
     }
 }
 

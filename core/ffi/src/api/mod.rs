@@ -2,6 +2,7 @@
 //! источники (поиск, альбом, каталог при действии, адрес потока) —
 //! `online_api` (E3).
 
+mod external_api;
 mod journal_api;
 mod library_api;
 mod mirror_api;
