@@ -85,12 +85,12 @@ sealed class ProviderException(
  */
 internal fun OnlineProvider.toRust(): RustProvider =
     object : RustProvider {
-        override fun id(): String = nameOrEmpty { this@toRust.id }
+        override fun id(): String = aboutItself("") { this@toRust.id }
 
         override fun capabilities(): RustCapabilities =
             RustCapabilities(
-                finds = nameOrEmpty(emptyList()) { this@toRust.finds.map(OnlineKind::toRust) },
-                bestQuality = nameOrEmpty(RustQuality.STANDARD) { this@toRust.bestQuality.toRust() },
+                finds = aboutItself(emptyList()) { this@toRust.finds.map(OnlineKind::toRust) },
+                bestQuality = aboutItself(RustQuality.STANDARD) { this@toRust.bestQuality.toRust() },
             )
 
         @Suppress("TooGenericExceptionCaught", "SwallowedException") // Колбэк ядра не бросает: беда — в ответе.
@@ -123,7 +123,7 @@ internal fun OnlineProvider.toRust(): RustProvider =
 
 /** Что провайдер сообщил о себе; не смог (исключение) — [fallback]: ядро само откажет пустому имени и `finds`. */
 @Suppress("TooGenericExceptionCaught", "SwallowedException") // Колбэк ядра не бросает.
-private inline fun <T> nameOrEmpty(
+private inline fun <T> aboutItself(
     fallback: T,
     ask: () -> T,
 ): T =
@@ -132,8 +132,6 @@ private inline fun <T> nameOrEmpty(
     } catch (e: Exception) {
         fallback
     }
-
-private inline fun nameOrEmpty(ask: () -> String): String = nameOrEmpty("", ask)
 
 /** Вид беды и её текст; чужое исключение — только имя класса (у анонимного — двоичное имя без пакета). */
 private fun Exception.toFailure(): RustFailure =
