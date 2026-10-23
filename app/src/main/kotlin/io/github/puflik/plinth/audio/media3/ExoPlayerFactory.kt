@@ -6,9 +6,6 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import io.github.puflik.plinth.audio.engine.StreamLookup
@@ -38,7 +35,9 @@ import io.github.puflik.plinth.audio.engine.StreamResolver
  *
  * И сеть (E3): ссылку на сетевой трек загрузчик раскрывает в адрес у
  * [streams] ([OnlineResolver]) и читает по HTTP как [userAgent] — так же
- * представляется ядро. Без [streams] сетевому треку играть нечем.
+ * представляется ядро; `User-Agent`, который выдал провайдер (YouTube), сильнее.
+ * На первый отказ (403) загрузки адрес спрашивается заново один раз
+ * ([onlineDataSourceFactory]). Без [streams] сетевому треку играть нечем.
  */
 class ExoPlayerFactory(
     context: Context,
@@ -49,8 +48,7 @@ class ExoPlayerFactory(
 
     @OptIn(UnstableApi::class)
     fun create(looper: Looper): ExoPlayer {
-        val http = DefaultHttpDataSource.Factory().setUserAgent(userAgent)
-        val data = ResolvingDataSource.Factory(DefaultDataSource.Factory(context, http), OnlineResolver(streams))
+        val data = onlineDataSourceFactory(context, userAgent, OnlineResolver(streams = streams))
         return ExoPlayer
             .Builder(context)
             .setLooper(looper)
