@@ -23,3 +23,12 @@
 -keep class io.github.puflik.plinth.ffi.generated.** { *; }
 # JNA ссылается на AWT, которого на Android нет, — эти ветки не исполняются.
 -dontwarn java.awt.**
+
+# YouTube (Ю3в): NewPipeExtractor тянет Rhino, а тот ссылается на java.beans, которого на Android нет, — эти ветки
+# не исполняются. Только -dontwarn: рабочие -keep-правила (Rhino, timeago.patterns, protobuf) и прогон release на
+# устройстве — Ю3г, до него релиз не выпускать.
+-dontwarn java.beans.BeanDescriptor
+-dontwarn java.beans.BeanInfo
+-dontwarn java.beans.IntrospectionException
+-dontwarn java.beans.Introspector
+-dontwarn java.beans.PropertyDescriptor
