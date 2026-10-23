@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Online search also covers YouTube: songs and albums from YouTube Music
+  appear in their own section after Internet Archive and play as Opus (about
+  160 kbps) or AAC 128 kbps. The player asks for a fresh link when the old one
+  runs out or the server refuses it.
+
 ### Fixed
 
 - A journal file damaged in the middle no longer drops everything after the
