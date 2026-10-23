@@ -454,35 +454,61 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"; $env:CARGO_TARGE
 
 ## Отчёт исполнителя
 
-**Остановлено по времени** (автор дал 10 + 10 минут), а не из-за упавших проверок. Сделаны Б–Ж и И; не сделаны З, К и полные
-проверки — список ниже. Сомнений в плане и в защищённых тестах не возникло.
+**Готово: Б–К сделаны, все «Проверки» пройдены.** Первый заход (18:51–19:07) остановили по времени после Б–Ж и И; остаток — З, К и полные
+проверки — доделан отдельным заходом. Сомнений в плане и защищённых тестах не возникло; один вопрос к Opus — ниже (п. 1).
 
-**Коммиты** (`work/yu3v`, после `36efb07`): `8c0982c` — ядро (Б–Г); второй — Kotlin (Д–Ж), ADR (И) и этот отчёт.
+**Коммиты** (`work/yu3v`, после `36efb07`)
+1. `8c0982c` — ядро (Б–Г).
+2. `39912ef` — Kotlin (Д–Ж) и ADR 0008 (И).
+3. `d069915` — плеер (З).
+4. `20adc46` — fmt: порядок строки `mod yu3v_tests;` в `api/mod.rs` (см. вопрос 1).
+5. `4932a57` — R8 (К): только `-dontwarn`.
+6. `77937b0` — переименован помощник в `OnlineProvider.toRust()` (`nameOrEmpty` → `aboutItself`: он отдаёт запасное и для `finds`, и для качества).
+7. Этот отчёт.
 
-**Сделано**
-- Ядро (Б–Г): `core/ffi/src/api/external_api.rs` — `ExternalProvider` (`with_foreign`), `ExternalCapabilities`, `ExternalFailure`,
-  `ExternalSearch/Resolve/Stream`, `QualityTier` (remote), `ExternalAdapter`: имя и возможности спрашиваются один раз, каждый вызов
-  платформы под `panic::guard`, чужие данные проверяются. `ProviderId::new` кладёт имя в текст ошибки, поэтому для имени платформы
-  ошибка своя («the name is not allowed»). `connect_online(transport, providers)` + `registry_with` (старый `registry` — `#[cfg(test)]`),
-  `StreamAddress.valid_for_ms`, `StreamRequest::with_valid_for/valid_for`.
-- Kotlin (Д–Ж): `ffi/CoreOnlineProvider.kt` (`OnlineProvider`, `OnlineQuality`, `ProviderException`, `toRust()` — исключение через границу не идёт,
-  чужое исключение — `Internal(<имя класса без пакета>)`, сообщение не берётся), `ffi/CoreOnline.kt` (`connect(transport, providers)`,
-  `StreamAddress.validFor`), `online/YoutubeProvider.kt` (варианты как в источнике, срок по `expire=`), `online/OnlineProviders.kt`,
-  `StreamLookup.Found.validFor`, `CoreOnlineRepository(…, providers)`, `OnlineModule` (`onlineProviders()` один раз).
-- ADR 0008 (И): новый пункт в «Решении» и строка в «Последствиях».
+**Что сделано**
+- **Ядро (Б–Г).** `core/ffi/src/api/external_api.rs`: `ExternalProvider` (`with_foreign`), `ExternalCapabilities`, `ExternalFailure`, `ExternalSearch/Resolve/Stream`,
+  `QualityTier` (remote), `ExternalAdapter`. Имя и возможности спрашиваются один раз, каждый вызов платформы под `panic::guard`, чужие данные проверяются, текст
+  беды платформы переносится как есть. `connect_online(transport, providers)` + `registry_with` (старый `registry` — `#[cfg(test)]`), `StreamAddress.valid_for_ms`,
+  `StreamRequest::with_valid_for/valid_for`.
+- **Kotlin (Д–Ж).** `ffi/CoreOnlineProvider.kt` (`OnlineProvider`, `OnlineQuality`, `ProviderException`, `toRust()`: исключение через границу не идёт, чужое — `Internal(<имя
+  класса без пакета>)`, сообщение не берётся), `ffi/CoreOnline.kt` (`connect(transport, providers)`, `StreamAddress.validFor`), `online/YoutubeProvider.kt` (варианты как в
+  источнике, срок по `expire=`), `online/OnlineProviders.kt`, `StreamLookup.Found.validFor`, `CoreOnlineRepository(…, providers)`, `OnlineModule` (`onlineProviders()` один раз).
+- **Плеер (З).** `OnlineResolver(clock, streams)`: на загрузку (`load=N`) помнит адрес, момент получения и метку «отказ был»; адрес годен, пока `now − получен < validFor`
+  (на границе — спрашивает), без срока не стареет, неудача не запоминается; `refused(link)`: первый отказ загрузки (даже без адреса в памяти) забывает адрес и ставит метку,
+  повторный и не сетевая ссылка — `false`. `ReResolvingDataSource(upstream, resolver)`: на 403 с `refused == true` закрывает `upstream` и открывает ещё раз, остальное — как есть.
+  `OnlineDataSources.kt`: `onlineDataSourceFactory(context, userAgent, resolver)` кладёт `User-Agent` приложения в умолчания запроса, а не в метод фабрики, который перекрывал
+  `User-Agent` провайдера; `ExoPlayerFactory` собирает источник через неё.
+- **ADR 0008 (И).** Новый пункт в «Решении» и строка в «Последствиях».
+- **R8 (К).** `minifyGithubReleaseWithR8` падал на пяти отсутствующих классах `java.beans.*` (`BeanDescriptor`, `BeanInfo`, `IntrospectionException`, `Introspector`, `PropertyDescriptor`),
+  на которые ссылается Rhino (`org.mozilla.javascript.JavaToJSONConverters`). Добавлены ровно эти `-dontwarn` в `app/proguard-rules.pro` с комментарием «до Ю3г»; больше правил не
+  потребовалось, сборка проходит. В выводе остаётся предупреждение (не ошибка) «Unexpected reference to missing service class: META-INF/services/javax.script.ScriptEngineFactory» — тоже Rhino.
 
-**Проверки** (Windows, своя папка сборки `core\target`)
-- `cargo test -p plinth-ffi -p plinth-providers` — зелёное: ffi 153 (из них `yu3v_tests` 52), `yu3v_stream_validity` 4;
-  `cargo clippy --workspace --all-targets -- -D warnings` — чисто; `rustfmt --check` по моим файлам — без «Diff in» (только «Incorrect newline style» из-за CRLF рабочей копии).
-- `testGithubDebugUnitTest` с фильтром по классам: `YoutubeProviderTest` 13, `ExternalProviderMappingTest` 10, `OnlineProvidersTest` 3,
-  `FfiBoundaryTest` 2, `YoutubeBoundaryTest` 4 — зелёное. `ktlintCheck detekt` — зелёное (одна правка по ходу: `OnlineModule.kt`, тело в строку сигнатуры).
+**Проверки** (Windows, своя папка сборки `core\target`, эмулятор `Medium_Phone_API_36.0`)
+- `cargo test --workspace` — зелёный целиком (ffi 153, из них `yu3v_tests` 52; `yu3v_stream_validity` 4). `cargo clippy --workspace --all-targets -- -D warnings` — чисто.
+  `cargo fmt --all -- --check` — настоящих «Diff in» нет (остаётся только «Incorrect newline style» из-за CRLF рабочей копии на Windows).
+- `ktlintCheck detekt compileGithubDebugAndroidTestKotlin lintGithubDebug` — зелёные.
+- `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` — по 818 тестов, по 4 упавших: известные `DataStore*SettingsTest` на Windows (`DataStoreFolderSettingsTest`, `DataStoreSortSettingsTest`,
+  `DataStoreOnboardingSettingsTest` ×2). Тесты задачи прошли: `YoutubeProviderTest` 13, `ExternalProviderMappingTest` 10, `OnlineProvidersTest` 3, `FfiBoundaryTest` 2, `YoutubeBoundaryTest` 4.
+- `minifyGithubReleaseWithR8` — зелёный (после `-dontwarn`).
+- Эмулятор, по пакету (счёт по `TEST-*.xml`): `audio.media3` — 103 теста, `ffi` — 31, `online` — 17; ни одного падения, ошибки или пропуска — числа те же, что на эталоне. В `audio.media3`:
+  `OnlineResolverExpiryTest` 12, `ReResolvingDataSourceTest` 11, `OnlineStreamPathTest` 6, `ExoPlayerStreamTest` 4, старые тесты плеера целы. `ffi` перегнан после последнего переименования (31, 0 падений).
+- Защищённые тесты: `git diff 5176622 HEAD -- <защищённые файлы>` — 0 строк, кроме порядка одной строки `mod yu3v_tests;` (вопрос 1). `grep -rn "org.schabi" app/src/main` — только `online/youtube/`;
+  `grep -rn "setUserAgent" app/src/main` — пусто; `connectOnline` зовётся из одного места (`CoreOnline.connect`).
 
-**Не сделано и не проверено**
-- З — плеер: `OnlineResolver(clock, streams)` со сроком и `refused`, `ReResolvingDataSource`, `OnlineDataSources.kt`, `ExoPlayerFactory`
-  (убрать `setUserAgent`, `setDefaultRequestProperties`). Защищённые инструментальные тесты (`OnlineResolverExpiryTest`, `ReResolvingDataSourceTest`,
-  `OnlineStreamPathTest`, `ExoPlayerStreamTest`) пока не собираются — нужного API нет. `ExternalProviderCoreTest` на эмуляторе не гонялся.
-- К — `minifyGithubReleaseWithR8` не запускался, `-dontwarn` не добавлялись.
-- Остальные «Проверки»: `cargo test --workspace` целиком, `cargo fmt --all -- --check`, `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` целиком,
-  `lintGithubDebug`, `compileGithubDebugAndroidTestKotlin`, инструментальные тесты по пакетам `audio.media3`, `ffi`, `online`.
+**Решения вне плана и вопросы Opus**
+1. **Строка `mod yu3v_tests;` в `core/ffi/src/api/mod.rs`.** Она защищённая, но коммит тестов поставил её перед `mod scan_api;`, и `cargo fmt --all -- --check` падал настоящим «Diff in»
+   (на CI с Linux упал бы так же). Я переставил обе строки (`#[cfg(test)]` и `mod yu3v_tests;`) после `mod test_api;` отдельным коммитом `20adc46`: модуль и файл тестов не тронуты.
+   Если это нельзя — откатить один этот коммит, но тогда `cargo fmt --check` останется красным.
+2. `ExternalAdapter::new`: `ProviderId::new` кладёт имя в текст ошибки, поэтому для имени платформы ошибка своя («the name is not allowed») — имя не попадает в журнал.
+3. `OnlineResolver` помнит метку отказа в той же LRU на 4 загрузки (`KEPT_LOADS`), что и адреса: самая старая загрузка при вытеснении забывает и метку, и ей достанется ещё один повтор.
+   Отдельную карту меток не заводил — «LRU на 4 загрузки как был»; если нужна строгость «один повтор на загрузку при любом числе загрузок», это отдельная правка.
 
-**Что дальше** (по порядку): З → К → остальные «Проверки» → дописать этот отчёт (что с R8, что осталось Ю3г).
+**Что не проверено и что осталось**
+- **Телефона нет:** настоящий YouTube (сеть, 403 по IP, `User-Agent` клиента на живом сервере), release на устройстве, минута игры — Ю3г/Ю6. Всё, что ходит в сеть, проверено только на эмуляторе и на HTTP-сервере
+  на петле (`OnlineStreamPathTest`, `ExoPlayerStreamTest`).
+- **Release.** Прогнан только `minifyGithubReleaseWithR8`; `assembleGithubRelease` целиком (подпись, все ABI) не собирал. Рабочие `-keep`-правила (Rhino, `timeago.patterns`, protobuf),
+  предупреждение про `javax.script.ScriptEngineFactory` — Ю3г; **релиз до Ю3г не выпускать**.
+- **Ю3г и дальше** (не трогал): flavor `github`/`fdroid`, метка `NonFreeNet`, переключатель по провайдерам, `NOTICE`; радио и `related` (Ю4); название и значок «YouTube», экраны, строки (Ю5);
+  сообщение человеку и классификация окончательного 403 в `PlaybackError`, смена формата после отказа, предзагрузка, минута игры (Ю6).
+- **CI.** Красный на `8c0982c` и `39912ef` (промежуточные: Kotlin и плеер были не готовы); `20adc46` и `d069915` отменены новыми пушами. Итог по последнему коммиту — в строке ответа или на странице Actions.
