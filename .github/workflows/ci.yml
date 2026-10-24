@@ -101,17 +101,40 @@ jobs:
         run: ./gradlew assembleGithubDebug assembleFdroidDebug
 
       # Бюджет размера (docs/BUILD.md, docs/testing/apk-size.md): релизный APK
-      # со всеми ABI — не больше 30 МБ. Без ключа release собирается
-      # неподписанным — размер от подписи почти не меняется.
-      - name: Release APK within the size budget
+      # со всеми ABI — не больше 30 МБ, у каждой flavor. Без ключа release
+      # собирается неподписанным — размер от подписи почти не меняется.
+      # fdroid здесь потому, что F-Droid собирает из исходников своим конвейером:
+      # красный release этой flavor дешевле увидеть в нашем CI, чем на их сборке.
+      # Нет APK — шаг падает, пустой glob не проходит молча.
+      - name: Release APKs within the size budget
         run: |
-          ./gradlew assembleGithubRelease
+          ./gradlew assembleGithubRelease assembleFdroidRelease
           budget=30000000
-          for apk in app/build/outputs/apk/github/release/*.apk; do
-            size=$(stat -c %s "$apk")
-            echo "$apk: $size bytes, budget $budget"
-            test "$size" -le "$budget" || { echo "::error::$apk is over the size budget"; exit 1; }
+          for dir in app/build/outputs/apk/github/release app/build/outputs/apk/fdroid/release; do
+            found=0
+            for apk in "$dir"/*.apk; do
+              test -f "$apk" || continue
+              found=1
+              size=$(stat -c %s "$apk")
+              echo "$apk: $size bytes, budget $budget"
+              test "$size" -le "$budget" || { echo "::error::$apk is over the size budget"; exit 1; }
+            done
+            test "$found" = 1 || { echo "::error::no release APK in $dir"; exit 1; }
           done
+
+      # Страж вывода R8 (R8OutputGuardTest): Rhino и языки экстрактора остаются под
+      # своими именами в mapping.txt и seeds.txt шага выше. Файл правил и вывод R8
+      # не входы задачи test, а в gradle.properties включён кэш сборки: без --rerun
+      # Gradle мог бы взять старый зелёный результат, и страж «прошёл» бы, не
+      # выполнившись. Проверка XML — что все три теста выполнены, а не пропущены
+      # (без вывода R8 тест пропускается; PLINTH_REQUIRE_R8_OUTPUT делает это провалом).
+      - name: R8 keeps what the rules promise
+        env:
+          PLINTH_REQUIRE_R8_OUTPUT: "1"
+        run: |
+          ./gradlew testGithubDebugUnitTest --tests '*R8OutputGuardTest' --rerun
+          xml=app/build/test-results/testGithubDebugUnitTest/TEST-io.github.puflik.plinth.R8OutputGuardTest.xml
+          grep -q 'tests="3"' "$xml" && grep -q 'skipped="0"' "$xml" || { echo "::error::R8OutputGuardTest did not run all 3 tests"; exit 1; }
 
       # Эмулятора в CI нет, но APK инструментальных тестов собрать можно:
       # так ловятся ошибки, которые видит только DEX, — например, пробелы
@@ -119,6 +142,8 @@ jobs:
       - name: Assemble instrumented tests
         run: ./gradlew assembleGithubDebugAndroidTest
 
+      # seeds.txt и configuration.txt R8 — по ним читается красный страж R8.
+      # mapping.txt (около 57 МБ) не грузим.
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -127,5 +152,7 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+            app/build/outputs/mapping/*/seeds.txt
+            app/build/outputs/mapping/*/configuration.txt
           retention-days: 7
           if-no-files-found: ignore
