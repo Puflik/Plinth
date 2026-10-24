@@ -343,7 +343,7 @@ CI ветки читается без токена: `https://api.github.com/repo
 
 **В. CI — готово** (`3fd9acd`): шаг «Release APKs within the size budget» (обе flavor, пустой glob и превышение бюджета роняют шаг — цикл проверен локально на трёх случаях: нет APK fdroid → падает,
 оба на месте → проходит, больше 30 000 000 → падает), шаг «R8 keeps what the rules promise» (`--rerun`, `PLINTH_REQUIRE_R8_OUTPUT=1`, проверка `tests="3"` и `skipped="0"` в XML),
-`seeds.txt` и `configuration.txt` в «Upload reports». Прогон CI по последнему коммиту — ниже, когда придёт.
+`seeds.txt` и `configuration.txt` в «Upload reports». **CI зелёный:** прогон по `e0f247e` (код, правила и CI те же, что в итоговой ветке; после него добавлены только документы) — оба job `success`, шаги «Release APKs within the size budget» и «R8 keeps what the rules promise» — `success`: https://github.com/Puflik/Plinth/actions/runs/40125084141. Rust-тесты на ветке не падали (код выхода 101 не встретился).
 
 **Г. Эмуляторы.**
 
@@ -371,7 +371,7 @@ CI ветки читается без токена: `https://api.github.com/repo
 1. ✅ `R8RulesGuardTest` 5/5 в `testGithubDebugUnitTest` и `testFdroidDebugUnitTest`; `R8OutputGuardTest` 3/3, `skipped="0"`, при `PLINTH_REQUIRE_R8_OUTPUT=1` после `assembleGithubRelease assembleFdroidRelease`.
 2. ✅ `ktlintCheck`, `detekt` зелёные; `minifyGithubReleaseWithR8` и `minifyFdroidReleaseWithR8` без ошибок. **Предупреждений R8 не осталось** (список пуст): `javax.script.ScriptEngineFactory` и «Missing classes» закрыты четырьмя `-dontwarn`.
 3. ✅ Блок YouTube по разделу А; у каждого правила комментарий; пять `-dontwarn java.beans.*` удалены (не вернулись, R8 не просил); про `javax.script` — результат проверки (см. А); слов «до Ю3г», «релиз не выпускать» в файле нет.
-4. ✅/⏳ CI: оба release в бюджете и шаг стража — см. «CI» ниже.
+4. ✅ CI: оба release в бюджете, шаг стража выполняется и зелёный; прогон `e0f247e` — ссылка в разделе «В. CI» выше.
 5. ✅ `apk-size.md` дополнен; бюджет держится: 18 299 458 Б из 30 000 000 (61,0 %, запас 11 700 542 Б).
 6. ✅ Таблица устройств заполнена по API 36, 30, 26. Сбои: кириллицей не набрано (ни на одном API); API 26 — один выброс перемотки 20–23 с.
 7. ✅ `docs/testing/youtube-live.md` создан; колонка «Эмулятор» совпадает с таблицей.
