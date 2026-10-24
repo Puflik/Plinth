@@ -152,21 +152,24 @@ pub struct StreamAddress {
 
 #[uniffi::export]
 impl Core {
-    /// Включает онлайн-источники поверх сети Kotlin: Internet Archive и провайдеры платформы
-    /// (`providers`, YouTube) в порядке аргумента. Повторный вызов заменяет транспорт и
-    /// провайдеров и сбрасывает здоровье. Негодный провайдер (имя, пустой `finds`, повтор
-    /// имени) — ошибка, и прежнее состояние остаётся.
+    /// Включает онлайн-источники поверх сети Kotlin: Internet Archive (если `archive`) и
+    /// провайдеры платформы (`providers`, YouTube) в порядке аргумента. Без `archive` Internet
+    /// Archive не создаётся вовсе, ни одного запроса к нему не уходит; реестр из одних
+    /// `providers` (и пустой — тоже не ошибка): поиск пуст, потока и альбома нет. Повторный
+    /// вызов заменяет транспорт и провайдеров и сбрасывает здоровье. Негодный провайдер (имя,
+    /// пустой `finds`, повтор имени) — ошибка, и прежнее состояние остаётся.
     pub fn connect_online(
         &self,
         transport: Arc<dyn NetTransport>,
         providers: Vec<Arc<dyn ExternalProvider>>,
+        archive: bool,
     ) -> Result<(), CoreError> {
         panic::guard(|| {
             let external = providers
                 .into_iter()
                 .map(|platform| ExternalAdapter::new(platform).map(|adapter| Arc::new(adapter) as Arc<dyn Provider>))
                 .collect::<Result<Vec<_>, _>>()?;
-            let registry = registry_with(Arc::new(PlatformTransport(transport)), None, external)?;
+            let registry = registry_with(Arc::new(PlatformTransport(transport)), None, archive, external)?;
             self.set_online(Some(Arc::new(registry)));
             log::info!("online sources on");
             Ok(())
@@ -326,20 +329,25 @@ impl OnlineCancel {
     }
 }
 
-/// Реестр онлайн-источников: Internet Archive, затем провайдеры платформы (`external`) в своём
-/// порядке; реестр ставит их по лучшему качеству устойчиво, так что `Lossless` у платформы
-/// встаёт после Internet Archive. `pause` — паузы между повторами (тесты не ждут); `None` —
-/// настоящие.
+/// Реестр онлайн-источников: Internet Archive (если `archive`), затем провайдеры платформы
+/// (`external`) в своём порядке; реестр ставит их по лучшему качеству устойчиво, так что
+/// `Lossless` у платформы встаёт после Internet Archive. Без `archive` Internet Archive не
+/// создаётся; пустой реестр — не ошибка. `pause` — паузы между повторами (тесты не ждут);
+/// `None` — настоящие.
 pub(crate) fn registry_with(
     transport: Arc<dyn HttpTransport>,
     pause: Option<fn(Duration)>,
+    archive: bool,
     external: Vec<Arc<dyn Provider>>,
 ) -> Result<Registry, CoreError> {
-    let mut archive = InternetArchive::new(transport)?;
-    if let Some(pause) = pause {
-        archive = archive.with_pause(pause);
+    let mut providers: Vec<Arc<dyn Provider>> = Vec::new();
+    if archive {
+        let mut archive = InternetArchive::new(transport)?;
+        if let Some(pause) = pause {
+            archive = archive.with_pause(pause);
+        }
+        providers.push(Arc::new(archive));
     }
-    let mut providers: Vec<Arc<dyn Provider>> = vec![Arc::new(archive)];
     providers.extend(external);
     Registry::new(providers, HealthPolicy::default())
 }
@@ -347,7 +355,7 @@ pub(crate) fn registry_with(
 /// Реестр из одного Internet Archive — для тестов, что платформенных провайдеров не знают.
 #[cfg(test)]
 pub(crate) fn registry(transport: Arc<dyn HttpTransport>, pause: Option<fn(Duration)>) -> Result<Registry, CoreError> {
-    registry_with(transport, pause, Vec::new())
+    registry_with(transport, pause, true, Vec::new())
 }
 
 fn off() -> CoreError {

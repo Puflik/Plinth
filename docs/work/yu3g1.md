@@ -379,4 +379,10 @@ Internet Archive; включить, а Internet Archive выключить → �
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+_Черновик, пишется по ходу (бюджет недели почти выбран — работа может оборваться по лимиту)._
+
+**Шаг 1 — ядро (сделано).** `core/ffi/src/api/online_api.rs`: `connect_online(transport, providers, archive)`;
+`registry_with(transport, pause, archive, external)` — Internet Archive создаётся только при `archive == true`, иначе реестр из одних
+`providers` (пустой — не ошибка); тестовый `registry` зовёт `registry_with(…, true, …)`.
+`cargo test --workspace` — зелёный (в `plinth-ffi` все 8 `yu3g_tests` проходят), `cargo clippy --workspace --all-targets -- -D warnings` — чисто,
+`cargo fmt --all -- --check` — только «Incorrect newline style» (CRLF рабочей копии на Windows), настоящих `Diff in` нет.
