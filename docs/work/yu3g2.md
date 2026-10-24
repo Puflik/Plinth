@@ -345,10 +345,19 @@ CI ветки читается без токена: `https://api.github.com/repo
 оба на месте → проходит, больше 30 000 000 → падает), шаг «R8 keeps what the rules promise» (`--rerun`, `PLINTH_REQUIRE_R8_OUTPUT=1`, проверка `tests="3"` и `skipped="0"` в XML),
 `seeds.txt` и `configuration.txt` в «Upload reports». Прогон CI по последнему коммиту — ниже, когда придёт.
 
+**Г. Эмуляторы.**
+
+*API 36* (`Medium_Phone_API_36.0`, `app-github-release.apk`, подпись отладочным ключом, пустые данные; на эмуляторе уже стояла старая установка 0.1.0 от 24 сентября — удалена `adb -s emulator-5554 uninstall`, телефон не тронут):
+сценарий пройден целиком, цифры — в строке таблицы ниже. Мастер: «Skip all» → «Don’t allow»; Настройки → «Online sources»: главный переключатель, «Internet Archive» и «YouTube» включены.
+Тап по результату YouTube открывает страницу трека (кнопка «Play», строка «Source: YouTube»), игра идёт после «Play»; перемотка — ползунок в полноэкранном плеере (нажатие на дорожку).
+Заметки: (а) значок источника у строки трека YouTube имеет описание «From Internet Archive» (до Ю5, названия и значок «YouTube» — их задача); (б) юникод в ответе читается (`Álvaro Fernández`, `范逸臣` в секции YouTube).
+*fdroid* (`app-fdroid-release.apk`, 0.2.3-fdroid, тот же эмулятор): запуск, поиск «piano» — секция YouTube есть; игра пошла через 1,4 с после «Play», за 30 с позиция 0 → 28,4 с, `state=3`; `FATAL EXCEPTION`,
+`NoSuch*`, `ClassNotFound`, `ReferenceError`, 403 — нет. После прогона `uninstall`, эмулятор погашен.
+
 **Таблица устройств** (заполнить по ходу, строка на API):
 
 | API | Эмулятор | Поиск «piano» / кириллицей (YouTube, строк) | Старт игры, с | Позиция через 60 с (было → стало) | Перемотка (→ 70 % / → 10 %; возобновление, с) | Ошибки в logcat |
 |---|---|---|---|---|---|---|
-| 36 | `Medium_Phone_API_36.0` | | | | | |
+| 36 | `Medium_Phone_API_36.0` | «piano»: секция «YouTube», ≥ 19 строк (9 + 10 на двух экранах), названия и исполнители читаются; **кириллицей — не набрана** (`adb input text` и `emu event text` — только ASCII) | 1,5 с от «Play» | 0 → 59,5 с за 60 с (через 10 с: 8,4 · 17,5 · 29,3 · 38,5 · 47,4 · 59,5), `state=3` на всех замерах | → 70 %: 153,7 → 217,3 с, `PLAYING` через 0,4 с; → 10 %: 220,3 → 30,9 с, `PLAYING` через 0,7 с; игра идёт дальше (38,4 → 59,5 с за 20 с) | нет `FATAL EXCEPTION`, `NoSuchMethodError`, `NoSuchFieldError`, `ClassNotFoundException`, `ReferenceError`, 403 (в процессе Plinth) |
 | 30 | `Plinth_API_30` | | | | | |
 | 26 | `Plinth_API_26` | | | | | |
