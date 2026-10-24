@@ -4,7 +4,8 @@
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
 
 - **Ветка:** `work/yu3g1` · **Ворктри:** `C:\claude\Plinth-yu3g1`
-- **Основа:** `main` на `479462c` (Ю3в в `main`). **Коммиты тестов:** _(заполняется после тестов)_
+- **Основа:** `main` на `479462c` (Ю3в в `main`). **Коммиты тестов:** `bf37dc1` (Rust), `9d58106` (Kotlin) — защищённые тесты
+  сверять с последним из них
 - **Откуда:** `tasks.md`, строка 389 (Ю3); `docs/work/yu1.md`, раздел 6 (строка Ю3г); `docs/work/yu3v.md`,
   «Что не проверено» и комментарий в `online/OnlineProviders.kt` («выбор по сборке и по переключателю — Ю3г»).
   Ю3г разбита на три задачи с непересекающимися файлами — раздел «Дальше» внизу; эта — первая.
@@ -76,9 +77,10 @@ pub fn connect_online(
 - `registry_with(transport, pause, archive, external)`; тестовый `registry` зовёт его с `true`.
 - Каталог (`add_online_tracks`, `known_online_tracks`) от подключения не зависит и не меняется: треки выключенного
   провайдера остаются, их `online_stream` — `Unavailable` (реестр пропускает незнакомого), включение возвращает игру.
-- Модуль тестов: строку `#[cfg(test)] mod yu3g_tests;` в `api/mod.rs` уже поставил коммит тестов (между `test_api` и
-  `yu3v_tests` — порядок `rustfmt`). Вызовы `connect_online(` в `r1_11a_tests.rs`, `r1_11d_tests.rs`, `yu3v_tests.rs`
-  правятся **механически**: добавить третий аргумент `true`; ни утверждения, ни имена тестов не трогать.
+- Тестовый модуль и вызовы уже в коммите тестов `bf37dc1`: строка `#[cfg(test)] mod yu3g_tests;` в `api/mod.rs` (между
+  `test_api` и `yu3v_tests` — порядок `rustfmt`) и третий аргумент `true` во всех 13 вызовах `connect_online(` в
+  `r1_11a_tests.rs` и `yu3v_tests.rs` (механическая правка планировщика; утверждения те же). Эти файлы защищены.
+  Пока `connect_online` не получит третий аргумент, тесты крейта `plinth-ffi` не собираются — это ожидаемо.
 
 ### В. Kotlin
 
@@ -188,7 +190,6 @@ emptySet())`), чтобы выбор провайдеров при выключ�
 
 - **Менять:**
   - `core/ffi/src/api/online_api.rs`
-  - `core/ffi/src/api/r1_11a_tests.rs`, `core/ffi/src/api/r1_11d_tests.rs`, `core/ffi/src/api/yu3v_tests.rs` — только третий аргумент `true` в вызовах `connect_online(`
   - `app/src/main/kotlin/io/github/puflik/plinth/ffi/CoreOnline.kt`
   - `app/src/main/kotlin/io/github/puflik/plinth/online/OnlineSettings.kt`, `OnlineSwitch.kt`, `OnlineRepository.kt`, `CoreOnlineRepository.kt`, `GatedOnlineRepository.kt`
   - `app/src/main/kotlin/io/github/puflik/plinth/online/OnlineProviders.kt` — только комментарий (выбор по переключателю теперь в `activeSources`; по сборке выбора нет)
@@ -199,6 +200,7 @@ emptySet())`), чтобы выбор провайдеров при выключ�
   `gradle/libs.versions.toml`, `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `CLAUDE.md`, план, ADR; существующие тесты, кроме трёх файлов выше.
 - **Защищённые тесты** (из коммитов тестов; не менять, не удалять, не глушить):
   - `core/ffi/src/api/yu3g_tests.rs` (и строка `mod yu3g_tests;` в `core/ffi/src/api/mod.rs`)
+  - `core/ffi/src/api/r1_11a_tests.rs`, `core/ffi/src/api/yu3v_tests.rs` — в коммите тестов только третий аргумент `true` в вызовах `connect_online(`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/OnlineProviderIdsTest.kt`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/ActiveSourcesTest.kt`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/OnlineSwitchProvidersTest.kt`
@@ -209,7 +211,35 @@ emptySet())`), чтобы выбор провайдеров при выключ�
 
 ## Тесты (написаны в коммитах тестов)
 
-_(заполняется после тестов)_
+**Rust** — `core/ffi/src/api/yu3g_tests.rs`, 8 тестов; сеть Internet Archive — записанные ответы со счётчиком запросов, платформа —
+«youtube» в памяти. На текущем коде крейт не собирается (у `connect_online` два аргумента) — новый API, сигнатура в «Решении Б».
+
+1. `with_the_archive_on_it_comes_first_and_is_asked` — `(…, [youtube], true)` → секции `[archive.org, youtube]`, к Internet Archive ушли запросы (как было).
+2. `without_the_archive_the_platform_is_alone_and_the_archive_is_never_asked` — `false` → одна секция `youtube` с одним результатом и **ноль** запросов к Internet Archive.
+3. `without_the_archive_its_album_is_a_problem_of_the_screen_not_an_error_of_the_call` — `online_album("archive.org", …)` → без треков, `problem == ProviderDown`, запросов нет.
+4. `a_track_of_the_archive_stays_in_the_catalog_while_the_archive_is_off_and_plays_again_when_it_is_on` — трек в каталоге; `false` → `online_stream` = `Unavailable`;
+   `known_online_tracks` находит тот же ID, повторный `add_online_tracks` отдаёт те же ID; `true` → тот же адрес.
+5. `switching_the_archive_off_and_on_gives_the_same_search_each_time` — `true` → `false` → `true`: поиск после возврата равен первому.
+6. `a_track_of_the_platform_stays_in_the_catalog_while_it_is_not_connected_and_plays_again_when_it_is` — провайдер не передан: `Unavailable`, секции `[archive.org]`,
+   платформу не спрашивали, каталог цел, возврат — играет (это «YouTube выключен»).
+7. `an_empty_registry_is_quiet_nothing_is_found_nothing_plays_and_nothing_is_asked` — `(Vec::new(), false)` → `Ok`; поиск пуст, поток `Unavailable`, альбом `ProviderDown`, никого не спросили.
+8. `a_refused_provider_keeps_the_previous_connection_also_without_the_archive` — негодное имя при `false` → ошибка, прежние секции на месте.
+
+**Kotlin (JVM, `app/src/test`)** — на текущем коде не собираются: нет `OnlineProviderIds`, `activeSources`, `OnlineSettings.disabledProviders` и `setProviderEnabled`,
+второго параметра `OnlineRepository.setEnabled`, `OnlineSourcesViewModel.disabledProviders` и `onProviderToggle`.
+
+- `OnlineProviderIdsTest` (3): ID дословно; `ALL` = архив + `onlineProviders()`; на экране у каждого имя, не ID.
+- `ActiveSourcesTest` (6): ничего не выключено; YouTube выключен; архив выключен; выключены оба → `isEmpty`; порядок провайдеров и чужой ID; без провайдеров приложения.
+- `OnlineSwitchProvidersTest` (5): по умолчанию применяется `Applied(true, {})`; каждое изменение набора доходит целиком и по порядку; то же значение дважды не применяется;
+  главный выключен — выбор не доходит, включили — применяется текущий набор; фейк следует выбору.
+- `OnlineSourcesProvidersViewModelTest` (4): включены все; выключенный запоминается, другой включён; включённый обратно уходит из набора; главный не трогает набор.
+- `DataStoreOnlineSettingsTest` (6): умолчание; старый ключ главного `online_sources`; независимость от главного; снятие одного; **незнакомый ID выживает**; ключ
+  `online_providers_off` на диске. На Windows может упасть по известной причине (раздел «Проверки») — судит CI.
+- Общие, `app/src/sharedTest`: `FakeOnlineSettings` (+набор выключенных), `FakeOnlineRepository` (`applied`, `disabled`; выключенный Internet Archive — ни секции, ни альбома, ни потока),
+  `OnlineRepositoryContractTest` (+3 случая в конце). Контракт проходят и фейк (JVM, `FakeOnlineRepositoryTest`), и настоящее ядро (эмулятор, `CoreOnlineRepositoryContractTest`):
+  выключенный провайдер не даёт секцию, альбом и поток, но `known` находит его треки; включённый обратно работает; чужой ID среди выключенных ничего не меняет.
+
+Не покрыто автотестом: сам Compose-экран (строки провайдеров) — ручная проверка в «Проверки».
 
 ## Проверки
 
@@ -253,11 +283,59 @@ Internet Archive; включить, а Internet Archive выключить → �
 
 ## На что смотреть при чтении плана (Opus)
 
-_(заполняется)_
+1. **Граница ядра.** Третий аргумент `archive: bool` у `connect_online` — вместо отдельного входа или фильтра внутри реестра. Меняет сигнатуру UniFFI;
+   13 вызовов в тестах Р1.11а и Ю3в уже правлены планировщиком (только аргумент). Согласен?
+2. **«Выключены оба провайдера» при включённом главном** = `disconnect`: поиск без сетевой секции, подсказки на экране нет (Ю5/Ю6). Нужна ли подсказка сейчас?
+3. **Формат на диске.** Новый ключ DataStore `online_providers_off` — набор *выключенных*. Старая версия его не знает и включает всё; незнакомые ID в наборе не теряются.
+   Хранить *включённых* отвергнуто: новый провайдер (Bandcamp) был бы выключен у всех.
+4. **Список в настройках** — константа `OnlineProviderIds.ALL`, а не вывод из `onlineProviders()`: экран не должен создавать `NewPipeYoutubeSource`. Согласованность держит `OnlineProviderIdsTest`.
+5. **Тексты строк** (особенно YouTube: «запросы уходят на youtube.com и серверы Google») — на ваш вкус; `settings_online_summary` меняется (старый текст говорил только об archive.org).
+6. **`providerName("youtube")` = «YouTube»** сделано здесь, хотя Ю3в оставил название Ю5: иначе строка настроек подписана ID. Ю5 поправит, если нужен значок.
+7. **`OnlineRepository.setEnabled(enabled, disabled = emptySet())`** — параметр по умолчанию в интерфейсе, реализации без умолчаний. Отдельный тип `OnlineSources` отвергнут как лишний.
+8. **Неохваченное автотестом:** Compose-экран (проверяется руками), `androidTest` для настроек нет.
+9. **Разбиение Ю3г** — раздел «Дальше»: `yu3g1 ∥ yu3g2`, `yu3g3` после `yu3g1`. Вопросы по ним — там же.
+
+## Временная реализация и мутации
+
+Планировщик не пишет код задачи, но проверил, что тесты верны: временная реализация (в ветку не вошла).
+
+- **Rust.** Патч — `yu3g1-reference-implementation-rust.patch` в папке заметок сессии (11 строк в `online_api.rs`). Все 8 тестов `yu3g_tests` зелёные; весь `plinth-ffi` — 161 тест зелёный
+  (с 13 исправленными вызовами); `cargo clippy -p plinth-ffi --all-targets -- -D warnings` чисто; `cargo fmt --check` — настоящих `Diff in` нет.
+  Мутанты: **M1** — `archive` игнорируется (Internet Archive всегда создаётся) — падают 5 тестов (2, 3, 4, 5, 7); **M2** — при `archive == false` пропадают и провайдеры платформы — падают 2 (2, 5).
+- **Kotlin.** _(результат прогона — ниже, если успел; иначе исполнитель проходит сам)_
 
 ## Дальше: остальные задачи Ю3г
 
-_(заполняется)_
+Ю3г = «довести YouTube до выпуска 0.3». Не влезает в день, поэтому три задачи; файлы не пересекаются, кроме `SettingsScreen.kt` и `strings.xml` у `yu3g3` и `yu3g1`
+(поэтому `yu3g3` после слияния `yu3g1`). **Релиз 0.3 — только после всех трёх** (`docs/work/yu3v.md`: «релиз до Ю3г не выпускать»).
+
+**yu3g2 — R8 и release на трёх эмуляторах.** Файлы: `app/proguard-rules.pro`, новый `docs/testing/youtube-live.md`, `docs/testing/apk-size.md`, `.github/workflows/ci.yml`, один JVM-страж правил.
+- Заменить временные `-dontwarn java.beans.*` рабочими правилами. Проверенный набор — в `git show spike/yu3a:app/proguard-rules.pro`: `-keep` для `timeago.patterns.**`,
+  `org.mozilla.javascript.**` (и `.engine.**`), `ClassFileWriter`, `javax.script.**`, `jdk.dynalink.**` + `-dontwarn`, поля `GeneratedMessageLite`. Предупреждение
+  `Unexpected reference to missing service class: META-INF/services/javax.script.ScriptEngineFactory` — снять правилом или объяснить (Ю3в: «тоже Rhino»).
+  Сужать Rhino (+0,66 МиБ, 69 % — из-за широкого `-keep`, `yu3a.md` §5 п. 7) — только если каждое сужение проверено сценарием на устройстве; иначе оставить широкое и записать.
+- Страж: JVM-тест читает `proguard-rules.pro` и держит правила (удалить «лишнее» легко — сломается только в release); дополнительно проверка по `mapping.txt`/`seeds.txt` после
+  `minifyGithubReleaseWithR8`: классы Rhino и `timeago.patterns` не переименованы.
+- `assembleGithubRelease` и `assembleFdroidRelease` (или `minifyFdroidReleaseWithR8`) собираются; CI: бюджет 30 МБ (`ci.yml`, шаг «Release APK within the size budget») держится; `fdroid` release в CI —
+  решить (нужен хотя бы `minifyFdroidReleaseWithR8`).
+- **Release играет YouTube на эмуляторах API 36 (`Medium_Phone_API_36.0`), 30 (`Plinth_API_30`), 26 (`Plinth_API_26`)** — поиск, минута игры, перемотка; на 26 и 30 нужен десугаринг (Ю3б).
+  Сети у эмулятора хватает (Ю3а ходил в живой YouTube). Приложение ведут руками через `uiautomator dump` + `input tap` (память проекта: «Ручная проверка экрана на эмуляторе без окна»);
+  если секция YouTube в поиске не читается (названия — Ю5), хватит ID в логе. Итог по трём API — таблица в отчёте.
+- `docs/testing/youtube-live.md` — **ручной сценарий «живой YouTube»** (не в CI): поиск, игра, перемотка, качество, срок ссылки, 403; формат таблицы — как `docs/testing/v0.2-checklist.md`
+  (колонки «Эмулятор» и «Телефон»). Его же исполнитель проходит как проверку.
+- Оценка 4–6 ч; параллельно с `yu3g1`.
+
+**yu3g3 — выпуск: NOTICE, «О приложении», метка fdroid.** После `yu3g1`. Файлы: новый `NOTICE`, `app/build.gradle.kts` (`buildConfigField` версии экстрактора из `libs.versions.toml`),
+`ui/settings/SettingsScreen.kt` и новый блок «О приложении», `strings.xml`, `fastlane/metadata/android/en-US/full_description.txt`, `docs/BUILD.md`, `README*.md`, заголовки у `online/youtube/**`.
+- **Экрана «О приложении» в приложении нет** (версия видна только в диагностике), поэтому его заводит эта задача: версия и flavor (`AppInfo`), версия экстрактора — **одним источником**
+  `libs.versions.toml` (`newpipeExtractor`; `yu3a.md` §5 п. 1), ссылка на исходники (AGPL), «Лицензии» — текст `NOTICE`. Вопрос Opus: отдельный экран или секция в настройках.
+- `NOTICE` в корне и в ресурсах: NewPipeExtractor (GPL-3.0-or-later), Rhino (MPL-2.0 — с адресом исходников), jsoup (MIT), protobuf-javalite (BSD-3-Clause), nanojson (Apache-2.0),
+  десугаринг (проверить по отчёту лицензий Gradle, `yu1.md` §8 их не проверял). Плюс AGPL-3.0 Plinth и совместимость с GPL-3.0 — одной строкой.
+- Заголовки в исходниках: там, где код выведен из кода NewPipe (кандидат — `YoutubeDownloader`), — ссылка на источник и лицензию; в остальных не плодить. Происхождение исполнитель проверяет
+  сам; сомнение — вопрос Opus.
+- **Метка NonFreeNet у `fdroid`** — это метаданные F-Droid (`AntiFeatures: NonFreeNet` в `fdroiddata`), в репозитории её нет. В репозитории: честное описание YouTube в `full_description.txt`
+  и раздел F-Droid в `docs/BUILD.md` с готовой записью для `fdroiddata`. Вопрос автору/Opus: нужен ли файл `.fdroid.yml` в корне.
+- Оценка 3–5 ч.
 
 ## Отчёт исполнителя
 
