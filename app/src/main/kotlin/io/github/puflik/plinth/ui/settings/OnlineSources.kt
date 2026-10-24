@@ -46,8 +46,23 @@ class OnlineSourcesViewModel
         val enabled: StateFlow<Boolean> =
             settings.enabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), true)
 
+        /** ID выключенных провайдеров (Ю3г); пусто до первого значения — включены все. */
+        val disabledProviders: StateFlow<Set<String>> =
+            settings.disabledProviders.stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+                emptySet(),
+            )
+
         fun onToggle(enabled: Boolean) {
             viewModelScope.launch { settings.setEnabled(enabled) }
+        }
+
+        fun onProviderToggle(
+            provider: String,
+            enabled: Boolean,
+        ) {
+            viewModelScope.launch { settings.setProviderEnabled(provider, enabled) }
         }
 
         private companion object {

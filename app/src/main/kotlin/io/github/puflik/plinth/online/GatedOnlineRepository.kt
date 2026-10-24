@@ -32,9 +32,12 @@ class GatedOnlineRepository(
     private val opened = CompletableDeferred<Unit>()
     private val openedForThreads = CountDownLatch(1)
 
-    override suspend fun setEnabled(enabled: Boolean) {
+    override suspend fun setEnabled(
+        enabled: Boolean,
+        disabled: Set<String>,
+    ) {
         try {
-            inner.setEnabled(enabled)
+            inner.setEnabled(enabled, disabled)
         } finally {
             opened.complete(Unit)
             openedForThreads.countDown()

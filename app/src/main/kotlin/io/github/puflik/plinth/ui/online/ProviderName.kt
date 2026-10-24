@@ -6,4 +6,4 @@ package io.github.puflik.plinth.ui.online
  */
 fun providerName(provider: String): String = NAMES[provider] ?: provider
 
-private val NAMES = mapOf("archive.org" to "Internet Archive")
+private val NAMES = mapOf("archive.org" to "Internet Archive", "youtube" to "YouTube")

@@ -36,9 +36,14 @@ class CoreOnlineRepository(
     // Вызовы поиска, пережившие отмену своей корутины: их доживает ядро, а не вызывающий.
     private val calls = CoroutineScope(SupervisorJob() + io)
 
-    override suspend fun setEnabled(enabled: Boolean) {
-        attempt(io, TAG, if (enabled) "connect" else "disconnect") {
-            if (enabled) core.online.connect(transport, providers) else core.online.disconnect()
+    override suspend fun setEnabled(
+        enabled: Boolean,
+        disabled: Set<String>,
+    ) {
+        val active = activeSources(providers, disabled)
+        val connect = enabled && !active.isEmpty
+        attempt(io, TAG, if (connect) "connect" else "disconnect") {
+            if (connect) core.online.connect(transport, active.providers, active.archive) else core.online.disconnect()
         }
     }
 

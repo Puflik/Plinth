@@ -386,3 +386,11 @@ _Черновик, пишется по ходу (бюджет недели по�
 `providers` (пустой — не ошибка); тестовый `registry` зовёт `registry_with(…, true, …)`.
 `cargo test --workspace` — зелёный (в `plinth-ffi` все 8 `yu3g_tests` проходят), `cargo clippy --workspace --all-targets -- -D warnings` — чисто,
 `cargo fmt --all -- --check` — только «Incorrect newline style» (CRLF рабочей копии на Windows), настоящих `Diff in` нет.
+
+**Шаг 2 — Kotlin-модель (сделано).** `ffi/CoreOnline.kt` (`connect(transport, providers, archive = true)`), новые `online/OnlineProviderIds.kt` и
+`online/ActiveSources.kt`, `OnlineSettings.kt` (`disabledProviders`, `setProviderEnabled`, ключ `online_providers_off`), `OnlineRepository.kt`
+(`setEnabled(enabled, disabled = emptySet())`), `CoreOnlineRepository.kt`, `GatedOnlineRepository.kt`, `OnlineSwitch.kt` (`combine` + `distinctUntilChanged`),
+комментарий в `OnlineProviders.kt`; в `OnlineSourcesViewModel` — `disabledProviders` и `onProviderToggle`; `providerName("youtube")` = «YouTube».
+`testGithubDebugUnitTest` по пакетам `online` и `ui.settings` (161 тест): `OnlineProviderIdsTest` 3/3, `ActiveSourcesTest` 6/6, `OnlineSwitchProvidersTest` 5/5,
+`OnlineSourcesProvidersViewModelTest` 4/4, `FakeOnlineRepositoryTest` 14/14, `GatedOnlineRepositoryTest` 11/11, `OnlineSwitchTest` 3/3;
+`DataStoreOnlineSettingsTest` — 3 из 6 падают `IOException` в `FileStorage.kt:114` (известное для Windows; судит CI на Linux).

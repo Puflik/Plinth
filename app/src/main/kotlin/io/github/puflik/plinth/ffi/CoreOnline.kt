@@ -30,14 +30,16 @@ class CoreOnline internal constructor(
     private val core: PlinthCore,
 ) {
     /**
-     * Включает источники поверх [transport]: Internet Archive и [providers] приложения (YouTube) в порядке списка.
-     * Повторный вызов заменяет транспорт и провайдеров и сбрасывает здоровье. Негодный провайдер (имя, пустой
-     * `finds`, повтор имени) — [CoreFailure], и прежнее подключение остаётся.
+     * Включает источники поверх [transport]: Internet Archive (если [archive]) и [providers] приложения (YouTube)
+     * в порядке списка. Без [archive] Internet Archive не создаётся — ни одного запроса к нему. Повторный вызов
+     * заменяет транспорт и провайдеров и сбрасывает здоровье. Негодный провайдер (имя, пустой `finds`, повтор
+     * имени) — [CoreFailure], и прежнее подключение остаётся.
      */
     fun connect(
         transport: NetTransport,
         providers: List<OnlineProvider> = emptyList(),
-    ) = core.call { it.connectOnline(transport.toRust(), providers.map(OnlineProvider::toRust)) }
+        archive: Boolean = true,
+    ) = core.call { it.connectOnline(transport.toRust(), providers.map(OnlineProvider::toRust), archive) }
 
     fun disconnect() = core.call { it.disconnectOnline() }
 
