@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   appear in their own section after Internet Archive and play as Opus (about
   160 kbps) or AAC 128 kbps. The player asks for a fresh link when the old one
   runs out or the server refuses it.
+- Settings: each online source, Internet Archive and YouTube, has its own
+  switch. A source that is switched off gets no requests; its saved tracks
+  stay in the library and play again when it is switched back on.
 
 ### Fixed
 
