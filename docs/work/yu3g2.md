@@ -322,7 +322,28 @@ CI ветки читается без токена: `https://api.github.com/repo
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+Работа идёт шагами, после каждого — коммит и пуш; ниже — по шагам.
+
+**А. Правила R8 — готово** (`293d665`).
+- `app/proguard-rules.pro`: блок «YouTube (Ю3г)» вместо «YouTube (Ю3в)» — четыре обязательных `-keep` и четыре `-dontwarn` (`JavaToJSONConverters`, `tools.**`, `javax.script.**`,
+  `jdk.dynalink.**`), у каждого правила комментарий. Пять `-dontwarn java.beans.*` удалены: покрыты `-dontwarn …JavaToJSONConverters` (все пять классов нужны одному методу этого класса).
+- R8 обеих flavor (`--no-build-cache`, оба release за 89–91 с): **ни ошибок, ни предупреждений** (в логе нет ни одной строки warning/missing). Предупреждение про
+  `javax.script.ScriptEngineFactory` снято строкой `-dontwarn javax.script.**` и объяснено в комментарии. Правил вне набора раздела А не понадобилось.
+- Опыт «без четырёх `-dontwarn`»: R8 падает на «Missing classes» — `java.beans` 5, `javax.script` 10 (`org.mozilla.javascript.engine.*`), `jdk.dynalink` 18 (`Bootstrapper`, линкеры) — и печатает
+  предупреждение про service class. **`-dontwarn …tools.**` в этой сборке ничего не подавляет** (без него ошибок нет): оставлен по набору раздела А, при желании его можно убрать.
+- Причины правил (разбор jar `v0.26.5` и Rhino 1.8.1 через `javap`) — комментарии в файле говорят то, что проверено. (1) `timeago.patterns`: `PatternMap` зовёт `<язык>.getInstance()` прямыми вызовами,
+  по имени классы не ищутся — **функционально правило не нужно**, оно держит имена по требованию стража и как у NewPipe; утверждение плана «разбор дат упал бы» для этой версии **не подтвердилось**.
+  (2) `ClassFileWriter`: экстрактор вызывает `Context.setInterpretedMode(true)`, ветка сборки байт-кода не исполняется. (3) Rhino ищет по строковым именам `VMBridge_jdk18`, `Interpreter`, `RegExpImpl`,
+  `XMLLibImpl`, `JavaAdapter`, `optimizer.Codegen`, `resources.Messages` — здесь правило существенно. (4) protobuf: 11 классов `GeneratedMessageLite` в экстракторе (токены продолжения плейлистов).
+- Проверки (Windows): `R8RulesGuardTest` 5/5 в `testGithubDebugUnitTest` и `testFdroidDebugUnitTest`; `R8OutputGuardTest` 3/3, `skipped="0"` (после `assembleGithubRelease assembleFdroidRelease`,
+  `PLINTH_REQUIRE_R8_OUTPUT=1`, свежий `TEST-…xml`); `ktlintCheck`, `detekt` зелёные; юнит-тесты обеих flavor: 853, падают 7 — все `DataStore*SettingsTest` (известное: Windows,
+  `FileStorage.kt:114`; не из-за задачи).
+- Размеры (мой замер, release, все ABI): без подписи `app-github-release-unsigned.apk` и `app-fdroid-release-unsigned.apk` по **18 299 458** байт (17,45 МиБ, 61,0 % бюджета 30 000 000);
+  подписанные отладочным ключом — **18 311 746** байт (+12 288).
+
+**В. CI — готово** (`3fd9acd`): шаг «Release APKs within the size budget» (обе flavor, пустой glob и превышение бюджета роняют шаг — цикл проверен локально на трёх случаях: нет APK fdroid → падает,
+оба на месте → проходит, больше 30 000 000 → падает), шаг «R8 keeps what the rules promise» (`--rerun`, `PLINTH_REQUIRE_R8_OUTPUT=1`, проверка `tests="3"` и `skipped="0"` в XML),
+`seeds.txt` и `configuration.txt` в «Upload reports». Прогон CI по последнему коммиту — ниже, когда придёт.
 
 **Таблица устройств** (заполнить по ходу, строка на API):
 
