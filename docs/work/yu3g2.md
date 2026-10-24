@@ -33,7 +33,7 @@ Release-сборка YouTube работает. `app/proguard-rules.pro` держ
 
 ### А. Правила R8 — `app/proguard-rules.pro`
 
-Блок «YouTube (Ю3в)» заменяется блоком «YouTube (Ю3г)». Набор — спайка Ю3а, без записей, которые ничего не делают:
+Блок «YouTube (Ю3в)» заменяется блоком «YouTube (Ю3г)». Набор — спайка Ю3а; из её `-keep` берутся только те, что что-то держат:
 
 ```text
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
@@ -53,25 +53,33 @@ Release-сборка YouTube работает. `app/proguard-rules.pro` держ
 - Из спайка **не берутся** `-keep class org.mozilla.javascript.* {*;}`, `…engine.**` (покрыты `org.mozilla.javascript.**`), `-keep class javax.script.**` и
   `-keep class jdk.dynalink.**` (таких классов на Android нет: `rhino-engine-1.8.1.jar` несёт только `org/mozilla/javascript/engine/*`). Если R8 всё же попросит —
   добавить и записать в отчёт.
-- **`-dontwarn java.beans.*` (пять строк из Ю3в) не «заменяются», а проверяются один раз:** убрать, прогнать `minifyGithubReleaseWithR8`. R8 прошёл — строки удалены.
-  R8 падает на `java.beans.*` — вернуть (можно одной строкой `-dontwarn java.beans.**`) и написать честный комментарий: Rhino ссылается на пакет, которого на Android нет,
-  эти ветки не исполняются. Слов «только -dontwarn», «до Ю3г», «релиз не выпускать» в файле не остаётся.
+- **Пять строк `-dontwarn java.beans.*` из Ю3в удаляются.** Планировщик проверил: с набором выше `minifyGithubReleaseWithR8` проходит и без них (41 с, предупреждений нет) — они были
+  нужны, пока Rhino не стоял под `-keep`. Исполнитель повторяет это для обеих flavor; если R8 всё же падает на `java.beans.*` — вернуть одной строкой `-dontwarn java.beans.**` с честным
+  комментарием (Rhino ссылается на пакет, которого на Android нет, эти ветки не исполняются) и написать об этом в отчёте. Слов «только -dontwarn», «до Ю3г», «релиз не выпускать»
+  в файле не остаётся.
 - **Предупреждение `Unexpected reference to missing service class: META-INF/services/javax.script.ScriptEngineFactory`.** Источник: `rhino-engine-1.8.1.jar`
   несёт этот файл (в нём `org.mozilla.javascript.engine.RhinoScriptEngineFactory`), а интерфейса `javax.script` на Android нет; экстрактор зовёт Rhino напрямую
-  (`org.mozilla.javascript.Context`), через `ServiceLoader` его никто не ищет. Попробовать снять правилом (`-dontwarn javax.script.**` уже в наборе — исчезает ли оно?).
-  Не исчезло — оставить, объяснить в комментарии блока одной строкой и в отчёте. Исключать файл из APK (`packaging.resources.excludes`) нельзя здесь: это
-  `app/build.gradle.kts`, вне списка «Менять»; можно предложить в отчёте.
+  (`org.mozilla.javascript.Context`), через `ServiceLoader` его никто не ищет. **Планировщик проверил:** на текущих правилах `minifyGithubReleaseWithR8` печатает это предупреждение
+  (`WARNING: …base.jar: R8: Unexpected reference to missing service class: META-INF/services/javax.script.ScriptEngineFactory.`), а с набором выше (вместе с пятью `java.beans`)
+  `minifyGithubReleaseWithR8` и `minifyFdroidReleaseWithR8` не печатают **ни одного** предупреждения. Исполнитель повторяет и пишет в отчёт; если предупреждение вернулось — снять
+  правилом или объяснить в комментарии блока одной строкой. Исключать файл из APK (`packaging.resources.excludes`) здесь нельзя: это `app/build.gradle.kts`, вне списка «Менять»;
+  можно предложить в отчёте.
 - **Rhino не сужается** (+0,66 МиБ, 69 % прироста — `yu3a.md` §5 п. 7). Сужение допустимо только с проверкой каждого шага сценарием на устройстве; такого сценария у задачи
-  нет, а бюджет 30 МБ держится с запасом. Оставить широкий `-keep`, записать цифры в `apk-size.md` (раздел В).
+  нет, а бюджет 30 МБ держится с запасом: **замер планировщика** (release `github`, все ABI, без подписи) — 17 856 866 байт на текущих правилах → 18 299 458 с набором раздела А
+  (+442 592 байта, +0,42 МиБ); `fdroid` — 18 299 458 (тот же размер). Оставить широкий `-keep`, записать цифры (свои, по своей сборке) в `apk-size.md` (раздел Д).
+- **Без правил R8 уже портит Rhino и языки** (планировщик, вывод R8 на текущих правилах): переименованы `org.mozilla.javascript.Context`, `Kit`, `ScriptRuntime`, `Scriptable`,
+  `VMBridge` и классы `…timeago.patterns.*` (`af`, `am`, `ar`, …) — в debug этого не видно.
 
 ### Б. Стражи (написаны планировщиком, защищены)
 
 - `R8RulesGuardTest` — читает `app/proguard-rules.pro` по тексту: четыре обязательных правила YouTube, прежние правила ядра/плеера/номеров строк, и что R8 не выключен
   (`-dontobfuscate`, `-dontshrink`, `-dontoptimize`, `-ignorewarnings`, `-dontwarn *`/`**`). Идёт в обычных `testGithubDebugUnitTest` / `testFdroidDebugUnitTest`.
 - `R8OutputGuardTest` — читает вывод настоящей сборки (`app/build/outputs/mapping/<flavor>Release/{mapping.txt,seeds.txt}`): шесть классов-представителей (Rhino, `ClassFileWriter`,
-  языки `en`, `ru`) стоят в `mapping.txt` под своими именами и есть в `seeds.txt`; ни один класс семейств `org.mozilla.javascript.`, `ClassFileWriter`,
-  `…timeago.patterns.` не переименован; у `Context` в `seeds.txt` есть члены (значит, `{ *; }` сработало). Без вывода R8 тест **пропускается** (обычный прогон unit-тестов
-  release не собирает); при `PLINTH_REQUIRE_R8_OUTPUT=1` отсутствие файлов обеих flavor — **провал**. Две первые проверки теста — на фикстурах, идут всегда.
+  языки `en`, `ru`) стоят в `mapping.txt` под своими именами и есть в `seeds.txt`; ни один класс пакетов `org.mozilla.javascript.` и `…timeago.patterns.` не переименован
+  (`ClassFileWriter` держится правилом без `**` — только сам класс, его вложенные R8 вправе переименовать; он проверяется по имени); у `Context` в `seeds.txt` есть члены
+  (значит, `{ *; }` сработало). Без вывода R8 тест **пропускается** (обычный прогон unit-тестов release не собирает); при `PLINTH_REQUIRE_R8_OUTPUT=1` отсутствие файлов
+  обеих flavor — **провал**. Две другие проверки класса — на фикстурах разбора, идут всегда. `mapping.txt` (66–70 МБ) читается потоком. **`mapping.txt` пишет только
+  `assemble…Release`** (`minify…WithR8` отдаёт `seeds.txt`, `usage.txt`, `configuration.txt`, но не `mapping.txt`) — гонять страж надо после `assemble`.
 - Исполнитель сам тестов стражей не пишет. Нужны другие правила (R8 или прогон показали) — правило в `proguard-rules.pro` и **свой тест в новом файле**
   рядом (например, `R8RulesGuardExtraTest.kt`); защищённые файлы не менять.
 
@@ -85,7 +93,13 @@ Release-сборка YouTube работает. `app/proguard-rules.pro` держ
    ```text
    ./gradlew testGithubDebugUnitTest --tests '*R8OutputGuardTest' --rerun
    ```
-   с `env: PLINTH_REQUIRE_R8_OUTPUT: "1"`. `--rerun` нужен, чтобы Gradle не взял результат из кэша; в логе шага должно быть видно, что тест выполнялся (не пропущен).
+   с `env: PLINTH_REQUIRE_R8_OUTPUT: "1"`. В `gradle.properties` стоит `org.gradle.caching=true`, а ни переменная окружения, ни вывод R8 не входят во входы задачи `test`: без `--rerun`
+   Gradle может взять старый зелёный результат из кэша, и страж «пройдёт», не выполнившись. Поэтому сразу за Gradle в том же шаге — проверка, что тест выполнялся, а не был пропущен:
+   ```text
+   xml=app/build/test-results/testGithubDebugUnitTest/TEST-io.github.puflik.plinth.R8OutputGuardTest.xml
+   grep -q 'tests="3"' "$xml" && grep -q 'skipped="0"' "$xml"
+   ```
+   (формат проверен планировщиком: `tests` и `skipped` стоят в первом теге `<testsuite …>`; в пропущенном прогоне там `skipped="1"`).
 3. В «Upload reports» добавить `app/build/outputs/mapping/*/seeds.txt` и `…/configuration.txt` (по ним читается красный страж). `mapping.txt` (≈ 57 МБ) **не** грузить.
 4. Остальное в файле не менять.
 
@@ -189,7 +203,7 @@ adb -s emulator-5554 shell getprop sys.boot_completed      (ждать «1»)
 |---|---|---|
 | `mapping txt tells a kept class from a renamed one` | фикстура `mapping.txt`: `a.Kept -> a.Kept:` против `b.Renamed -> x.y:`, члены и комментарии пропущены | проходит (проверка разбора) |
 | `seeds txt lists a class by name and a member after a colon` | фикстура `seeds.txt` | проходит (проверка разбора) |
-| `release builds keep the extractor and rhino under their own names` | вывод `assembleGithubRelease` / `…FdroidRelease`: классы-представители под своими именами и в `seeds.txt`, ни один класс семейств не переименован, у `Context` есть члены | без вывода R8 — пропуск; с `PLINTH_REQUIRE_R8_OUTPUT=1` на старом коде **падает** (результат прогона — в разделе «Временная реализация и мутации») |
+| `release builds keep the extractor and rhino under their own names` | вывод `assembleGithubRelease` / `…FdroidRelease`: классы-представители под своими именами и в `seeds.txt`, ни один класс пакетов `org.mozilla.javascript.` и `…timeago.patterns.` не переименован, у `Context` есть члены | без вывода R8 — пропуск (`skipped`); после `assembleGithubRelease` на старом коде **падает**: «githubRelease: R8 переименовал классы под правилом keep: [org.mozilla.javascript.Context, …Kit, …ScriptRuntime, …Scriptable, …VMBridge, …patterns.af, …am, …ar, …az, …be]» |
 
 Классы-представители — проверены по jar-файлам версии `v0.26.5` / Rhino `1.8.1` (`org.mozilla.javascript.Context`, `ScriptRuntime`, `…engine.RhinoScriptEngineFactory`,
 `org.mozilla.classfile.ClassFileWriter`, `…timeago.patterns.en`, `…patterns.ru`). Смена версии экстрактора или Rhino — повод перечитать список в `R8OutputGuardTest.KEPT_BY_NAME`.
@@ -201,12 +215,18 @@ adb -s emulator-5554 shell getprop sys.boot_completed      (ждать «1»)
 
 ```text
 .\gradlew.bat ktlintCheck detekt testGithubDebugUnitTest testFdroidDebugUnitTest
+.\gradlew.bat testGithubDebugUnitTest --tests "*R8RulesGuardTest" --rerun
 $env:PLINTH_REQUIRE_R8_OUTPUT = "1"; .\gradlew.bat assembleGithubRelease assembleFdroidRelease; .\gradlew.bat testGithubDebugUnitTest --tests "*R8OutputGuardTest" --rerun
 Get-ChildItem app\build\outputs\apk\github\release\*.apk, app\build\outputs\apk\fdroid\release\*.apk | Select-Object Name, Length
 ```
 
+**Ловушка Gradle:** `app/proguard-rules.pro` и вывод R8 не входы задачи `test` (а в `gradle.properties` включён кэш сборки). Правишь правила — страж без `--rerun` может ответить
+«UP-TO-DATE» старым зелёным; поэтому вторая и третья строки — с `--rerun`, а в отчёте — число тестов из свежего `TEST-…xml`. Подписанные сборки для эмуляторов (раздел Г) пишут вывод R8
+в те же каталоги `app/build/outputs/mapping/<flavor>Release/`, так что страж можно гонять и после них.
+
 Известное: на Windows падают 4 теста `DataStore*SettingsTest` (+ 3 `DataStoreOnlineSettingsTest`, `IOException` в `FileStorage.kt:114`) — не из-за задачи; в CI на Linux проходят.
 Показатель к отчёту: `R8RulesGuardTest` 5/5, `R8OutputGuardTest` 3/3 **без пропусков** (в `app/build/test-results/testGithubDebugUnitTest/TEST-…R8OutputGuardTest.xml`: `skipped="0"`).
+Время (планировщик, Windows): холодное ядро + `assembleGithubRelease` — 4 мин 41 с; `assembleGithubRelease assembleFdroidRelease` при тёплом кэше — 2 мин 15 с.
 
 CI ветки читается без токена: `https://api.github.com/repos/Puflik/Plinth/actions/runs?branch=work/yu3g2` (интересует последний прогон по твоему последнему коммиту). Красный шаг стража — сначала `seeds.txt` и
 `configuration.txt` из артефакта `reports`.
@@ -217,7 +237,7 @@ CI ветки читается без токена: `https://api.github.com/repo
 
 1. Защищённые тесты зелёные: `R8RulesGuardTest` 5/5 в `testGithubDebugUnitTest` и `testFdroidDebugUnitTest`; `R8OutputGuardTest` 3/3, **не пропущен**, при `PLINTH_REQUIRE_R8_OUTPUT=1` после `assembleGithubRelease assembleFdroidRelease`.
 2. `ktlintCheck` и `detekt` зелёные; `minifyGithubReleaseWithR8` и `minifyFdroidReleaseWithR8` (через `assemble…Release`) без ошибок; в отчёте — список предупреждений R8, которые остались, и почему.
-3. `app/proguard-rules.pro`: блок YouTube — по разделу А; у каждого правила комментарий «что ищется по имени → что сломается»; про `java.beans` и `javax.script` — решение и причина; слов «до Ю3г», «релиз не выпускать» нет.
+3. `app/proguard-rules.pro`: блок YouTube — по разделу А; у каждого правила комментарий «что ищется по имени → что сломается»; пять `-dontwarn java.beans.*` удалены (или возвращены одной строкой с причиной); про `javax.script` — результат проверки; слов «до Ю3г», «релиз не выпускать» нет.
 4. CI: оба release в бюджете, шаг стража выполняется и зелёный; CI ветки зелёный на последнем коммите (ссылка на прогон в отчёте).
 5. Размеры: `apk-size.md` дополнен; бюджет 30 МБ держится (число и запас — в отчёте).
 6. Таблица устройств в отчёте заполнена по API 36, 30 и 26: поиск, старт игры, позиция через 60 с, перемотка, ошибки в логе. Сбои — с причиной.
@@ -240,7 +260,9 @@ CI ветки читается без токена: `https://api.github.com/repo
 
 1. **Страж вывода R8 — JVM-тест с пропуском, а не скрипт в `tools/`.** Выбрано ради единообразия со стражами (`BackupRulesTest`, `YoutubeBoundaryTest`) и чтобы фикстурные проверки разбора шли в обычном прогоне.
    Цена: настоящая проверка идёт только в CI-шаге после release и локально — при `PLINTH_REQUIRE_R8_OUTPUT=1`. Альтернатива — `tools/check_r8_output.py` + шаг CI; решение не необратимо, тесты тогда переписываются.
-2. **`--rerun` в шаге CI** — на случай, если `setup-gradle` вернёт результат теста из кэша (тогда страж «зелёный», не выполнившись). Если опция не нравится, нужен другой способ гарантии (например, `cleanTestGithubDebugUnitTest`).
+2. **`--rerun` в шаге CI и локально** — файл правил и вывод R8 не входы задачи `test`, кэш сборки включён: без `--rerun` страж может «пройти», не выполнившись. В CI добавлена ещё проверка по
+   `TEST-…xml` (`skipped="0"`). Надёжнее было бы объявить `proguard-rules.pro` входом задачи в `app/build.gradle.kts` (`tasks.withType<Test> { inputs.file("proguard-rules.pro") }`) —
+   это вне списка «Менять»; предлагаю отдельной правкой Opus. Если `--rerun` не нравится, другой способ гарантии — `cleanTestGithubDebugUnitTest` перед шагом.
 3. **`assembleFdroidRelease` в CI**, а не только `minifyFdroidReleaseWithR8`: Rust-часть общая (повторной сборки ядра нет), добавляются R8 и упаковка — порядка минуты-двух. Если CI-время важнее — хватит `minifyFdroidReleaseWithR8` и сверки `mapping.txt`; тогда править раздел В и `VARIANTS` в тесте (+ пересобрать).
 4. **Отладочный ключ для release на эмуляторе.** Пакет release равен пакету рабочего приложения автора. На эмуляторах конфликта нет; запрет на телефон записан в «Инварианты» и «Остановиться». Согласен ли, что ключ и пароль `android` стоят в тексте задачи? Это публичные значения стандартного отладочного хранилища.
 5. **`-keep javax.script.**` и `jdk.dynalink.**` из спайка не берутся** (на Android этих классов нет). Если Opus знает причину, по которой NewPipe их держит (сборка под JVM?), — вернуть.
@@ -251,7 +273,36 @@ CI ветки читается без токена: `https://api.github.com/repo
 
 ## Временная реализация и мутации
 
-_Проверка планировщика: см. ниже, заполняется после прогонов._
+Проверка планировщика (Windows, ворктри `C:\claude\Plinth-yu3g2`, основа `c6f5939`). Временная реализация — набор раздела А дописан в конец `proguard-rules.pro` (в коммит не входит,
+ветка чиста); сравнение — на настоящей сборке, а не на фикстурах.
+
+| Что | Результат |
+|---|---|
+| `ktlintCheck`, `detekt` по двум тестам | чисто |
+| Текущие правила, `R8RulesGuardTest` | 5 тестов: 3 падают утверждением `R8RulesGuardTest.kt:61` («В …proguard-rules.pro нет правил: […]»), 2 проходят (охрана прежнего) |
+| Текущие правила, `R8OutputGuardTest` без вывода R8 | 3 теста: 2 проходят, настоящий — `skipped` («R8 не запускали…») |
+| Текущие правила, `assembleGithubRelease` (4 мин 41 с, APK 17 856 866 байт), затем `R8OutputGuardTest` | настоящий тест **падает**: «githubRelease: R8 переименовал классы под правилом keep: [org.mozilla.javascript.Context, …Kit, …ScriptRuntime, …Scriptable, …VMBridge, …patterns.af, …am, …ar, …az, …be]»; R8 печатает предупреждение про `javax.script.ScriptEngineFactory` |
+| Временная реализация (набор А + пять `java.beans`), `assembleGithubRelease assembleFdroidRelease` (2 мин 15 с), `PLINTH_REQUIRE_R8_OUTPUT=1` | оба APK по 18 299 458 байт (+442 592 к текущим правилам); R8 **без предупреждений**; `R8RulesGuardTest` 5/5; `R8OutputGuardTest` 3/3, `skipped=0` |
+| Тот же прогон, первый раз | настоящий тест упал на `ClassFileWriter$BootstrapEntry`, `$ClassFileFormatException`, `$MHandle`, `$StackMapTable`: проверка «семейство не переименовано» шла по префиксу `ClassFileWriter`, а правило держит только сам класс. **Ошибка теста, исправлена** (семейства — только пакеты; `ClassFileWriter` — по имени); прогнано заново, зелёное |
+| Без пяти `-dontwarn java.beans.*` (набор А + `minifyGithubReleaseWithR8`) | проходит, 41 с, без предупреждений |
+
+Мутанты текстового стража (правка `proguard-rules.pro` на временной реализации, `testGithubDebugUnitTest --tests *R8RulesGuardTest --rerun`):
+
+| Мутант | Упал |
+|---|---|
+| M0 без правки | никто (5/5) |
+| M1 удалено правило `timeago.patterns` | `the timeago patterns of the extractor keep their names` |
+| M2 удалено `-keep class org.mozilla.javascript.** { *; }` | `rhino is kept whole` |
+| M3 удалено `-keep class org.mozilla.classfile.ClassFileWriter` | `rhino is kept whole` |
+| M4 удалено правило protobuf (три строки) | `protobuf messages keep their fields` |
+| M5 Rhino сужен до `org.mozilla.javascript.Context { *; }` | `rhino is kept whole` |
+| M6 удалено `-keep class com.sun.jna.** { *; }` | `the rules of the core bridge and the player stay` |
+| M7 добавлено `-dontobfuscate` | `r8 is not switched off and warnings are not silenced wholesale` |
+| M8 добавлено `-dontwarn **` | то же |
+| M9 те же правила, записанные иначе (`**{*;}` в одну строку, `{ *; }` в три строки) | никто (5/5): страж не придирается к форме |
+
+Настоящий страж вывода (мутанты по R8 не гонялись — каждый стоит несколько минут сборки): его красный вид показал прогон на текущих правилах (все три семейства не держатся), зелёный — на
+временной реализации.
 
 ## Отчёт исполнителя
 
