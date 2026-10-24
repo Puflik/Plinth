@@ -38,6 +38,18 @@ class FakeOnlineRepository(
     var enabled = false
         private set
 
+    /** ID выключенных провайдеров, как их передал последний [setEnabled] (Ю3г). */
+    var disabled: Set<String> = emptySet()
+        private set
+
+    /** Каждое применение переключателей по порядку: главный и выключенные провайдеры. */
+    val applied = mutableListOf<Applied>()
+
+    data class Applied(
+        val enabled: Boolean,
+        val disabled: Set<String>,
+    )
+
     /** Есть ли сеть; нет — поиск и альбомы говорят «нет сети». */
     var networkUp = true
 
@@ -53,13 +65,21 @@ class FakeOnlineRepository(
     private val catalog = mutableMapOf<String, TrackId>()
     private val variants = mutableMapOf<TrackId, OnlineTrack>()
 
-    override suspend fun setEnabled(enabled: Boolean) {
+    /** Подключён ли Internet Archive: главный включён и сам он не выключен. */
+    private val active: Boolean get() = enabled && PROVIDER !in disabled
+
+    override suspend fun setEnabled(
+        enabled: Boolean,
+        disabled: Set<String>,
+    ) {
         this.enabled = enabled
+        this.disabled = disabled
+        applied += Applied(enabled, disabled)
     }
 
     override suspend fun search(query: String): List<OnlineSection> {
         val words = query.lowercase().split(' ').filter(String::isNotBlank)
-        if (!enabled || words.isEmpty()) return emptyList()
+        if (!active || words.isEmpty()) return emptyList()
         searches += query
         gate?.await()
         val problem = problem()
@@ -77,7 +97,7 @@ class FakeOnlineRepository(
         item: String,
     ): OnlineAlbum {
         val album = albums.find { it.item == item && provider == PROVIDER }
-        val problem = if (enabled) problem() else OnlineProblem.PROVIDER_DOWN
+        val problem = if (active) problem() else OnlineProblem.PROVIDER_DOWN
         return when {
             problem != null -> OnlineAlbum.Failed(problem)
             album == null -> OnlineAlbum.Failed(OnlineProblem.PROVIDER_DOWN)
@@ -107,7 +127,7 @@ class FakeOnlineRepository(
         undecodable: Set<AudioFormat>,
     ): StreamLookup {
         val all = variants[track]?.variants.orEmpty()
-        if (!enabled || all.isEmpty()) return StreamLookup.Unavailable
+        if (!active || all.isEmpty()) return StreamLookup.Unavailable
         val options = all.filter { it.format !in undecodable }.ifEmpty { all }
         val chosen =
             if (metered) {
