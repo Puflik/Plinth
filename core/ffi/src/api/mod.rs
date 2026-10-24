@@ -24,4 +24,6 @@ mod r9f_tests;
 mod scan_api;
 mod test_api;
 #[cfg(test)]
+mod yu3g_tests;
+#[cfg(test)]
 mod yu3v_tests;
