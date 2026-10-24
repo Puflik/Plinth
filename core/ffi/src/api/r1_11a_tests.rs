@@ -22,7 +22,7 @@ const SEARCH_JSON: &str = r#"{"response":{"numFound":1,"start":0,"docs":[
 /// Ядро с онлайн-источниками поверх `transport`; паузы между повторами настоящие.
 fn online(dir: &Scratch, transport: Arc<dyn NetTransport>) -> Arc<Core> {
     let core = Core::open(dir.path()).unwrap();
-    core.connect_online(transport, Vec::new()).unwrap();
+    core.connect_online(transport, Vec::new(), true).unwrap();
     core
 }
 

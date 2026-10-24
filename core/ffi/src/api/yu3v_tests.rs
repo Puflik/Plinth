@@ -356,7 +356,7 @@ fn as_providers(platforms: &[&Arc<Platform>]) -> Vec<Arc<dyn ExternalProvider>> 
 /// Ядро с Internet Archive на записанных ответах и платформенными провайдерами `platforms`.
 fn connected(dir: &Scratch, platforms: &[&Arc<Platform>]) -> Arc<Core> {
     let core = Core::open(dir.path()).unwrap();
-    core.connect_online(recorded(), as_providers(platforms)).unwrap();
+    core.connect_online(recorded(), as_providers(platforms), true).unwrap();
     core
 }
 
@@ -841,7 +841,7 @@ fn a_platform_that_claims_the_best_quality_still_comes_after_archive_org() {
 fn without_platform_providers_it_is_archive_org_alone() {
     let dir = Scratch::new();
     let core = Core::open(dir.path()).unwrap();
-    core.connect_online(recorded(), Vec::new()).unwrap();
+    core.connect_online(recorded(), Vec::new(), true).unwrap();
 
     let sections = search_sections(&core);
 
@@ -1066,12 +1066,12 @@ fn a_liked_track_stays_when_its_provider_is_gone_and_does_not_play() {
     let ids = added(&core, SONG);
     core.like(ids[0]).unwrap();
 
-    core.connect_online(recorded(), Vec::new()).unwrap();
+    core.connect_online(recorded(), Vec::new(), true).unwrap();
 
     let liked: Vec<String> = core.liked_tracks().unwrap().into_iter().map(|row| row.title).collect();
     assert_eq!(liked, ["Piano Man"]);
     assert!(matches!(core.online_stream(ids[0], false, Vec::new()), Err(CoreError::Unavailable { .. })));
-    core.connect_online(recorded(), as_providers(&[&platform])).unwrap();
+    core.connect_online(recorded(), as_providers(&[&platform]), true).unwrap();
     assert!(core.online_stream(ids[0], false, Vec::new()).is_ok(), "it plays again once the provider is back");
 }
 
@@ -1091,12 +1091,12 @@ fn connecting_again_replaces_the_providers_and_forgets_their_health() {
     assert_eq!(platform.calls().len(), asked, "after three refusals in a row it is benched");
 
     platform.fail_with(None);
-    core.connect_online(recorded(), as_providers(&[&platform])).unwrap();
+    core.connect_online(recorded(), as_providers(&[&platform]), true).unwrap();
 
     assert_eq!(problem_of(&core, NAME), None);
     assert!(platform.calls().len() > asked, "a new connection asks it again");
     let other = Platform::named("other.test");
-    core.connect_online(recorded(), as_providers(&[&other])).unwrap();
+    core.connect_online(recorded(), as_providers(&[&other]), true).unwrap();
     assert_eq!(
         search_sections(&core).iter().map(|s| s.provider.as_str()).collect::<Vec<_>>(),
         ["archive.org", "other.test"]
@@ -1127,10 +1127,10 @@ fn a_provider_that_cannot_be_registered_fails_the_connection_and_changes_nothing
     let bad_name = Platform::named("YouTube");
     let nothing = Platform::new("nothing.test", QualityTier::Standard, Vec::new());
 
-    let taken = core.connect_online(recorded(), as_providers(&[&clash]));
-    let twice = core.connect_online(recorded(), as_providers(&[&platform, &twin]));
-    let invalid = core.connect_online(recorded(), as_providers(&[&bad_name]));
-    let blind = core.connect_online(recorded(), as_providers(&[&nothing]));
+    let taken = core.connect_online(recorded(), as_providers(&[&clash]), true);
+    let twice = core.connect_online(recorded(), as_providers(&[&platform, &twin]), true);
+    let invalid = core.connect_online(recorded(), as_providers(&[&bad_name]), true);
+    let blind = core.connect_online(recorded(), as_providers(&[&nothing]), true);
 
     assert!(matches!(taken, Err(CoreError::Internal { .. })), "{taken:?}");
     assert!(matches!(twice, Err(CoreError::Internal { .. })), "{twice:?}");
@@ -1146,7 +1146,7 @@ fn a_connection_with_a_bad_provider_does_not_switch_online_on() {
     let dir = Scratch::new();
     let core = Core::open(dir.path()).unwrap();
 
-    let invalid = core.connect_online(recorded(), as_providers(&[&Platform::named("YouTube")]));
+    let invalid = core.connect_online(recorded(), as_providers(&[&Platform::named("YouTube")]), true);
 
     assert!(invalid.is_err());
     assert!(search_sections(&core).is_empty(), "nothing was switched on");
@@ -1191,7 +1191,7 @@ fn a_platform_that_panics_when_asked_who_it_is_stays_out_and_fails_only_the_conn
         let core = Core::open(dir.path()).unwrap();
         let providers: Vec<Arc<dyn ExternalProvider>> = vec![Arc::new(Hopeless { no_name })];
 
-        let outcome = core.connect_online(recorded(), providers);
+        let outcome = core.connect_online(recorded(), providers, true);
 
         assert!(matches!(outcome, Err(CoreError::Internal { .. })), "no_name={no_name}: {outcome:?}");
         assert!(search_sections(&core).is_empty(), "nothing was switched on");
