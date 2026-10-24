@@ -75,7 +75,10 @@ class GatedOnlineRepositoryTest {
         runTest {
             val failing =
                 object : OnlineRepository by inner {
-                    override suspend fun setEnabled(enabled: Boolean): Unit = error("the core did not open")
+                    override suspend fun setEnabled(
+                        enabled: Boolean,
+                        disabled: Set<String>,
+                    ): Unit = error("the core did not open")
                 }
             val gated = GatedOnlineRepository(failing, waitLimit = 5.seconds)
             val search = async { gated.search("concert") }
