@@ -162,6 +162,38 @@ abstract class OnlineRepositoryContractTest {
             assertThat(online.search("concert").single().results).hasSize(1)
         }
 
+    /** Ю3г: выключенный провайдер — как выключенные источники, но каталог его треков цел. */
+    @Test
+    fun a_provider_switched_off_has_no_section_no_album_and_no_stream_but_its_tracks_stay_known() =
+        contract { online ->
+            val tracks = (online.album(ARCHIVE, CONCERT) as OnlineAlbum.Tracks).tracks
+            val ids = checkNotNull(online.add(ARCHIVE, tracks))
+
+            online.setEnabled(true, disabled = setOf(ARCHIVE))
+
+            assertThat(online.search("concert")).isEmpty()
+            assertThat(online.album(ARCHIVE, CONCERT)).isInstanceOf(OnlineAlbum.Failed::class.java)
+            assertThat(online.stream(ids[0], metered = false)).isEqualTo(StreamLookup.Unavailable)
+            assertThat(online.known(ARCHIVE, tracks)).isEqualTo(ids)
+        }
+
+    @Test
+    fun a_provider_switched_on_again_works_again() =
+        contract { online ->
+            online.setEnabled(true, disabled = setOf(ARCHIVE))
+            online.setEnabled(true, disabled = emptySet())
+
+            assertThat(online.search("concert").single().results).hasSize(1)
+        }
+
+    @Test
+    fun an_id_the_app_does_not_know_among_the_switched_off_changes_nothing() =
+        contract { online ->
+            online.setEnabled(true, disabled = setOf("no.such.provider"))
+
+            assertThat(online.search("concert").single().results).hasSize(1)
+        }
+
     /** Архив с включёнными источниками; [networkUp] — есть ли сеть. */
     private fun contract(
         networkUp: Boolean = true,
