@@ -400,3 +400,16 @@ _Черновик, пишется по ходу (бюджет недели по�
 `toggleable(role = Role.Switch)`, при выключенном главном строка недоступна и притушена); `SettingsScreen.kt` передаёт набор и обработчик;
 `strings.xml` (en/ru): `settings_online_summary` изменена, добавлены `settings_online_archive_summary` и `settings_online_youtube_summary` (тексты из таблицы).
 `ktlintCheck detekt lintGithubDebug` — зелёные (detekt нашёл две строки KDoc длиннее предела — перенесены).
+
+**Шаг 4 — проверки (Windows, эмулятор `Medium_Phone_API_36.0`).**
+- `testGithubDebugUnitTest testFdroidDebugUnitTest`: 845 тестов в каждой сборке, упали 7 — все `java.io.IOException` в `FileStorage.kt:114` (14 записей = 7 × 2 сборки):
+  3 из `DataStoreOnlineSettingsTest` (эта задача: «a provider switched off is kept apart from the main switch», «an id this version does not know survives the
+  switching of the others», «switching a provider on removes only it and the same twice changes nothing») и 4 прежних `DataStore*SettingsTest` (Folder, Sort, Onboarding ×2).
+  Это известная беда Windows (вторая запись в тот же файл); три наших судит CI на Linux (ветка пушится). `RussianTranslationTest` 4/4.
+- Эмулятор, по `TEST-*.xml`: пакет `online` — 20 тестов, 0 падений (`CoreOnlineRepositoryContractTest` 14/14, в том числе три новых случая на настоящем ядре:
+  «a provider switched off has no section, no album and no stream but its tracks stay known», «a provider switched on again works again»,
+  «an id the app does not know among the switched off changes nothing»; `CoreOnlineRepositoryCancelTest` 5, `DeviceDecodersTest` 1);
+  пакет `ffi` — 31 тест, 0 падений (`ExternalProviderCoreTest` 9, `PlinthCoreTest` 10 и др.).
+- Защищённые тесты не тронуты: `git diff 61afd61 HEAD -- core/ffi/src/api/{yu3g_tests,mod,r1_11a_tests,yu3v_tests}.rs app/src/test app/src/sharedTest` пуст;
+  `YoutubeProvider.kt` против `main` пуст; `CHANGELOG.md`, `tasks.md`, `docs/decisions.md`, `CLAUDE.md` против основы `479462c` не менялись;
+  `connect_online(` — везде три аргумента; `connectOnline` зовётся из одного места (`CoreOnline.connect`).
