@@ -379,7 +379,8 @@ Internet Archive; включить, а Internet Archive выключить → �
 
 ## Отчёт исполнителя
 
-_Черновик, пишется по ходу (бюджет недели почти выбран — работа может оборваться по лимиту)._
+**Итог:** задача выполнена по плану, без отклонений от «Решения»; защищённые тесты не менялись. Единственное не проверенное здесь — три теста
+`DataStoreOnlineSettingsTest` (падают на Windows известным `IOException`) — их судит CI на Linux. Мутанты Kotlin (K1–K4) не гонялись — по ответу Opus (п. 8).
 
 **Шаг 1 — ядро (сделано).** `core/ffi/src/api/online_api.rs`: `connect_online(transport, providers, archive)`;
 `registry_with(transport, pause, archive, external)` — Internet Archive создаётся только при `archive == true`, иначе реестр из одних
@@ -413,3 +414,25 @@ _Черновик, пишется по ходу (бюджет недели по�
 - Защищённые тесты не тронуты: `git diff 61afd61 HEAD -- core/ffi/src/api/{yu3g_tests,mod,r1_11a_tests,yu3v_tests}.rs app/src/test app/src/sharedTest` пуст;
   `YoutubeProvider.kt` против `main` пуст; `CHANGELOG.md`, `tasks.md`, `docs/decisions.md`, `CLAUDE.md` против основы `479462c` не менялись;
   `connect_online(` — везде три аргумента; `connectOnline` зовётся из одного места (`CoreOnline.connect`).
+
+**Шаг 5 — руками на эмуляторе** (`Medium_Phone_API_36.0`, `installGithubDebug`, чистые данные, «Skip all» и отказ в доступе к музыке; ход — `uiautomator dump` + `input tap`;
+запрос «piano», живые Internet Archive и YouTube). Что видел:
+- Настройки → «Online sources»: три строки — «Online sources» («Search music online: requests go to the sources below»), «Internet Archive» («Live recordings and
+  public-domain music: requests go to archive.org»), «YouTube» («Requests go to youtube.com and Google servers»); все три включены.
+- Оба включены → в поиске «In your library», «Internet Archive», «YouTube» (с результатами).
+- YouTube выключен → секции «In your library» и «Internet Archive»; YouTube нет.
+- YouTube включён, Internet Archive выключен → «In your library» и «YouTube»; Internet Archive нет.
+- Выключены оба (главный включён) → только «In your library»: сетевой секции нет, подсказки нет (как решено, Ю5/Ю6).
+- Главный выключен → строки провайдеров недоступны (`enabled=false`) и притушены (скриншот), их состояние сохранено (Internet Archive выкл., YouTube вкл.);
+  главный включён снова → строки доступны, состояние прежнее.
+- Перезапуск приложения (`force-stop` и запуск): выбор на месте (Internet Archive выкл., YouTube вкл.), поиск сразу даёт «In your library» и «YouTube».
+- На диске: `files/datastore/library.preferences_pb` содержит `online_providers_off` со значением `archive.org` и прежний `online_sources`.
+После проверки: debug-пакет удалён, эмулятор погашен.
+
+**Что стоит знать ревьюеру.**
+- Строка провайдера — приватный `ProviderSwitch` в `ui/settings/OnlineSources.kt`; недоступность при выключенном главном — `toggleable(enabled = …)`, `Switch(enabled = …)` и
+  притушенный (`0.38`) текст: у `ListItem` собственного `enabled` нет. Константа `DISABLED_ALPHA` — файловая.
+- detekt нашёл две строки KDoc длиннее предела (`OnlineRepository.kt`, `OnlineSettings.kt`) — перенесены; других замечаний к `ktlintCheck`, `detekt`, `lintGithubDebug` нет.
+- `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `CLAUDE.md` не трогал; ветка стоит на основе `479462c`, в `main` позже легли записи решений — слияние за Opus.
+
+**Коммиты ветки `work/yu3g1`** (после `ccf5a03`): `89422c5` ядро; `12c1a67` Kotlin-модель; `3d85b87` экран и строки; `4d4cede` отчёт по проверкам; итоговый — отчёт целиком.
