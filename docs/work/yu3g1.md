@@ -394,3 +394,9 @@ _Черновик, пишется по ходу (бюджет недели по�
 `testGithubDebugUnitTest` по пакетам `online` и `ui.settings` (161 тест): `OnlineProviderIdsTest` 3/3, `ActiveSourcesTest` 6/6, `OnlineSwitchProvidersTest` 5/5,
 `OnlineSourcesProvidersViewModelTest` 4/4, `FakeOnlineRepositoryTest` 14/14, `GatedOnlineRepositoryTest` 11/11, `OnlineSwitchTest` 3/3;
 `DataStoreOnlineSettingsTest` — 3 из 6 падают `IOException` в `FileStorage.kt:114` (известное для Windows; судит CI на Linux).
+
+**Шаг 3 — экран и строки (сделано).** `ui/settings/OnlineSources.kt`: `onlineSources(enabled, disabledProviders, onToggle, onProviderToggle)` рисует под главным
+переключателем строку на каждый ID из `OnlineProviderIds.ALL` (заголовок — `providerName`, пояснение — строка по ID, незнакомому — без пояснения, `Switch`,
+`toggleable(role = Role.Switch)`, при выключенном главном строка недоступна и притушена); `SettingsScreen.kt` передаёт набор и обработчик;
+`strings.xml` (en/ru): `settings_online_summary` изменена, добавлены `settings_online_archive_summary` и `settings_online_youtube_summary` (тексты из таблицы).
+`ktlintCheck detekt lintGithubDebug` — зелёные (detekt нашёл две строки KDoc длиннее предела — перенесены).

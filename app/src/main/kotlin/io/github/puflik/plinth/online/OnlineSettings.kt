@@ -15,7 +15,10 @@ interface OnlineSettings {
 
     suspend fun setEnabled(enabled: Boolean)
 
-    /** ID провайдеров, которые человек выключил. Пусто — включены все; новый провайдер включён, пока его не выключат. */
+    /**
+     * ID провайдеров, которые человек выключил. Пусто — включены все; новый провайдер включён, пока его
+     * не выключат.
+     */
     val disabledProviders: Flow<Set<String>>
 
     suspend fun setProviderEnabled(

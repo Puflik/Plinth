@@ -277,5 +277,7 @@
     <string name="online_album_source">Source: %1$s</string>
     <string name="online_album_unavailable">The album is not available.</string>
     <string name="settings_online_title">Online sources</string>
-    <string name="settings_online_summary">Search Internet Archive: requests go to archive.org</string>
+    <string name="settings_online_summary">Search music online: requests go to the sources below</string>
+    <string name="settings_online_archive_summary">Live recordings and public-domain music: requests go to archive.org</string>
+    <string name="settings_online_youtube_summary">Requests go to youtube.com and Google servers</string>
 </resources>

@@ -298,5 +298,7 @@
     <string name="online_album_source">Источник: %1$s</string>
     <string name="online_album_unavailable">Альбом недоступен.</string>
     <string name="settings_online_title">Онлайн-источники</string>
-    <string name="settings_online_summary">Поиск в Internet Archive: запросы уходят на archive.org</string>
+    <string name="settings_online_summary">Поиск музыки в сети: запросы уходят на источники ниже</string>
+    <string name="settings_online_archive_summary">Концерты и музыка в общественном достоянии: запросы уходят на archive.org</string>
+    <string name="settings_online_youtube_summary">Запросы уходят на youtube.com и серверы Google</string>
 </resources>

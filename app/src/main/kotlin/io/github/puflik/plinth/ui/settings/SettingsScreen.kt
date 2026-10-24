@@ -62,6 +62,7 @@ fun SettingsScreen(
     val state by viewModel.uiState.collectAsState()
     val backupState by backup.uiState.collectAsState()
     val onlineEnabled by online.enabled.collectAsState()
+    val disabledProviders by online.disabledProviders.collectAsState()
     val pickBackupFolder = rememberMirrorFolderPicker(backup::onFolderPicked)
     val startState by start.uiState.collectAsState()
     val include = rememberFolderPicker(viewModel::onInclude)
@@ -93,7 +94,12 @@ fun SettingsScreen(
             ) { Text(stringResource(R.string.folders_reset)) }
         }
         item(key = "rescan") { Rescan(state.scan, viewModel::onRescan) }
-        onlineSources(onlineEnabled, onToggle = online::onToggle)
+        onlineSources(
+            onlineEnabled,
+            disabledProviders,
+            onToggle = online::onToggle,
+            onProviderToggle = online::onProviderToggle,
+        )
         backupSection(backupState, onPick = pickBackupFolder, onDismissPending = backup::onDismissPending)
         diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
         vendorGuideItem(onOpen = { vendorGuide = true })
