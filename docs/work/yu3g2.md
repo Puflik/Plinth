@@ -116,7 +116,8 @@ $env:PLINTH_KEYSTORE_PASSWORD = "android"; $env:PLINTH_KEY_ALIAS = "androiddebug
 .\gradlew.bat assembleGithubRelease assembleFdroidRelease
 ```
 
-Всё в одной команде PowerShell (среда между вызовами не живёт). APK: `app\build\outputs\apk\github\release\app-github-release.apk` (проверять на эмуляторах — его; fdroid —
+Всё в одной команде PowerShell (среда между вызовами не живёт). Планировщик проверил: так собирается подписанный `app-github-release.apk` (17 869 154 байт на текущих правилах;
+`apksigner verify --print-certs` из `build-tools\36.0.0` — `CN=Android Debug`). APK: `app\build\outputs\apk\github\release\app-github-release.apk` (проверять на эмуляторах — его; fdroid —
 собрать и измерить, а запустить достаточно на API 36). Пакет release — `io.github.puflik.plinth` — **тот же, что у рабочего приложения автора на телефоне**: подписанный отладочным ключом,
 он не встанет поверх (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), а удаление стёрло бы данные. Поэтому **каждый** вызов `adb` — с `-s emulator-5554`; простой `adb install` запрещён, телефон
 автора бывает подключён. Телефон не трогать совсем.
