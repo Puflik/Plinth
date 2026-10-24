@@ -4,14 +4,22 @@
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
 
 - **Ветка:** `work/yu3g1` · **Ворктри:** `C:\claude\Plinth-yu3g1`
-- **Основа:** `main` на `479462c` (Ю3в в `main`). **Коммиты тестов:** `bf37dc1` (Rust), `9d58106` (Kotlin) — защищённые тесты
-  сверять с последним из них
+- **Основа:** `main` на `479462c` (Ю3в в `main`). **Коммиты тестов:** `bf37dc1` (Rust), `9d58106` (Kotlin), `61afd61` (двойник в
+  `GatedOnlineRepositoryTest`) — защищённые тесты сверять с последним из них (`61afd61`)
 - **Откуда:** `tasks.md`, строка 389 (Ю3); `docs/work/yu1.md`, раздел 6 (строка Ю3г); `docs/work/yu3v.md`,
   «Что не проверено» и комментарий в `online/OnlineProviders.kt` («выбор по сборке и по переключателю — Ю3г»).
   Ю3г разбита на три задачи с непересекающимися файлами — раздел «Дальше» внизу; эта — первая.
 - **Данные пользователя трогает по краю.** Каталог и журнал не меняются, но в настройках появляется новый сохранённый
   ключ, а ID провайдеров (`archive.org`, `youtube`) — ключи данных пользователя. Меняется граница ядра (UniFFI).
   **До исполнителя план читает Opus** — раздел «На что смотреть при чтении плана (Opus)».
+
+> **Где остановился и что дальше** (планировщик, 2026-10-24; остановлен по слову автора). Готово и запушено: этот файл, тесты `bf37dc1`
+> (Rust), `9d58106` и `61afd61` (Kotlin); тесты проверены временной реализацией — в ветке её нет, патчи лежат в папке заметок сессии Opus
+> (`yu3g1-reference-*`), итоги — в «Временная реализация и мутации». Ветка названа `work/yu3g1`, не `work/yu3g`. **Не сделано:** мутанты
+> Kotlin; прогон на Linux (CI) для `DataStoreOnlineSettingsTest`; `CoreOnlineRepositoryContractTest` на эмуляторе; Compose-экран и строки
+> (в временной реализации только модель экрана); подробные планы и тесты `yu3g2`, `yu3g3` — есть лишь наброски в «Дальше». **Дальше:** Opus
+> читает план («На что смотреть…», девять вопросов) → при согласии исполнитель по этому файлу; `yu3g2` можно планировать и запускать
+> параллельно — файлы не пересекаются.
 
 ## Цель
 
@@ -83,6 +91,9 @@ pub fn connect_online(
   Пока `connect_online` не получит третий аргумент, тесты крейта `plinth-ffi` не собираются — это ожидаемо.
 
 ### В. Kotlin
+
+Сигнатуры ниже записаны в строку ради чтения; форматирование — как вокруг и как требует `ktlintCheck` (при двух и более параметрах — в
+столбик, с висячей запятой). Защищённые тесты прошли `ktlintCheck` и `detekt` вместе с временной реализацией планировщика (замечания были только к её main-коду).
 
 **`ffi/CoreOnline.kt`:** `connect(transport, providers = emptyList(), archive = true)` передаёт `archive` в `connectOnline`.
 Умолчание сохраняет вызовы `online.connect(archive)` в `androidTest` (`ExternalProviderCoreTest`).
@@ -206,6 +217,8 @@ emptySet())`), чтобы выбор провайдеров при выключ�
   - `app/src/test/kotlin/io/github/puflik/plinth/online/OnlineSwitchProvidersTest.kt`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/DataStoreOnlineSettingsTest.kt`
   - `app/src/test/kotlin/io/github/puflik/plinth/ui/settings/OnlineSourcesProvidersViewModelTest.kt`
+  - `app/src/test/kotlin/io/github/puflik/plinth/online/GatedOnlineRepositoryTest.kt` — в коммите тестов только подпись `setEnabled(enabled, disabled)` у тестового
+    двойника («a switch that fails still lets the search through»): иначе он «overrides nothing»; утверждения те же
   - `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineSettings.kt`, `FakeOnlineRepository.kt`, `OnlineRepositoryContractTest.kt`
     (в двух фейках уже новый API; в контракте — три новых случая в конце)
 
@@ -302,7 +315,15 @@ Internet Archive; включить, а Internet Archive выключить → �
 - **Rust.** Патч — `yu3g1-reference-implementation-rust.patch` в папке заметок сессии (11 строк в `online_api.rs`). Все 8 тестов `yu3g_tests` зелёные; весь `plinth-ffi` — 161 тест зелёный
   (с 13 исправленными вызовами); `cargo clippy -p plinth-ffi --all-targets -- -D warnings` чисто; `cargo fmt --check` — настоящих `Diff in` нет.
   Мутанты: **M1** — `archive` игнорируется (Internet Archive всегда создаётся) — падают 5 тестов (2, 3, 4, 5, 7); **M2** — при `archive == false` пропадают и провайдеры платформы — падают 2 (2, 5).
-- **Kotlin.** _(результат прогона — ниже, если успел; иначе исполнитель проходит сам)_
+- **Kotlin.** Патч — `yu3g1-reference-implementation-full.patch` (Rust + Kotlin без новых файлов) и `yu3g1-reference-new-files/` (`ActiveSources.kt`,
+  `OnlineProviderIds.kt`) в папке заметок; Compose-строки провайдеров и ресурсы в нём **не сделаны** — только модель экрана. На нём (Windows): `OnlineProviderIdsTest` 3/3,
+  `ActiveSourcesTest` 6/6, `OnlineSwitchProvidersTest` 5/5, `OnlineSourcesProvidersViewModelTest` 4/4, контракт фейка (`FakeOnlineRepositoryTest`) 14/14 с тремя новыми
+  случаями; старые `GatedOnlineRepositoryTest` 11, `OnlineSwitchTest` 3, `RussianTranslationTest` 4 — зелёные; `compileGithubDebugAndroidTestKotlin` собирается;
+  `ktlintCheck` и `detekt` к тестам замечаний не дали. **`DataStoreOnlineSettingsTest`: 3 из 6 падают `IOException` в `FileStorage.kt:114`** — известная беда
+  Windows (вторая запись в тот же файл; так же падают `DataStore*SettingsTest`); эти три **не проверены, нужен CI на Linux**. Первый прогон нашёл, что
+  `GatedOnlineRepositoryTest` держит свой двойник `OnlineRepository.setEnabled(Boolean)` — поправлен в `61afd61`. **Мутанты Kotlin не гонялись**; заготовка —
+  `mutate_kotlin.py` в папке заметок (K1 — набор доходит при выключенном главном; K2 — архив всегда включён; K3 — включение стирает набор; K4 — переключатель
+  провайдера в модели экрана наоборот).
 
 ## Дальше: остальные задачи Ю3г
 
