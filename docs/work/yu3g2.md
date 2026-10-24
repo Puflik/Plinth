@@ -354,10 +354,14 @@ CI ветки читается без токена: `https://api.github.com/repo
 *fdroid* (`app-fdroid-release.apk`, 0.2.3-fdroid, тот же эмулятор): запуск, поиск «piano» — секция YouTube есть; игра пошла через 1,4 с после «Play», за 30 с позиция 0 → 28,4 с, `state=3`; `FATAL EXCEPTION`,
 `NoSuch*`, `ClassNotFound`, `ReferenceError`, 403 — нет. После прогона `uninstall`, эмулятор погашен.
 
+*API 30* (`Plinth_API_30`, `app-github-release.apk`, пустые данные; отладочный `….plinth.debug` на эмуляторе не тронут): сценарий пройден целиком. Отличия от 36: разрешение на музыку — «Deny»;
+в `uiautomator dump` нижнее меню и «Skip all» без координат — тапы по скриншоту; формат `dumpsys media_session` — `PlaybackState {state=3, …}` без имён (мой разбор сперва не понял — исправил, игра шла).
+Снятый перед этим Pause/Play: Play перезапускает трек с 0. После прогона `uninstall`, эмулятор погашен.
+
 **Таблица устройств** (заполнить по ходу, строка на API):
 
 | API | Эмулятор | Поиск «piano» / кириллицей (YouTube, строк) | Старт игры, с | Позиция через 60 с (было → стало) | Перемотка (→ 70 % / → 10 %; возобновление, с) | Ошибки в logcat |
 |---|---|---|---|---|---|---|
 | 36 | `Medium_Phone_API_36.0` | «piano»: секция «YouTube», ≥ 19 строк (9 + 10 на двух экранах), названия и исполнители читаются; **кириллицей — не набрана** (`adb input text` и `emu event text` — только ASCII) | 1,5 с от «Play» | 0 → 59,5 с за 60 с (через 10 с: 8,4 · 17,5 · 29,3 · 38,5 · 47,4 · 59,5), `state=3` на всех замерах | → 70 %: 153,7 → 217,3 с, `PLAYING` через 0,4 с; → 10 %: 220,3 → 30,9 с, `PLAYING` через 0,7 с; игра идёт дальше (38,4 → 59,5 с за 20 с) | нет `FATAL EXCEPTION`, `NoSuchMethodError`, `NoSuchFieldError`, `ClassNotFoundException`, `ReferenceError`, 403 (в процессе Plinth) |
-| 30 | `Plinth_API_30` | | | | | |
+| 30 | `Plinth_API_30` | «piano»: секция «YouTube» есть, ≥ 13 строк; **кириллицей — не набрана** (как на 36) | 3,1 с от «Play» (с опросом `adb`, ≈ 0,4 с на опрос) | 0 → 59,6 с за 60 с (через 10 с: 8,6 · 17,4 · 29,4 · 38,4 · 47,5 · 59,6), `state=3` на всех замерах | → 70 %: 72,1 → 219,7 с, `BUFFERING` ≈ 3,5 с, `PLAYING` через 3,8 с; → 10 %: 219,7 → 32,1 с, `PLAYING` через 0,8 с; игра идёт дальше (32,1 → 44,3 с за ≈ 13 с) | нет `FATAL EXCEPTION`, `NoSuchMethodError`, `NoSuchFieldError`, `ClassNotFoundException`, `ReferenceError`, 403 (в процессе Plinth); только предупреждения «hidden API» и `InputConnection` |
 | 26 | `Plinth_API_26` | | | | | |
