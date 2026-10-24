@@ -4,7 +4,7 @@
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
 
 - **Ветка:** `work/yu3g2` · **Ворктри:** `C:\claude\Plinth-yu3g2`
-- **Основа:** `main` на `c6f5939` · **Коммит тестов:** `<хеш>` (первый в ветке)
+- **Основа:** `main` на `c6f5939` · **Коммит тестов:** `b85368a` (первая редакция тестов и файла — `dcd9b98`; `R8OutputGuardTest` поправлен после прогона на настоящей сборке)
 - **Откуда:** набросок `docs/work/yu3g1.md`, «Дальше: остальные задачи Ю3г», пункт yu3g2; `docs/work/yu3a.md` §5 п. 1, 4, 7 и §7;
   `docs/work/yu3v.md` п. К «R8» и «Что не проверено» («релиз до Ю3г не выпускать»).
 
@@ -53,8 +53,8 @@ Release-сборка YouTube работает. `app/proguard-rules.pro` держ
 - Из спайка **не берутся** `-keep class org.mozilla.javascript.* {*;}`, `…engine.**` (покрыты `org.mozilla.javascript.**`), `-keep class javax.script.**` и
   `-keep class jdk.dynalink.**` (таких классов на Android нет: `rhino-engine-1.8.1.jar` несёт только `org/mozilla/javascript/engine/*`). Если R8 всё же попросит —
   добавить и записать в отчёт.
-- **Пять строк `-dontwarn java.beans.*` из Ю3в удаляются.** Планировщик проверил: с набором выше `minifyGithubReleaseWithR8` проходит и без них (41 с, предупреждений нет) — они были
-  нужны, пока Rhino не стоял под `-keep`. Исполнитель повторяет это для обеих flavor; если R8 всё же падает на `java.beans.*` — вернуть одной строкой `-dontwarn java.beans.**` с честным
+- **Пять строк `-dontwarn java.beans.*` из Ю3в удаляются.** Планировщик проверил: с набором выше `minifyGithubReleaseWithR8` проходит и без них (41 с, предупреждений нет).
+  Исполнитель повторяет это для обеих flavor; если R8 всё же падает на `java.beans.*` — вернуть одной строкой `-dontwarn java.beans.**` с честным
   комментарием (Rhino ссылается на пакет, которого на Android нет, эти ветки не исполняются) и написать об этом в отчёте. Слов «только -dontwarn», «до Ю3г», «релиз не выпускать»
   в файле не остаётся.
 - **Предупреждение `Unexpected reference to missing service class: META-INF/services/javax.script.ScriptEngineFactory`.** Источник: `rhino-engine-1.8.1.jar`
