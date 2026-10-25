@@ -45,19 +45,23 @@ import io.github.puflik.plinth.ui.common.rememberSafeUriHandler
 
 /**
  * Вкладка «Настройки»: стартовый экран (F3), язык приложения (12.12, только
- * Android 13+), папки фонотеки (C2.5), копия данных (C4) и диагностика (G1.3).
+ * Android 13+), папки фонотеки (C2.5), копия данных (C4), диагностика (G1.3)
+ * и «О приложении» (Ю3г) — последней секцией.
  *
  * Папки — что сканировать и что пропускать; выбираются системным диалогом
  * (`OpenDocumentTree`), до библиотеки доходят после «Пересканировать».
+ * [onOpenLicenses] открывает экран «Лицензии» поверх вкладок.
  */
 @Composable
 fun SettingsScreen(
+    onOpenLicenses: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FolderSettingsViewModel = hiltViewModel(),
     start: StartScreenSettingViewModel = hiltViewModel(),
     diagnostics: DiagnosticsViewModel = hiltViewModel(),
     backup: BackupViewModel = hiltViewModel(),
     online: OnlineSourcesViewModel = hiltViewModel(),
+    about: AboutViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val backupState by backup.uiState.collectAsState()
@@ -103,6 +107,11 @@ fun SettingsScreen(
         backupSection(backupState, onPick = pickBackupFolder, onDismissPending = backup::onDismissPending)
         diagnosticsSection(onSaveLog = saveLog, onReport = { uriHandler.openUri(diagnostics.issueUrl) })
         vendorGuideItem(onOpen = { vendorGuide = true })
+        aboutSection(
+            about.details,
+            onOpenSource = { uriHandler.openUri(about.details.sourceUrl) },
+            onOpenLicenses = onOpenLicenses,
+        )
     }
 }
 

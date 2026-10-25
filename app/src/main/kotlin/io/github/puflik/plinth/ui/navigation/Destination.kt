@@ -20,7 +20,7 @@ import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel.Companion.ARG_TITL
  * Перечень экранов приложения (A2.1).
  *
  * Вкладки нижней навигации — подмножество [tabs]; у них есть подпись и
- * значок. Экраны без вкладки (плеер, альбом, исполнитель, плейлисты) открываются поверх вкладок, их
+ * значок. Экраны без вкладки (плеер, альбом, исполнитель, плейлисты, лицензии) открываются поверх вкладок, их
  * [labelRes] и [iconRes] — `0`.
  */
 enum class Destination(
@@ -63,6 +63,9 @@ enum class Destination(
             "online-album?$ARG_PROVIDER={$ARG_PROVIDER}&$ARG_ITEM={$ARG_ITEM}&$ARG_ONLINE_TITLE={$ARG_ONLINE_TITLE}" +
                 "&$ARG_ONLINE_ARTIST={$ARG_ONLINE_ARTIST}&$ARG_YEAR={$ARG_YEAR}",
     ),
+
+    /** Лицензии сторонних компонентов (Ю3г): открываются из «О приложении» в настройках. */
+    Licenses(route = "licenses"),
     ;
 
     companion object {

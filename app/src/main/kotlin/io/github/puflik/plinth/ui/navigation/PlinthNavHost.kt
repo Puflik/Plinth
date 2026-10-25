@@ -25,6 +25,7 @@ import io.github.puflik.plinth.ui.online.OnlineAlbumScreen
 import io.github.puflik.plinth.ui.online.OnlineAlbumViewModel
 import io.github.puflik.plinth.ui.player.PlayerScreen
 import io.github.puflik.plinth.ui.search.SearchScreen
+import io.github.puflik.plinth.ui.settings.LicensesScreen
 import io.github.puflik.plinth.ui.settings.SettingsScreen
 
 /**
@@ -91,7 +92,10 @@ fun PlinthNavHost(
             OnlineAlbumScreen(onBack = back, onOpenPlayer = openPlayer)
         }
         composable(Destination.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(onOpenLicenses = { navController.navigate(Destination.Licenses.route) })
+        }
+        composable(Destination.Licenses.route) {
+            LicensesScreen(onBack = back)
         }
     }
 }

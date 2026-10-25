@@ -39,6 +39,9 @@ android {
         versionCode = 6
         versionName = "0.2.3"
 
+        // Ю3г: «О приложении» показывает тег NewPipeExtractor; тег записан один раз, в каталоге версий.
+        buildConfigField("String", "NEWPIPE_EXTRACTOR_VERSION", "\"${libs.versions.newpipeExtractor.get()}\"")
+
         // A2.4: четыре ABI — под них собирается Rust-ядро (плагин plinth.rust
         // берёт список отсюда). Фильтр отсекает и лишнее из зависимостей: JNA
         // несёт ещё armeabi и mips, под которые ядра нет.

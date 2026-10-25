@@ -467,3 +467,18 @@ _Черновик по ходу работы (Sonnet, 2026-10-25); итог — 
   Лицензия крейта лежит не в `Cargo.lock` (как написано в ячейке таблицы А), а в `Cargo.toml` крейта и на crates.io — в тексте так.
 - Проверка стража `Yu3g3NoticeTest` до появления Kotlin-части (класс не запустить: `Yu3g3AboutTest` не компилируется) — тем же
   алгоритмом на Python: 12 компонентов находятся, обе фразы (MIT, BSD-3) на месте, заглушек нет; настоящий прогон — в шаге 5.
+
+### Шаг 2. «О приложении» и «Лицензии»
+
+- Новые файлы `ui/settings/`: `AboutDetails.kt` (данные + `aboutDetails()`), `About.kt` (`aboutSection`), `AboutViewModel.kt`,
+  `LicensesScreen.kt`; правки: `ProjectLinks.SOURCE`, `Destination.Licenses`, `PlinthNavHost` (маршрут `licenses`;
+  `SettingsScreen(onOpenLicenses = …)`), `SettingsScreen` (`aboutSection` — последней, после `vendorGuideItem`), девять строк
+  EN/RU, `buildConfigField("String", "NEWPIPE_EXTRACTOR_VERSION", "\"${libs.versions.newpipeExtractor.get()}\"")` в `defaultConfig`
+  (литерала тега в `build.gradle.kts` нет, в комментарии тоже).
+- `LicensesScreen`: `Column` → `BackTopBar` + `Text(bodySmall)` в `verticalScroll`; чтение asset — `produceState` + `Dispatchers.IO`;
+  `IOException` не глотается: `AppLog.w("Licenses", …)` и на экране `licenses_load_failed` цветом ошибки (закрытый `NoticeState`:
+  `Loading` / `Loaded` / `Failed`). Перевод строк в тексте не трогаю: на Windows в рабочем каталоге `NOTICE` с CRLF — на эмуляторе
+  это видно сразу (шаг 5).
+- Прогон `ktlintCheck detekt testGithubDebugUnitTest --tests "*Yu3g3*" --tests "*RussianTranslationTest"` (github): ktlint и detekt
+  чисто; `Yu3g3AboutTest` 7/7, `Yu3g3NoticeTest` 5/5, `RussianTranslationTest` 4/4; в `Yu3g3ReleaseFilesTest` 5 из 9, остальные
+  четыре — как и должно быть до шагов 3–4 (заголовок `YoutubeDownloader.kt`, описание, `BUILD.md`, README).

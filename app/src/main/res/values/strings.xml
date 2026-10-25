@@ -118,6 +118,16 @@
     <string name="vendor_guide_open_settings">Open settings</string>
     <string name="vendor_guide_learn_more">More on dontkillmyapp.com</string>
     <string name="vendor_guide_close">Close</string>
+    <!-- Ю3г: «О приложении» в настройках и экран «Лицензии» -->
+    <string name="settings_about_title">About</string>
+    <string name="settings_about_version">Version</string>
+    <string name="settings_about_extractor">YouTube extractor</string>
+    <string name="settings_about_source">Source code</string>
+    <string name="settings_about_source_hint">Plinth is free software under the AGPL-3.0 licence</string>
+    <string name="settings_about_licenses">Licenses</string>
+    <string name="settings_about_licenses_hint">Third-party components and their licences</string>
+    <string name="licenses_title">Licenses</string>
+    <string name="licenses_load_failed">Could not read the licence text.</string>
     <string name="start_explain_empty">Showing the library: it has no music yet.</string>
     <string name="start_explain_recent">Continuing where you left off: you listened %1$s ago.</string>
     <string name="start_explain_recent_now">Continuing where you left off: you were listening a moment ago.</string>
