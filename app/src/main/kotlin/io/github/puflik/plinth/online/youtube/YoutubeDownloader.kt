@@ -1,3 +1,9 @@
+/*
+ * Сеть для NewPipeExtractor (GPL-3.0-or-later, https://github.com/TeamNewPipe/NewPipeExtractor):
+ * реализация его `Downloader`. Устроена по образцу `DownloaderImpl` приложения NewPipe (GPL-3.0-or-later,
+ * https://github.com/TeamNewPipe/NewPipe), переписана на `HttpURLConnection` и таблицу статусов ядра Plinth.
+ * Plinth — AGPL-3.0; раздел 13 GPL-3.0 разрешает такое соединение. Сторонние компоненты — в NOTICE.
+ */
 package io.github.puflik.plinth.online.youtube
 
 import org.schabi.newpipe.extractor.downloader.Downloader

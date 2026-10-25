@@ -482,3 +482,18 @@ _Черновик по ходу работы (Sonnet, 2026-10-25); итог — 
 - Прогон `ktlintCheck detekt testGithubDebugUnitTest --tests "*Yu3g3*" --tests "*RussianTranslationTest"` (github): ktlint и detekt
   чисто; `Yu3g3AboutTest` 7/7, `Yu3g3NoticeTest` 5/5, `RussianTranslationTest` 4/4; в `Yu3g3ReleaseFilesTest` 5 из 9, остальные
   четыре — как и должно быть до шагов 3–4 (заголовок `YoutubeDownloader.kt`, описание, `BUILD.md`, README).
+
+### Шаг 3. Заголовки и происхождение кода `online/youtube/`
+
+Заголовок (блочный комментарий над `package`, ровно как в плане, строки ≤ 120) — только у `YoutubeDownloader.kt`. Прочитал все пять
+файлов целиком; по строке на файл:
+
+| Файл | Итог |
+|---|---|
+| `YoutubeDownloader.kt` | **выведен из `DownloaderImpl` приложения NewPipe** (GPL-3.0-or-later): последовательность шагов запроса и запасной `User-Agent` (`Mozilla/5.0 (Windows NT 10.0; rv:128.0) … Firefox/128.0`) повторяют его; сеть переписана на `HttpURLConnection`, статусы — по таблице ядра. Заголовок поставлен |
+| `NewPipeYoutubeSource.kt` | **своё**: вызовы документированного API экстрактора (`NewPipe.init`, `ServiceList.YouTube.get*Extractor`, `YoutubeSearchQueryHandlerFactory.MUSIC_SONGS/MUSIC_ALBUMS`, `AudioStream`, `YoutubeParsingHelper` для VisionOS) — написание кода по API, не заимствование; срок вызова, заготовка потоков, перевод бед, itag 251/140, разбор адресов — собственные; комментариев и последовательностей, перенесённых из NewPipe или экстрактора, нет |
+| `CallBudget.kt` | **своё**: срок вызова на `ThreadLocal` по монотонным часам; к NewPipe отношения нет |
+| `HttpStatusTable.kt` | **своё**: интерфейс над таблицей статусов ядра (Ю2) |
+| `YoutubeSource.kt` | **своё**: интерфейс источника и модели результатов |
+
+Переносов, о которых нужно спрашивать Opus, не нашёл.
