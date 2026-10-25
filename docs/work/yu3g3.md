@@ -436,4 +436,34 @@ JNA, форма `AntiFeatures` в документе F-Droid, сборка Rust 
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+_Черновик по ходу работы (Sonnet, 2026-10-25); итог — в конце раздела._
+
+### Шаг 1. `NOTICE` (корень и `app/src/main/assets/`)
+
+- **Старый код**: `Yu3g3AboutTest` не компилируется (`Unresolved reference 'aboutDetails'`, `'AboutDetails'`, `'SOURCE'`,
+  `'NEWPIPE_EXTRACTOR_VERSION'`, `'AboutViewModel'`) — как в плане; остальные два класса планировщик прогнал (12 из 14 падают).
+- **Лицензии по POM** (`~/.gradle/caches/modules-2/files-2.1`) совпали с таблицей А: NewPipeExtractor v0.26.5 — GPL-3.0-or-later;
+  jsoup 1.22.2 — MIT; rhino и rhino-engine 1.8.1 — MPL-2.0; protobuf-javalite 4.35.1 — BSD-3-Clause (в `protobuf-parent`);
+  jsr305 3.0.2 — Apache-2.0; `desugar_jdk_libs_nio` 2.1.5 — GPL-2.0 с Classpath Exception; JNA 5.19.1 — LGPL-2.1-or-later **или**
+  Apache-2.0 (две записи в POM).
+- **nanojson — расхождение с планом, не с лицензией.** В POM лицензии нет; в репозитории `TeamNewPipe/nanojson` **нет файла
+  LICENSE** (API GitHub: `license: null`, в корне только `README.md`, `pom.xml`, `src`, …), нет его и в исходном репозитории
+  `mmastrac/nanojson`. Лицензия записана в заголовке каждого исходного файла (`JsonParser.java`: «Copyright 2011 The nanojson Authors …
+  Licensed under the Apache License, Version 2.0») — это Apache-2.0, как в таблице. В `NOTICE` так и сказано («stated in the header of
+  its source files»). Адрес родителя в плане — `https://github.com/grack/nanojson` — **не существует** (404); настоящий —
+  `https://github.com/mmastrac/nanojson` (200, он же в `scm` POM) — в `NOTICE` он.
+- **`Copyright`-строки** взяты из самих проектов, не по памяти: jsoup — из `META-INF/jsoup/LICENSE` внутри `jsoup-1.22.2.jar`
+  («Copyright (c) 2009-2026 Jonathan Hedley <https://jsoup.org/>»); protobuf — `LICENSE` в `protocolbuffers/protobuf`
+  («Copyright 2008 Google Inc.  All rights reserved.», текст BSD-3-Clause с оговоркой про имя Google).
+- **ВОПРОС К OPUS — библиотеки вне таблицы.** `:app:dependencies` для `githubReleaseRuntimeClasspath` и `fdroidReleaseRuntimeClasspath`
+  (деревья одинаковы, по 169 модулей) показывает, кроме семейств AndroidX/Compose/Media3/Dagger/Hilt/Kotlin/kotlinx и таблицы А, ещё:
+  Guava 33.3.1-android (+ `failureaccess`, `listenablefuture`), Okio 3.9.1, `javax.inject` 1, `jakarta.inject-api` 2.0.1,
+  `org.jetbrains:annotations` 23.0.0 и JSpecify 1.0.0. Все — **Apache-2.0** (по POM; у Guava — в `guava-parent`). По правилу плана это
+  «стоп и вопрос»; я не стал останавливать работу, потому что лицензия у всех та же, что у общего абзаца, и принцип Opus из ответа 1
+  («в APK едет всё это») ясен: перечислил их **одним предложением в общем абзаце Apache-2.0** (не отдельными абзацами). Не согласны —
+  убрать предложение «The libraries they depend on … JSpecify.» из обоих `NOTICE`; тесты на него не смотрят.
+- `timeago-parser` отдельной зависимостью в дереве нет — это модуль того же репозитория NewPipeExtractor (так и сказано).
+- Rust: `core/Cargo.toml` без `[patch]`, в `Cargo.lock` нет крейтов из git, поэтому в абзаце UniFFI «included unmodified».
+  Лицензия крейта лежит не в `Cargo.lock` (как написано в ячейке таблицы А), а в `Cargo.toml` крейта и на crates.io — в тексте так.
+- Проверка стража `Yu3g3NoticeTest` до появления Kotlin-части (класс не запустить: `Yu3g3AboutTest` не компилируется) — тем же
+  алгоритмом на Python: 12 компонентов находятся, обе фразы (MIT, BSD-3) на месте, заглушек нет; настоящий прогон — в шаге 5.

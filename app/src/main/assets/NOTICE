@@ -1,0 +1,68 @@
+Licences of Plinth and of the third-party components it includes. The same text is shown in the app on the Licenses screen.
+
+Plinth — AGPL-3.0
+https://github.com/Puflik/Plinth
+Plinth is free software under the GNU Affero General Public License, version 3; the licence text is the file LICENSE of the source code. Plinth includes NewPipeExtractor (GPL-3.0-or-later), and section 13 of the GPL-3.0 allows such code to be combined with code under the AGPL-3.0, so the combined work is distributed under the AGPL-3.0.
+
+NewPipeExtractor — GPL-3.0-or-later
+https://github.com/TeamNewPipe/NewPipeExtractor
+The library that searches YouTube and finds its streams; the same repository contains the module timeago-parser. The licence text is at https://www.gnu.org/licenses/gpl-3.0.txt
+
+nanojson — Apache-2.0
+https://github.com/TeamNewPipe/nanojson
+A JSON parser and writer used by NewPipeExtractor; this is the NewPipe fork of https://github.com/mmastrac/nanojson. The licence, Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0), is stated in the header of its source files.
+
+jsoup — MIT
+https://jsoup.org
+An HTML parser used by NewPipeExtractor. Copyright (c) 2009-2026 Jonathan Hedley <https://jsoup.org/>. The licence text is reproduced below.
+
+Rhino (rhino, rhino-engine) — MPL-2.0
+https://github.com/mozilla/rhino
+A JavaScript engine used by NewPipeExtractor to run the scripts of YouTube that are needed to build stream addresses. The library is included unmodified; its version is set by the NewPipeExtractor release in use. Source code: https://github.com/mozilla/rhino. The licence text is at https://www.mozilla.org/MPL/2.0/
+
+protobuf-javalite — BSD-3-Clause
+https://github.com/protocolbuffers/protobuf
+The lite runtime of Protocol Buffers for Java, used by NewPipeExtractor to read messages of YouTube. Copyright 2008 Google Inc. All rights reserved. The licence text is reproduced below.
+
+jsr305 — Apache-2.0
+http://findbugs.sourceforge.net/
+Annotations (javax.annotation) that NewPipeExtractor depends on. The optimizer of the app may leave them out of the APK; they are listed all the same. The licence text is at https://www.apache.org/licenses/LICENSE-2.0
+
+desugar_jdk_libs_nio — GPL-2.0-only WITH Classpath-exception-2.0
+https://github.com/google/desugar_jdk_libs
+Java APIs of Android 13 (API 33) for Android 8 to 12 (API 26 to 32), for example URLEncoder.encode with a Charset and Collectors.toUnmodifiableList, which NewPipeExtractor calls. The Classpath exception lets independent modules be linked with it under their own licence terms. The licence text is at https://github.com/google/desugar_jdk_libs/blob/master/LICENSE
+
+UniFFI — MPL-2.0
+https://github.com/mozilla/uniffi-rs
+The runtime of UniFFI (the crates uniffi, uniffi_core and their companions) is linked into the native library libplinth_ffi.so of Plinth. The crates are included unmodified. Source code: https://github.com/mozilla/uniffi-rs; their versions are in core/Cargo.lock in the source code of Plinth. The licence text is at https://www.mozilla.org/MPL/2.0/
+
+AndroidX, Jetpack Compose, Media3, Dagger and Hilt, Kotlin and kotlinx.coroutines — Apache-2.0
+https://www.apache.org/licenses/LICENSE-2.0
+The libraries the app is built on, from Google and JetBrains. The libraries they depend on are under the same licence: Guava, Okio, javax.inject, jakarta.inject, JetBrains Annotations and JSpecify. The licence text is at the address above.
+
+JNA — LGPL-2.1-or-later OR Apache-2.0
+https://github.com/java-native-access/jna
+Java Native Access, which the Kotlin code of Plinth uses to call its native core. JNA is available under either licence; it is used under Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+
+Rust crates of the core — MIT, Apache-2.0, MPL-2.0, Zlib, Unlicense, 0BSD, Unicode-3.0
+The native core of Plinth is written in Rust and uses open-source crates. Most of them are licensed under MIT or Apache-2.0; the others under MPL-2.0 (the uniffi crates, see above), Zlib, Unlicense, 0BSD and Unicode-3.0. The list of the crates and their exact versions is the file core/Cargo.lock in the source code; each crate states its licence in its own Cargo.toml and on https://crates.io
+
+MIT License (jsoup)
+Copyright (c) 2009-2026 Jonathan Hedley <https://jsoup.org/>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+BSD 3-Clause License (protobuf-javalite)
+Copyright 2008 Google Inc. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name of Google Inc. nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
