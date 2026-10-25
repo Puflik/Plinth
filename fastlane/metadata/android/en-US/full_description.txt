@@ -8,6 +8,7 @@ more sources and sync between devices.
 <li>Plays your music in the background, with notification, lock-screen and headset controls, and resumes where you left off.</li>
 <li>Reads tags straight from your files on the phone and SD cards: tracks, albums, artists and folders in natural order, and search.</li>
 <li>Searches the Internet Archive and plays what it finds: FLAC on Wi-Fi, MP3 on a metered network. Online sources can be turned off.</li>
+<li>Searches YouTube and plays what it finds, through the NewPipe extractor: no Google account and no Google libraries. YouTube changes without notice, so this source may stop working for a while until the extractor is updated.</li>
 <li>Likes, listening history and playlists, with M3U, M3U8 and PLS import and M3U8 export.</li>
 <li>Keeps your likes, playlists and history through a reinstall: a copy in a folder you choose and in Android backup. Songs you moved, renamed or retagged are found again.</li>
 <li>Skips files that can't be played, and explains what to do when your phone's firmware stops background playback.</li>
@@ -17,10 +18,14 @@ more sources and sync between devices.
 <b>Privacy</b>
 <ul>
 <li>No accounts, no ads, no analytics or telemetry.</li>
-<li>While online sources are on, searches and streams go to archive.org.</li>
+<li>While online sources are on, searches and streams go to archive.org and, if YouTube is on, to youtube.com and Google servers, which can see your IP address. Both sources are on by default; turn them off in Online sources in the settings.</li>
 <li>Your likes, playlists and history go to Android backup only when the phone encrypts it; your music and library stay on the device.</li>
 <li>A log or a crash report leaves the device only if you share it yourself.</li>
 </ul>
+
+YouTube is a non-free network service, so F-Droid marks Plinth with the
+NonFreeNet anti-feature. Plinth is not affiliated with or endorsed by YouTube
+or Google.
 
 Plinth is written entirely by AI (Claude) under its author's direction: an
 experiment in how well AI can build and maintain a large app.

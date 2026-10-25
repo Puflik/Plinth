@@ -48,6 +48,68 @@ Rust собирается профилем `release` и для отладочн�
 LTO и `strip` (размер, A2.4) и **`panic = "unwind"`**. С `abort` перестаёт
 работать перехват паник на границе.
 
+## Выпуск и F-Droid
+
+YouTube входит в обе сборки, `github` и `fdroid` (решение автора, 2026-10-19). Метка `AntiFeatures: NonFreeNet` живёт в
+метаданных `fdroiddata`, а не в этом репозитории; `.fdroid.yml` не нужен (решение Opus, 2026-10-24). Описание для магазина —
+`fastlane/metadata/android/en-US/`: оно прямо говорит про YouTube, про «on by default» и «not affiliated with»; править его
+вместе с поведением приложения. Сторонние компоненты и их лицензии — файл `NOTICE`.
+
+Готовая запись для `fdroiddata` (черновик). Поля и их форма — по
+[Build Metadata Reference](https://f-droid.org/docs/Build_Metadata_Reference/); `AntiFeatures` записана словарём с пояснением,
+как в живой записи NewPipe, — сам справочник описывает её списком через запятую. В угловых скобках — то, что выставляет выпуск:
+
+```yaml
+Categories:
+  - Multimedia
+License: AGPL-3.0-only
+SourceCode: https://github.com/Puflik/Plinth
+IssueTracker: https://github.com/Puflik/Plinth/issues
+Changelog: https://github.com/Puflik/Plinth/releases
+AntiFeatures:
+  NonFreeNet:
+    en-US: YouTube is a non-free network service. It is on by default and can be turned off in Settings, Online sources.
+
+RepoType: git
+Repo: https://github.com/Puflik/Plinth.git
+
+Builds:
+  - versionName: <versionName>
+    versionCode: <versionCode>
+    commit: <полный хеш коммита выпуска>
+    subdir: app
+    gradle:
+      - fdroid
+    ndk: 28.2.13676358
+
+UpdateCheckMode: Tags
+AutoUpdateMode: Version
+```
+
+`License: AGPL-3.0-only`: в `LICENSE` и README нет «или новее». `ndk` — версия из `gradle/libs.versions.toml`, `subdir: app` —
+каталог, где Gradle кладёт `build/`, `gradle: - fdroid` — flavor `fdroid`.
+
+**Не проверено** (записано как есть, чтобы черновик не сошёл за готовое):
+
+- сборка Rust-ядра на сервере F-Droid: нужны `rustup`, `cargo-ndk` и Rust не старше `rust-version = "1.98"` из
+  `core/Cargo.toml`; при подаче нужен локальный `fdroid build`;
+- `versionName` в записи — как у собранного APK, а flavor `fdroid` добавляет к нему суффикс `-fdroid` (у 0.3.0 это
+  `0.3.0-fdroid`); как этот суффикс ложится на `UpdateCheckMode: Tags` и `AutoUpdateMode: Version` (справочник допускает
+  суффикс в `AutoUpdateMode`, например `Version +-fdroid %v`), тоже проверить локально;
+- JitPack как источник зависимости `com.github.TeamNewPipe:NewPipeExtractor`: у NewPipe он принят, для Plinth не проверялся.
+
+### Обновление экстрактора
+
+Сменили тег `newpipeExtractor` в `gradle/libs.versions.toml` (больше нигде он не записан):
+
+1. `./gradlew :app:dependencies --configuration githubReleaseRuntimeClasspath` (и то же для `fdroidReleaseRuntimeClasspath`) и
+   сверить список с `NOTICE`: не появились ли новые библиотеки, не сменились ли лицензии (лицензия — по блоку `<licenses>` POM
+   в кэше Gradle, `~/.gradle/caches/modules-2/files-2.1`).
+2. Править **оба** файла `NOTICE`: в корне и `app/src/main/assets/NOTICE` — это один текст, его показывает экран «Лицензии»;
+   `Yu3g3NoticeTest` падает, если копии разошлись.
+3. Перечитать `R8OutputGuardTest.KEPT_BY_NAME`: классы Rhino и экстрактора, до которых код доходит только по имени, R8 обязан
+   оставить; в новом выпуске их состав мог измениться.
+
 ## Размер APK (A2.4)
 
 Свежий замер по ABI — [`docs/testing/apk-size.md`](testing/apk-size.md)

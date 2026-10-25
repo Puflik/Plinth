@@ -124,7 +124,8 @@ cd core && cargo test --workspace    # Rust-ядро
 
 ## Лицензия
 
-GNU Affero General Public License v3.0 — текст в [LICENSE](LICENSE).
+GNU Affero General Public License v3.0 — текст в [LICENSE](LICENSE). Сторонние
+компоненты и их лицензии — в [NOTICE](NOTICE).
 
 Цель сформулирована прямо: никто не должен суметь форкнуть проект, сделать
 закрытую экосистему и выложить её продаваться.

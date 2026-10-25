@@ -129,7 +129,8 @@ cd core && cargo test --workspace    # the Rust core
 
 ## Licence
 
-GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
+GNU Affero General Public License v3.0 — see [LICENSE](LICENSE). Third-party
+components and their licences — see [NOTICE](NOTICE).
 
 The goal is blunt: nobody should be able to fork this into a closed ecosystem
 and sell it.

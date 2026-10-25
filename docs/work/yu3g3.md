@@ -497,3 +497,23 @@ _Черновик по ходу работы (Sonnet, 2026-10-25); итог — 
 | `YoutubeSource.kt` | **своё**: интерфейс источника и модели результатов |
 
 Переносов, о которых нужно спрашивать Opus, не нашёл.
+
+### Шаг 4. Описание для магазина, `docs/BUILD.md`, README
+
+- `full_description.txt` (2 273 знака из 4000): пункт про YouTube в «What it does now»; в «Privacy» вместо старой фразы — «…go to
+  archive.org and, if YouTube is on, to youtube.com and Google servers, which can see your IP address. Both sources are on by
+  default; turn them off in Online sources in the settings.»; абзац про `non-free`/`NonFreeNet` и «not affiliated with or endorsed by
+  YouTube or Google». `short_description.txt` и `title.txt` не тронуты. Вводный абзац («…albums and concerts from the Internet
+  Archive; later versions add more sources…») я **не менял**: правки плана его не называют, но после Ю3 он неполон — на выпуск 0.3.
+- `docs/BUILD.md`: новый раздел `## Выпуск и F-Droid` перед «Размером APK» — где живёт метка, готовая запись `fdroiddata`
+  (yaml), «Не проверено», подраздел «Обновление экстрактора».
+- **Форма `AntiFeatures`.** Build Metadata Reference описывает её как список через запятую (форма старого `.txt`); живая запись
+  NewPipe в `fdroiddata` (`metadata/org.schabi.newpipe.yml`, прочитал) — YAML-словарь `NonFreeNet: {en-US: …}`. В `BUILD.md` — словарь,
+  он же в плане («с английским пояснением»). Остальные поля (`subdir`, `gradle:` блочным списком, `ndk` строкой `28.2.13676358`,
+  `UpdateCheckMode: Tags` + `AutoUpdateMode: Version` «без шаблона» для Tags) совпали со справочником. Справочник требует в `commit`
+  полный хеш, не тег — в записи заполнитель `<полный хеш коммита выпуска>`.
+- **Не проверено, так и написано в `BUILD.md`:** сборка Rust-ядра на сервере F-Droid; суффикс `-fdroid` в `versionName` flavor против
+  `Tags`/`Version` (справочник допускает `Version +-fdroid %v`); JitPack.
+- `README.md` и `README.ru.md`: одно предложение со ссылкой `[NOTICE](NOTICE)` в разделе «Licence»/«Лицензия»; версию и «Что дальше»
+  не трогал.
+- Прогон `testGithubDebugUnitTest --tests "*Yu3g3*" --tests "*RussianTranslationTest"`: 25 из 25 (5 + 9 + 7 + 4).
