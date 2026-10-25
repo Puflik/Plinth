@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings: each online source, Internet Archive and YouTube, has its own
   switch. A source that is switched off gets no requests; its saved tracks
   stay in the library and play again when it is switched back on.
+- Settings: an About section with the app version, the YouTube extractor
+  version and a link to the source code, and a Licenses screen with the
+  third-party components and their licences (also in the NOTICE file).
 
 ### Fixed
 
