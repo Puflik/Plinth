@@ -83,7 +83,8 @@ Apache-2.0) — по адресу.
 
 ### Б. «О приложении» — секция в конце настроек
 
-Решение Opus 2026-10-24, п. 9. Новый файл `ui/settings/About.kt`:
+Решение Opus 2026-10-24, п. 9. Новый файл `ui/settings/AboutDetails.kt` (имя файла = имя единственного класса в нём, иначе
+detekt `MatchingDeclarationName`):
 
 ```kotlin
 /** Что показывает «О приложении»: значения готовы к показу, Android-типов нет. */
@@ -98,7 +99,11 @@ data class AboutDetails(
 }
 
 fun aboutDetails(info: AppInfo, extractorVersion: String = BuildConfig.NEWPIPE_EXTRACTOR_VERSION): AboutDetails
+```
 
+Новый `ui/settings/About.kt` — секция:
+
+```kotlin
 internal fun LazyListScope.aboutSection(details: AboutDetails, onOpenSource: () -> Unit, onOpenLicenses: () -> Unit)
 ```
 
@@ -163,12 +168,14 @@ internal fun LazyListScope.aboutSection(details: AboutDetails, onOpenSource: () 
 
 ```kotlin
 /*
- * Сеть для NewPipeExtractor (GPL-3.0-or-later, https://github.com/TeamNewPipe/NewPipeExtractor): реализация его `Downloader`.
- * Устроена по образцу `DownloaderImpl` приложения NewPipe (GPL-3.0-or-later, https://github.com/TeamNewPipe/NewPipe),
- * переписана на `HttpURLConnection` и таблицу статусов ядра Plinth. Plinth — AGPL-3.0; раздел 13 GPL-3.0 разрешает такое
- * соединение. Сторонние компоненты — в NOTICE.
+ * Сеть для NewPipeExtractor (GPL-3.0-or-later, https://github.com/TeamNewPipe/NewPipeExtractor):
+ * реализация его `Downloader`. Устроена по образцу `DownloaderImpl` приложения NewPipe (GPL-3.0-or-later,
+ * https://github.com/TeamNewPipe/NewPipe), переписана на `HttpURLConnection` и таблицу статусов ядра Plinth.
+ * Plinth — AGPL-3.0; раздел 13 GPL-3.0 разрешает такое соединение. Сторонние компоненты — в NOTICE.
  */
 ```
+
+(Строки ≤ 120 знаков: detekt `MaxLineLength` считает и комментарии.)
 
 Остальные файлы `online/youtube/` (`CallBudget`, `HttpStatusTable`, `NewPipeYoutubeSource`, `YoutubeSource`) исполнитель читает на
 происхождение: код, написанный по API экстрактора (вызовы `ServiceList.YouTube`, `StreamInfo`…), заимствованием не считается.
@@ -238,7 +245,8 @@ internal fun LazyListScope.aboutSection(details: AboutDetails, onOpenSource: () 
   - `NOTICE` (новый), `app/src/main/assets/NOTICE` (новый)
   - `app/build.gradle.kts` (только `buildConfigField` в `defaultConfig`)
   - `app/src/main/kotlin/io/github/puflik/plinth/core/config/ProjectLinks.kt` (`SOURCE`)
-  - `app/src/main/kotlin/io/github/puflik/plinth/ui/settings/About.kt` (новый), `AboutViewModel.kt` (новый), `LicensesScreen.kt` (новый), `SettingsScreen.kt`
+  - `app/src/main/kotlin/io/github/puflik/plinth/ui/settings/AboutDetails.kt` (новый), `About.kt` (новый), `AboutViewModel.kt` (новый),
+    `LicensesScreen.kt` (новый), `SettingsScreen.kt`
   - `app/src/main/kotlin/io/github/puflik/plinth/ui/navigation/Destination.kt`, `PlinthNavHost.kt`
   - `app/src/main/res/values/strings.xml`, `app/src/main/res/values-ru/strings.xml`
   - `app/src/main/kotlin/io/github/puflik/plinth/online/youtube/YoutubeDownloader.kt` (только заголовок над `package`)
@@ -256,7 +264,46 @@ internal fun LazyListScope.aboutSection(details: AboutDetails, onOpenSource: () 
 
 ## Тесты (написаны в коммите тестов)
 
-_Заполняется после написания тестов._
+Все — JVM (`testGithubDebugUnitTest`, `testFdroidDebugUnitTest`), читают файлы репозитория, сеть не нужна. Корень находит
+`RepoFiles` (вверх до `settings.gradle.kts`), `SourceTree` даёт `src/main`. Исполнитель может добавить свои тесты в новых файлах.
+
+`Yu3g3NoticeTest` — `NOTICE` (раздел А):
+
+| Тест | Вход → ожидание | На старом коде |
+|---|---|---|
+| `notice is a plain utf-8 file at the repository root` | `NOTICE` в корне есть, не пуст, без BOM | **падает**: «В корне репозитория нет файла NOTICE» |
+| `every component has a paragraph with its name and licence in the first line and an address` | для 12 компонентов таблицы А: абзац (через пустую строку), первая строка которого начинается с имени и содержит лицензию; в абзаце адрес и обязательные слова (`source` у Rhino и UniFFI, `Copyright` у jsoup и protobuf, `section 13` у Plinth, `core/Cargo.lock`…) | **падает**: «В NOTICE не хватает или неполно: […]» |
+| `mit and bsd texts are reproduced in full` | в тексте (пробелы сжаты) обе фразы — MIT («Permission is hereby granted, free of charge…») и BSD-3 («Redistribution and use in source and binary forms…») | **падает** |
+| `no placeholders are left in the text` | нет слов TODO/TBD/FIXME/XXX | проходит (охрана) |
+| `the copy in assets is the same text` | `app/src/main/assets/NOTICE` есть и равен корневому после `\r\n`→`\n` | **падает**: «Нет app/src/main/assets/NOTICE» |
+
+`Yu3g3ReleaseFilesTest` — версия, заголовок, описание, BUILD.md, README, подключение (разделы Б–З):
+
+| Тест | Вход → ожидание | На старом коде |
+|---|---|---|
+| `the extractor tag is written once, in the version catalog` | в `app/build.gradle.kts` есть `buildConfigField`, `NEWPIPE_EXTRACTOR_VERSION`, `libs.versions.newpipeExtractor`; литерала тега (`v0.26.5`) нет | **падает** |
+| `build config carries the tag of the version catalog` | `BuildConfig.NEWPIPE_EXTRACTOR_VERSION` (рефлексией) равен тегу из `libs.versions.toml` | **падает**: «В BuildConfig нет поля» |
+| `the youtube downloader names the code it follows` | текст над `package` в `YoutubeDownloader.kt` содержит `https://github.com/TeamNewPipe/NewPipe`, `GPL-3.0-or-later`, `AGPL-3.0` | **падает** |
+| `the store description tells the truth about youtube` | в `full_description.txt` (без учёта регистра): `YouTube`, `youtube.com`, `Google`, `NewPipe`, `non-free`, `on by default`, `not affiliated with`, `Online sources`; старой фразы «…go to archive.org.» нет | **падает** |
+| `store texts fit the store limits` | полное описание ≤ 4000, краткое ≤ 80, название ≤ 50 знаков | проходит (охрана) |
+| `build md has an f-droid section with a ready record for fdroiddata` | заголовок `##`/`###` с «F-Droid» и yaml-блок: `AntiFeatures:` с `NonFreeNet`, `License: AGPL-3.0…`, `SourceCode: https://github.com/Puflik/Plinth`, `subdir: app`, `gradle:` → `- fdroid`, `UpdateCheckMode:`, слова `fdroiddata` и `NOTICE` | **падает** |
+| `both readmes point at the notice` | в `README.md` и `README.ru.md` есть `](NOTICE)` | **падает** |
+| `about is the last section of the settings and licenses is a screen of the nav host` | в `SettingsScreen.kt` `aboutSection(` стоит после `vendorGuideItem(onOpen`; `PlinthNavHost.kt` содержит `composable(Destination.Licenses.route)` и `LicensesScreen(` | **падает** |
+| `about strings exist in english and russian` | девять ключей раздела Б в `values/strings.xml` и `values-ru/strings.xml` | **падает** |
+
+`Yu3g3AboutTest` (`ui/settings`) — данные «О приложении» и маршрут. Новый API: на старом коде тест **не компилируется** (нет `AboutDetails`,
+`aboutDetails`, `AboutViewModel`, `ProjectLinks.SOURCE`, `Destination.Licenses`, `BuildConfig.NEWPIPE_EXTRACTOR_VERSION`; сигнатуры — разделы Б–Г).
+`AppInfo("0.3.0", "github", …)` и `v0.26.5` — вход тестов.
+
+| Тест | Вход → ожидание |
+|---|---|
+| `details come from the build info and the extractor tag` | `aboutDetails(github, "v0.26.5")` == `AboutDetails("0.3.0", "github", "v0.26.5", ProjectLinks.SOURCE)` |
+| `the version line shows the version and the flavor as the diagnostics line does` | `"0.3.0 (github)"`, `"0.3.0-fdroid (fdroid)"`; `AppInfo.line` содержит ту же подстроку |
+| `the extractor line names the extractor and its tag` | `"NewPipeExtractor v0.26.5"` |
+| `without an explicit tag the tag of this build is shown` | `aboutDetails(info).extractorVersion == BuildConfig.NEWPIPE_EXTRACTOR_VERSION`, он не пуст |
+| `the view model offers the details of the build it runs in` | `AboutViewModel(info).details == aboutDetails(info)` |
+| `the source link is the project repository` | `ProjectLinks.SOURCE == "https://github.com/Puflik/Plinth"` |
+| `licenses is a screen over the tabs with a route of its own` | `Destination.Licenses.route == "licenses"`, `labelRes == 0`, не среди `Destination.tabs`, маршруты всех `Destination` различны |
 
 ## Проверки
 
@@ -298,7 +345,32 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"
 
 ## На что смотреть при чтении плана (Opus)
 
-_Заполняется после написания тестов._
+Данных пользователя задача не трогает (нет формата на диске, ключей DataStore, миграций), поэтому исполнитель берёт её сразу после пуша;
+ниже — решения, которые я принял сам и которые стоит оспорить до слияния, а не до исполнителя.
+
+1. **NOTICE шире перечня автора.** К NewPipeExtractor, Rhino, jsoup, protobuf, nanojson и десугарингу добавлены: jsr305 (зависимость
+   экстрактора); **UniFFI — MPL-2.0** (восемь крейтов `uniffi*` в `libplinth_ffi.so`, найдено `cargo metadata`; MPL требует
+   указать, где исходники, и для Rust-части); общие абзацы про AndroidX/Compose/Media3/Dagger/Kotlin (Apache-2.0), JNA (двойная
+   лицензия, берём Apache-2.0) и Rust-крейты. Перечень «только YouTube» был бы неполным: в APK едет и остальное. Хотите уже —
+   урезать три общих абзаца вместе со стражем (`Yu3g3NoticeTest.COMPONENTS`).
+2. **Десугаринг — не Apache, а GPL-2.0 с Classpath Exception** (POM `desugar_jdk_libs_nio` 2.1.5; `yu1.md` §8 его не проверял).
+   Совместимо с AGPL-3.0: исключение разрешает линковку с кодом под любой лицензией. Записано в NOTICE как есть.
+3. **YouTube включён по умолчанию.** В yu3g1 хранится набор *выключенных*, вариант «новый провайдер выключен у всех» отвергнут. Значит,
+   у тех, кто ставил 0.2.x ради Internet Archive, после обновления запросы пойдут и на youtube.com/Google. Описание для F-Droid
+   говорит это прямо («on by default»). Хотите «выключен до согласия» — отдельная задача (ключ `online_providers_off`, данные
+   пользователя), не эта.
+4. **README: только ссылка на NOTICE.** «Версия 0.2.3», «Что дальше» (там YouTube стоит в v1.0, хотя волна «Ю» идёт в 0.3) и
+   «F-Droid после v1.0» не трогаю — это выпуск 0.3 (Opus). Верно?
+5. **Заголовок — только у `YoutubeDownloader.kt`.** Файл прочитан: код написан заново под `HttpURLConnection`, но шаги запроса и запасной
+   `User-Agent` повторяют `DownloaderImpl` NewPipe — заголовок честнее его отсутствия. Остальные файлы `online/youtube/` я не сверял
+   с NewPipe; проверку происхождения делает исполнитель и спрашивает при сомнении.
+6. **Два `NOTICE` под стражем равенства**, а не Gradle-копирование («Отвергнуто»). Цена — править два файла; расхождение сразу красное.
+7. **Запись для `fdroiddata` — черновик.** `License: AGPL-3.0-only` (в `LICENSE`/README нет «или новее»); сборку Rust на сервере F-Droid не
+   проверял (README: «F-Droid после v1.0»), в BUILD.md это сказано прямо. Форму `AntiFeatures` исполнитель сверяет с документом F-Droid.
+8. **Compose-экраны проверяются руками** (решение Opus yu3g1 п. 8); JVM-стражи держат данные: `AboutDetails`, строки, порядок секции,
+   маршрут, тег в `BuildConfig`, тексты. `RepoFiles` ищет корень по `settings.gradle.kts` и приводит `\r\n` к `\n` (на Windows `git` ставит CRLF).
+9. **Не здесь:** версия 0.2.3 → 0.3.0, `versionCode`, CHANGELOG, тег; озвучка значка источника (Ю5); тексты авторов Rust-крейтов
+   (`cargo-about`) — отдельная задача, если понадобится.
 
 ## Временная реализация и мутации
 
