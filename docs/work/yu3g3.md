@@ -436,7 +436,44 @@ JNA, форма `AntiFeatures` в документе F-Droid, сборка Rust 
 
 ## Отчёт исполнителя
 
-_Черновик по ходу работы (Sonnet, 2026-10-25); итог — в конце раздела._
+_Исполнитель: Sonnet 5.5, 2026-10-25. Ветка `work/yu3g3`, ворктри `C:\claude\Plinth-yu3g3`._
+
+### Итог
+
+**Сделано всё по плану (А–Ж и З), пятью коммитами после `4701caf`:** `4d25813` (`NOTICE`), `72971c2` («О приложении» и «Лицензии»),
+`9d1c5e6` (заголовок `YoutubeDownloader.kt`), `fe8f0a7` (описание, `BUILD.md`, README), последний — этот отчёт. Защищённые тесты не
+тронуты; файлов вне списка «Менять» нет.
+
+**Проверки** (Windows, подробнее — «Шаг 5»):
+
+- `Yu3g3NoticeTest` 5/5, `Yu3g3ReleaseFilesTest` 9/9, `Yu3g3AboutTest` 7/7, `RussianTranslationTest` 4/4 — в `github` и `fdroid`.
+- Весь набор: 867 из 874 в каждом flavor; 7 красных — `DataStore*SettingsTest` (`IOException: Unable to rename …`, `FileStorage.kt:114`), не из-за
+  задачи (**их семь, не четыре**: ещё три в `DataStoreOnlineSettingsTest` из yu3g1 — см. «Шаг 5»).
+- `ktlintCheck`, `detekt` — чисто; `lintGithubDebug` — 0 ошибок (24 прежних предупреждения, ни одного в строках задачи);
+  `assembleFdroidDebug` собирается.
+- Сверх плана: `assembleGithubRelease assembleFdroidRelease` (R8) — собираются, `assets/NOTICE` в обоих APK;
+  `R8OutputGuardTest` 3/3 и `R8RulesGuardTest` 5/5 при `PLINTH_REQUIRE_R8_OUTPUT=1`; release на эмуляторе — тот же экран.
+- Руками на эмуляторе все четыре пункта плана пройдены (английский, русский, тёмная тема), плюс ветка ошибки чтения и asset с CRLF.
+
+**Вопросы и отклонения — к Opus, по важности:**
+
+1. **Библиотеки вне таблицы А** (правило плана: «стоп и вопрос»). Не остановился, а ответил на ходу, как велит ваш ответ 1 («в APK
+   едет всё это»): Guava (+`failureaccess`, `listenablefuture`), Okio, `javax.inject`, `jakarta.inject-api`, JetBrains Annotations,
+   JSpecify — все Apache-2.0 по POM — названы **одним предложением в общем абзаце Apache-2.0** обоих `NOTICE`. Не согласны —
+   убрать предложение «The libraries they depend on are under the same licence: …» (тесты на него не смотрят). Подробности — «Шаг 1».
+2. **nanojson**: файла LICENSE нет ни в `TeamNewPipe/nanojson`, ни в `mmastrac/nanojson`; лицензия — в заголовке каждого исходного
+   файла (Apache-2.0), в `NOTICE` так и сказано. Адрес `grack/nanojson` из плана не существует (404) — в `NOTICE` `mmastrac/nanojson`.
+3. **Вводный абзац `full_description.txt`** («…albums and concerts from the Internet Archive; later versions add more sources…») после
+   Ю3 неполон; правки плана его не называют — не менял, править при выпуске 0.3 вместе с README.
+4. **«Известное» в `docs/work/README.md` устарело:** на Windows красных `DataStore*SettingsTest` семь (4 + 3 из
+   `DataStoreOnlineSettingsTest`; про три писал отчёт yu3g1). README не мой файл — не трогал.
+5. **YouTube «on by default»** в описании — как в плане и в вашем ответе 3; если автор решит иначе, текст описания (и строка
+   `AntiFeatures` в `BUILD.md`) правятся при слиянии.
+6. **Не вошло по плану** (п. 9): тексты авторов Rust-крейтов (у MIT-only крейтов нужны свои уведомления) — в `NOTICE` только перечень
+   лицензий и отсылка к `core/Cargo.lock`; полное — отдельная задача (`cargo-about`).
+7. Эмулятор: debug-пакет удалён, ночной режим возвращён в `no` (прежнее значение не читал), эмулятор погашен; на нём осталась моя
+   release-сборка этой ветки в пакете `io.github.puflik.plinth` (поверх прежней). Скриншоты — в общей папке заметок сессий,
+   `yu3g3-executor-shots/` (7 файлов), в репозиторий не входят.
 
 ### Шаг 1. `NOTICE` (корень и `app/src/main/assets/`)
 
@@ -477,8 +514,8 @@ _Черновик по ходу работы (Sonnet, 2026-10-25); итог — 
   (литерала тега в `build.gradle.kts` нет, в комментарии тоже).
 - `LicensesScreen`: `Column` → `BackTopBar` + `Text(bodySmall)` в `verticalScroll`; чтение asset — `produceState` + `Dispatchers.IO`;
   `IOException` не глотается: `AppLog.w("Licenses", …)` и на экране `licenses_load_failed` цветом ошибки (закрытый `NoticeState`:
-  `Loading` / `Loaded` / `Failed`). Перевод строк в тексте не трогаю: на Windows в рабочем каталоге `NOTICE` с CRLF — на эмуляторе
-  это видно сразу (шаг 5).
+  `Loading` / `Loaded` / `Failed`). Перевод строк в тексте не трогаю: asset с CRLF (так `git` кладёт файл на Windows) проверен на
+  эмуляторе — выглядит так же (шаг 5).
 - Прогон `ktlintCheck detekt testGithubDebugUnitTest --tests "*Yu3g3*" --tests "*RussianTranslationTest"` (github): ktlint и detekt
   чисто; `Yu3g3AboutTest` 7/7, `Yu3g3NoticeTest` 5/5, `RussianTranslationTest` 4/4; в `Yu3g3ReleaseFilesTest` 5 из 9, остальные
   четыре — как и должно быть до шагов 3–4 (заголовок `YoutubeDownloader.kt`, описание, `BUILD.md`, README).
@@ -517,3 +554,52 @@ _Черновик по ходу работы (Sonnet, 2026-10-25); итог — 
 - `README.md` и `README.ru.md`: одно предложение со ссылкой `[NOTICE](NOTICE)` в разделе «Licence»/«Лицензия»; версию и «Что дальше»
   не трогал.
 - Прогон `testGithubDebugUnitTest --tests "*Yu3g3*" --tests "*RussianTranslationTest"`: 25 из 25 (5 + 9 + 7 + 4).
+
+### Шаг 5. Проверки
+
+**Gradle** (`$env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"`, `--continue`):
+`ktlintCheck detekt testGithubDebugUnitTest testFdroidDebugUnitTest lintGithubDebug assembleFdroidDebug`.
+
+- `ktlintCheck`, `detekt` — без замечаний (код шагов 2–3; первая же попытка).
+- `lintGithubDebug` — 0 ошибок, 24 предупреждения, все прежние (`Untranslatable` в `debug/res/values-ru`, `UnusedResources` у
+  `player_title` и `library_scan_progress` и т. п.); к девяти новым строкам замечаний нет.
+- `assembleFdroidDebug` — собирается.
+- `testGithubDebugUnitTest` и `testFdroidDebugUnitTest`: по 874 теста, **867 зелёных, 7 красных в каждом flavor**, красные — одни и те же:
+  `DataStoreFolderSettingsTest` (1), `DataStoreOnboardingSettingsTest` (2), `DataStoreSortSettingsTest` (1), `DataStoreOnlineSettingsTest` (3);
+  все — `java.io.IOException: Unable to rename C:\Users\User\AppData\Local\Temp\junit…` из `FileStorage.kt:114`. Повторный прогон
+  `--tests "*DataStore*"` — те же 7 из 20. Первые четыре — «известное» из `docs/work/README.md`; три `DataStoreOnlineSettingsTest` (3 из 6) уже
+  описал отчёт yu3g1, они добавились после того, как «Известное» писали. Вне `DataStore*` красных нет.
+- **Зависимости**: `:app:dependencies --configuration githubReleaseRuntimeClasspath` и `fdroidReleaseRuntimeClasspath` — одинаковые деревья,
+  169 модулей; сверка с `NOTICE` — «Шаг 1» (вопрос 1 итога). Десугаринг (`coreLibraryDesugaring`) в `RuntimeClasspath` не входит —
+  он в `NOTICE` по `build.gradle.kts` и POM.
+- **Release (сверх плана)**: `assembleGithubRelease assembleFdroidRelease`, подпись одноразовым отладочным ключом Android
+  (`~/.android/debug.keystore`, как в `docs/testing/youtube-live.md`; ключ автора не трогал) — 2 мин 40 с, оба APK по 18 318 885 байт,
+  `assets/NOTICE` в обоих (6 826 байт); `testGithubDebugUnitTest --tests "*R8OutputGuardTest" --tests "*R8RulesGuardTest" --rerun` при
+  `PLINTH_REQUIRE_R8_OUTPUT=1`: 3/3 и 5/5, не пропущены.
+
+**Руками на эмуляторе** (`Medium_Phone_API_36.0`, API 36, `-no-window`, только `emulator-5554`; отладочная сборка `githubDebug`):
+
+1. Настройки → прокрутка до конца: «About» — последняя секция; «Version» `0.2.3-debug (github)`, «YouTube extractor»
+   `NewPipeExtractor v0.26.5`, «Source code» (Plinth is free software under the AGPL-3.0 licence) и «Licenses» (Third-party components and their
+   licences). **Пройдено.**
+2. «Source code»: система запустила `ACTION_VIEW` на `https://github.com/…` в Chrome (журнал: `ActivityTaskManager: START … act=VIEW
+   dat=https://github.com/... cmp=com.android.chrome/…IntentDispatcher` от uid приложения; путь Android в журнале скрывает). На экране —
+   первый запуск Chrome; его согласие с условиями я не принимал и дальше не шёл, поэтому адрес целиком на странице не видел — сам адрес
+   держит `Yu3g3AboutTest` (`ProjectLinks.SOURCE`). «Назад» вернул в Plinth, прокрутка настроек на месте. **Пройдено с этой оговоркой.**
+3. «Licenses»: стрелка и заголовок, под ними `NOTICE` — абзацы, адреса, тексты MIT и BSD; нижней панели нет; текст прокручивается до
+   последней строки («…EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.»); стрелка возвращает в настройки, нижняя панель на месте.
+   **Пройдено.**
+4. Русский (`cmd locale set-app-locales … --locales ru`) и тёмная тема (`cmd uimode night yes`): «О приложении» → «Версия», «Экстрактор
+   YouTube», «Исходный код» (Plinth — свободная программа под лицензией AGPL-3.0), «Лицензии» (Сторонние компоненты и их лицензии); экран
+   «Лицензии» — заголовок по-русски, текст `NOTICE` (английский, как задумано) читается на тёмном фоне. **Пройдено.**
+
+Сверх плана на эмуляторе:
+
+- **Asset с CRLF** (так `git` кладёт файл в рабочий каталог на Windows): экран выглядит так же, лишних знаков нет.
+- **Ветка ошибки чтения** (asset временно убран, сборка, потом файл возвращён и `cmp` с корневым `NOTICE` чист): на экране «Не удалось
+  прочитать текст лицензий.» цветом ошибки, приложение не падает; в журнале `W Plinth/Licenses` со стеком исключения.
+- **Release (R8)**: Настройки → «About» (версия `0.2.3 (github)`), «Licenses» → текст прокручивается до конца; мини-плеер (остался в состоянии
+  эмулятора) текст не перекрывает.
+
+**Что я не проверял:** `fdroid`-flavor на эмуляторе (его строки версии держит `Yu3g3AboutTest`: `0.3.0-fdroid (fdroid)`); `fdroid build` на
+сервере F-Droid; страницу `github.com/Puflik/Plinth` в браузере (см. п. 2).
