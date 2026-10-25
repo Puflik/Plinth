@@ -4,7 +4,7 @@
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
 
 - **Ветка:** `work/yu3g3` · **Ворктри:** `C:\claude\Plinth-yu3g3`
-- **Основа:** `main` на `c289ac9` · **Коммит тестов:** `<хеш>` (второй в ветке: первым ушёл черновик этого файла)
+- **Основа:** `main` на `c289ac9` · **Коммит тестов:** `f34ef1c` (второй в ветке: первым, `9eb7452`, ушёл черновик этого файла)
 - **Откуда:** `docs/work/yu3g1.md`, «Дальше: остальные задачи Ю3г», пункт yu3g3, и «Чтение плана (Opus, 2026-10-24)», п. 9
 
 ## Цель
@@ -204,7 +204,8 @@ internal fun LazyListScope.aboutSection(details: AboutDetails, onOpenSource: () 
 2. Готовая запись для `fdroiddata` — блок ```` ```yaml ````: `Categories`, `License: AGPL-3.0-only` (в `LICENSE`/README нет «или новее»),
    `SourceCode`, `IssueTracker`, `Changelog`, `AntiFeatures` с `NonFreeNet` (с английским пояснением: YouTube — несвободный сетевой
    сервис, отключается в «Online sources»), `Builds` (`versionName`/`versionCode`/`commit` — **заполнители в угловых скобках**: их
-   выставляет выпуск; `subdir: app`, `gradle: [fdroid]`, `ndk: 28.2.13676358`), `UpdateCheckMode: Tags`, `AutoUpdateMode: Version`.
+   выставляет выпуск; `subdir: app`, `gradle:` и строкой ниже `- fdroid` (блочным списком — так ищет страж), `ndk: 28.2.13676358`),
+   `UpdateCheckMode: Tags`, `AutoUpdateMode: Version`.
    Поля и их форма — по Build Metadata Reference; расхождение с этим черновиком — запись по документу, расхождение — в отчёт.
 3. **Не проверено** и так и написано: сборка Rust-ядра на сервере F-Droid (rustup, `cargo-ndk`, `rust-version = "1.98"`) — нужен
    локальный `fdroid build` при подаче; JitPack как источник зависимости экстрактора — у NewPipe он принят.
@@ -315,6 +316,13 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"
 
 Известное: на Windows падают 4 теста `DataStore*SettingsTest` — не из-за задачи; в CI на Linux проходят.
 
+**Линтеры** (всплыли на эталонной реализации; защищённые тесты ими уже проверены и чисты):
+
+- detekt `MaxLineLength` = 120 и считает комментарии и KDoc: длинные строки заголовка и комментариев переносить;
+- detekt `MatchingDeclarationName`: файл с единственным классом называется по классу (отсюда `AboutDetails.kt` отдельно от `About.kt`);
+- ktlint: цепочка из четырёх и более вызовов через точку пишется в столбик; длинный `assertWithMessage(…).that(…)` — тоже;
+- исключение при чтении `NOTICE` не глотать молча (инвариант 3): запись в журнал `AppLog.w(TAG, "…", e)`, как в `SafeUriHandler`.
+
 **Руками на эмуляторе** (`Medium_Phone_API_36.0`, `$env:ANDROID_SERIAL = "emulator-5554"`; память проекта «Ручная проверка экрана на
 эмуляторе без окна»: `uiautomator dump` + `input tap`) — что увидел, в отчёт:
 
@@ -374,7 +382,42 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"
 
 ## Временная реализация и мутации
 
-_Заполняется после проверки._
+Проверка планировщика (Windows, ворктри `C:\claude\Plinth-yu3g3`, основа `c289ac9`). Временная реализация — все правки разделов А–З;
+в коммит не входит, ветка чиста. Лежит патчем `yu3g3-reference-implementation.patch` в общей папке заметок сессий (рядом —
+`yu3g3-planner-notes.md`: лицензии, найденные в POM и `cargo metadata`, и что осталось непроверенным); применяется `git apply` в
+чистом ворктри. **Не образец для копирования вслепую**: строки `Copyright` jsoup и protobuf в ней мои, не сверенные с проектами.
+
+| Что | Результат |
+|---|---|
+| Старый код, `Yu3g3NoticeTest` + `Yu3g3ReleaseFilesTest` (`Yu3g3AboutTest` убран: не компилируется), `testGithubDebugUnitTest --tests "*Yu3g3*"` | 14 тестов: 12 падают **утверждением** (`AssertionErrorWithFacts`: «нет файла NOTICE», «нет раздела про F-Droid»…), 2 проходят (охрана: `no placeholders…`, `store texts fit…`) |
+| `Yu3g3AboutTest` на старом коде | не запускался: ссылается на символы, которых нет (`AboutDetails`, `aboutDetails`, `AboutViewModel`, `ProjectLinks.SOURCE`, `Destination.Licenses`, `BuildConfig.NEWPIPE_EXTRACTOR_VERSION`) — ошибка компиляции |
+| Временная реализация, `testGithubDebugUnitTest` и `testFdroidDebugUnitTest` по `*Yu3g3*`, плюс `RussianTranslationTest`, `FlavorConfig*` | **21/21** в каждом flavor (5 + 9 + 7); `RussianTranslationTest` 4/4, `FlavorConfig*` зелёные |
+| `ktlintCheck`, `detekt`, первый прогон | замечания: строки > 120 знаков (detekt считает и комментарии) и длинные цепочки вызовов в **моих тестах** — тесты переписаны; в эталоне — заголовок `YoutubeDownloader.kt`, имя `About.kt` при единственном классе, цепочка в `LicensesScreen.kt` — поправлены, «Проверки» дополнены |
+| `ktlintCheck`, `detekt` после правок | чисто; строк длиннее 120 в изменённых `.kt` нет |
+
+Мутанты (правка временной реализации, `testGithubDebugUnitTest --tests *Yu3g3* --tests *RussianTranslationTest`; все 14 внесены разом —
+у каждой правки свой тест, поэтому провалы читаются по одному; прогон дал ровно 16 падений, остальные 11 тестов прошли):
+
+| Мутант | Упал |
+|---|---|
+| M1 нет абзаца UniFFI (в обоих `NOTICE`) | `every component has a paragraph…` |
+| M2 копия в assets расходится с корневой на один пробел | `the copy in assets is the same text` |
+| M3 `buildConfigField` с литералом `v0.26.4` вместо `libs.versions.newpipeExtractor` | `the extractor tag is written once…`, `build config carries the tag…` |
+| M4 в описании нет «not affiliated with» | `the store description tells the truth about youtube` |
+| M5 в записи BUILD.md `NonFreeNet:` → `NonFree:` | `build md has an f-droid section…` |
+| M6 `README.ru.md` без `[NOTICE](NOTICE)` | `both readmes point at the notice` |
+| M7 `aboutSection(` вызван раньше `backupSection(` | `about is the last section of the settings…` |
+| M8 в заголовке `YoutubeDownloader.kt` нет `AGPL-3.0` | `the youtube downloader names the code it follows` |
+| M9 нет русской `settings_about_licenses_hint` | `about strings exist in english and russian`, `RussianTranslationTest › every string has a russian translation…` |
+| M10 `versionLine` = `"$flavor $version"` | `the version line shows the version and the flavor…` |
+| M11 `AboutViewModel` отдаёт `aboutDetails(info, "x")` | `the view model offers the details…` |
+| M12 маршрут `"license"` вместо `"licenses"` | `licenses is a screen over the tabs…` |
+| M13 `ProjectLinks.SOURCE` с косой чертой в конце | `the source link is the project repository` |
+| M14 `extractorLine` = `"Extractor …"` | `the extractor line names the extractor and its tag` |
+
+**Не проверено** (граница моей проверки): Compose-экраны на эмуляторе (секция, «Лицензии», нижняя панель, тёмная тема, русский язык) — работа
+исполнителя; `lintGithubDebug`, `assembleGithubRelease` и попадание `assets/NOTICE` в APK; строки `Copyright` jsoup и protobuf, лицензии nanojson и
+JNA, форма `AntiFeatures` в документе F-Droid, сборка Rust на сервере F-Droid; `Yu3g3AboutTest` на старом коде (только компиляция).
 
 ## Отчёт исполнителя
 
