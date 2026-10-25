@@ -38,8 +38,28 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # Лог — ещё и в файл: следующий шаг достаёт из него упавшие тесты.
       - name: Tests
-        run: cargo test --workspace --locked
+        shell: bash
+        run: cargo test --workspace --locked 2>&1 | tee "$RUNNER_TEMP/cargo-test.log"
+
+      # Упавшие тесты и паники — в аннотацию: аннотации API GitHub отдаёт без
+      # входа, а лог шага — только после входа.
+      - name: Failed tests to annotation
+        if: failure()
+        shell: bash
+        run: |
+          log="$RUNNER_TEMP/cargo-test.log"
+          [ -f "$log" ] || exit 0
+          out="$RUNNER_TEMP/cargo-test-failed.txt"
+          grep -E -A12 '^---- .+ stdout ----$' "$log" | head -n 150 > "$out" || true
+          grep -E "^test .+ FAILED$|^error: test failed|didn't exit successfully|signal: " "$log" | head -n 30 >> "$out" || true
+          python3 - "$out" <<'EOF'
+          import sys
+          text = open(sys.argv[1], encoding="utf-8", errors="replace").read().strip()
+          text = text or "no failure lines in the log"
+          print("::error title=cargo test failed::" + text.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+          EOF
 
   check:
     name: Style, tests, both flavors
