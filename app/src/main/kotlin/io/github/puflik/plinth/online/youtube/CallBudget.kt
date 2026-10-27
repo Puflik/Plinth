@@ -4,10 +4,14 @@ import java.net.SocketTimeoutException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** Сроки вызовов источника: [search] — поиск, [extract] — `resolve` и `stream` с извлечением. */
+/**
+ * Сроки вызовов источника: [search] — поиск, [extract] — `resolve` и `stream` с извлечением, [radio] — страница
+ * Mix (первая или следующая).
+ */
 internal data class YoutubeBudgets(
     val search: Duration = 10.seconds,
     val extract: Duration = 25.seconds,
+    val radio: Duration = 10.seconds,
 )
 
 /**

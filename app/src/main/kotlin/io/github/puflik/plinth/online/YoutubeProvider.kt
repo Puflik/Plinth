@@ -4,6 +4,7 @@ import io.github.puflik.plinth.ffi.AudioFormat
 import io.github.puflik.plinth.ffi.OnlineKind
 import io.github.puflik.plinth.ffi.OnlineProvider
 import io.github.puflik.plinth.ffi.OnlineQuality
+import io.github.puflik.plinth.ffi.OnlineRadioPage
 import io.github.puflik.plinth.ffi.OnlineResult
 import io.github.puflik.plinth.ffi.OnlineTrack
 import io.github.puflik.plinth.ffi.OnlineVariant
@@ -47,6 +48,15 @@ class YoutubeProvider(
         asked {
             val stream = youtube.stream(source)
             StreamAddress(stream.url, stream.headers, validFor(stream.url))
+        }
+
+    override fun radio(
+        seed: String,
+        page: String?,
+    ): OnlineRadioPage =
+        asked {
+            val answer = youtube.radio(seed, page)
+            OnlineRadioPage(answer.tracks.map(YoutubeTrack::toApp), answer.next)
         }
 
     /**

@@ -2,6 +2,7 @@ package io.github.puflik.plinth.online.youtube
 
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
@@ -19,9 +20,12 @@ import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamExtractor
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.security.SecureRandom
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -39,6 +43,10 @@ import kotlin.time.Duration.Companion.seconds
  * Любой другой `stream` — новое извлечение и новая ссылка: ссылку, на которую плеер получил отказ, второй раз
  * не отдаём.
  *
+ * Радио (Ю4б) — страницы Mix затравки, по одному запросу на страницу, без извлечения видео. Страница экстрактора
+ * (`Page`) в ключ не сериализуется: она лежит в памяти ([RadioPages]), а наружу уходит короткий ключ; после запуска
+ * приложения ключей нет, и приложение открывает радио заново.
+ *
  * Только первая страница альбома (до 100 треков); прямой эфир и премьера (нет аудиопотоков) — `Parse`, а не
  * `Unavailable`.
  */
@@ -53,6 +61,7 @@ class NewPipeYoutubeSource internal constructor(
 
     private val network: Downloader = Budgeted(downloader)
     private val stash = StreamStash(nanoTime)
+    private val pages = RadioPages(nanoTime)
 
     override fun search(
         query: String,
@@ -80,6 +89,16 @@ class NewPipeYoutubeSource internal constructor(
         val match = VARIANT.matchEntire(variant) ?: throw YoutubeException.Unavailable("variant")
         val (video, itag) = match.destructured
         return call(budgets.extract) { streamOf(video, itag.toInt()) }
+    }
+
+    override fun radio(
+        seed: String,
+        page: String?,
+    ): YoutubeRadioPage {
+        val video = seedVideo(seed)
+        // Ключ проверяется до сети: чужой, неизвестный и просроченный — одно и то же «открой радио заново».
+        val kept = page?.let { pages.find(video, it) ?: throw YoutubeException.Unavailable("page") }
+        return call(budgets.radio) { radioPage(video, kept) }
     }
 
     /** Вызов экстрактора: загрузчик, срок и перевод бед. Бросает только [YoutubeException]. */
@@ -138,6 +157,27 @@ class NewPipeYoutubeSource internal constructor(
         return extractor.initialPage.items
             .mapIndexedNotNull { index, item -> songOf(item)?.toTrack(album, index + 1) }
             .ifEmpty { throw YoutubeException.Unavailable("empty album") }
+    }
+
+    /**
+     * Страница Mix затравки [video]: первая — `fetchPage` и `initialPage`, следующая — `getPage` по сохранённой
+     * [kept]. Нового экстрактора для продолжения хватает: `getPage` не читает то, что заполняет `fetchPage`.
+     */
+    private fun radioPage(
+        video: String,
+        kept: Page?,
+    ): YoutubeRadioPage {
+        val extractor = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/watch?v=$video&list=RD$video")
+        val found =
+            if (kept == null) {
+                extractor.fetchPage()
+                extractor.initialPage
+            } else {
+                extractor.getPage(kept)
+            }
+        val tracks = found.items.mapNotNull { radioTrack(it, video) }
+        val next = found.nextPage?.takeIf { found.hasNextPage() }?.let { pages.put(video, it) }
+        return YoutubeRadioPage(tracks, next)
     }
 
     /** Поток варианта: из заготовки (один раз) или из нового извлечения. */
@@ -227,6 +267,59 @@ private class StreamStash(
     }
 }
 
+/**
+ * Ключи страниц радио (Ю4б): страница экстрактора (`Page` — адрес, тело, кукис) в ключ не сериализуется, поэтому лежит
+ * здесь, а наружу уходит короткая случайная строка. Живёт [RADIO_LIFETIME_NANOS] от выдачи и не продлевается
+ * использованием; хранит не больше [RADIO_CAPACITY] ключей, старейший уходит первым. Ключ привязан к видео затравки и
+ * переживает использование: повтор после сбоя получает ту же страницу. Время — [nanoTime], чтобы тесты двигали
+ * его сами.
+ */
+private class RadioPages(
+    private val nanoTime: () -> Long,
+) {
+    private class Kept(
+        val video: String,
+        val page: Page,
+        val bornNanos: Long,
+    )
+
+    private val kept = LinkedHashMap<String, Kept>()
+    private val random = SecureRandom()
+
+    /** Страница по ключу, если ключ жив и выдан для этой затравки. */
+    @Synchronized
+    fun find(
+        video: String,
+        key: String,
+    ): Page? {
+        dropSpent(nanoTime())
+        return kept[key]?.takeIf { it.video == video }?.page
+    }
+
+    @Synchronized
+    fun put(
+        video: String,
+        page: Page,
+    ): String {
+        val now = nanoTime()
+        dropSpent(now)
+        var key = newKey()
+        while (key in kept) key = newKey()
+        kept[key] = Kept(video, page, now)
+        while (kept.size > RADIO_CAPACITY) kept.remove(kept.keys.first())
+        return key
+    }
+
+    private fun newKey(): String {
+        val letters = CharArray(RADIO_KEY_LENGTH) { RADIO_KEY_ALPHABET[random.nextInt(RADIO_KEY_ALPHABET.length)] }
+        return String(letters)
+    }
+
+    private fun dropSpent(now: Long) {
+        kept.values.removeAll { now - it.bornNanos >= RADIO_LIFETIME_NANOS }
+    }
+}
+
 /** Поток YouTube, который источник умеет отдавать: номер формата, как его называет источник, и его битрейт. */
 private class Itag(
     val number: Int,
@@ -244,7 +337,7 @@ private class Song(
 
 private fun Song.toTrack(
     album: String?,
-    number: Int,
+    number: Int?,
 ): YoutubeTrack = YoutubeTrack(id, title, artist, album, number, duration, variantsOf(id, ITAG_NUMBERS))
 
 private fun songResult(item: InfoItem): YoutubeResult? =
@@ -260,6 +353,33 @@ private fun albumResult(item: InfoItem): YoutubeResult? =
         } else {
             YoutubeResult(id, YoutubeKind.ALBUM, title, artistOf(album.uploaderName))
         }
+    }
+
+/**
+ * Песня Mix для радио: прямой эфир, премьера и всё без положительной длительности играть нечем (аудиопотоков нет) и
+ * пропускаются, как безымянное, чужого вида и сама затравка [seed]. Закрытые и удалённые видео выбрасывает ещё
+ * экстрактор.
+ */
+private fun radioTrack(
+    item: InfoItem,
+    seed: String,
+): YoutubeTrack? {
+    val playable = (item as? StreamInfoItem)?.takeIf { it.streamType == StreamType.VIDEO_STREAM && it.duration > 0 }
+    return playable
+        ?.let(::songOf)
+        ?.takeIf { it.id != seed }
+        ?.toTrack(album = null, number = null)
+}
+
+/**
+ * Видео затравки радио: само видео или вариант `<видео>/<itag>`; прочее — [YoutubeException.Unavailable] (`id`)
+ * без сети.
+ */
+private fun seedVideo(seed: String): String =
+    if (VIDEO_ID.matches(seed)) {
+        seed
+    } else {
+        VARIANT.matchEntire(seed)?.groupValues?.get(1) ?: throw YoutubeException.Unavailable("id")
     }
 
 /** Элемент без названия или без идентификатора и элемент другого вида пропускаются. */
@@ -430,3 +550,8 @@ private const val CAUSE_DEPTH = 8
 
 private const val CAPACITY = 8
 private val LIFETIME_NANOS = 2.minutes.inWholeNanoseconds
+
+private const val RADIO_CAPACITY = 8
+private val RADIO_LIFETIME_NANOS = 3.hours.inWholeNanoseconds
+private const val RADIO_KEY_LENGTH = 12
+private const val RADIO_KEY_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
