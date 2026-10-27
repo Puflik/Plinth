@@ -21,7 +21,8 @@ use std::time::Duration;
 
 use plinth_providers::Provider;
 use plinth_providers::model::{
-    Capabilities, ExternalId, RemoteTrack, ResultKind, SearchQuery, SearchResult, SourceOption, StreamRequest,
+    Capabilities, ExternalId, RadioPage, RemoteTrack, ResultKind, SearchQuery, SearchResult, SourceOption,
+    StreamRequest,
 };
 use plinth_types::{Bitrate, CoreError, Mbid, ProviderId, QualityTier};
 
@@ -54,7 +55,14 @@ pub trait ExternalProvider: Send + Sync {
 
     /// Адрес потока варианта источника из `resolve`.
     fn stream(&self, source: String) -> ExternalStream;
+
+    /// Радио от трека `seed` (id трека или его источника); `page` — ключ из прошлого ответа.
+    /// Не умеет — `Failed { Unavailable }`: у внешнего трейта UniFFI методов по умолчанию не бывает.
+    fn radio(&self, seed: String, page: Option<String>) -> ExternalRadio;
 }
+
+/// Больше треков на странице радио ядро не берёт: платформа не должна раздувать ответ.
+const RADIO_PAGE_MAX: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ExternalCapabilities {
@@ -87,6 +95,12 @@ pub enum ExternalResolve {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum ExternalStream {
     Found { address: StreamAddress },
+    Failed { failure: ExternalFailure },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum ExternalRadio {
+    Found { tracks: Vec<OnlineTrackInfo>, next: Option<String> },
     Failed { failure: ExternalFailure },
 }
 
@@ -169,6 +183,26 @@ impl Provider for ExternalAdapter {
                     Some(millis) => request.with_valid_for(Duration::from_millis(millis)),
                     None => request,
                 })
+            }
+        }
+    }
+
+    fn radio(&self, seed: &ExternalId, page: Option<&ExternalId>) -> Result<RadioPage, CoreError> {
+        let answer = panic::guard(|| {
+            Ok(self.platform.radio(seed.as_str().to_owned(), page.map(|key| key.as_str().to_owned())))
+        })?;
+        match answer {
+            ExternalRadio::Failed { failure } => Err(failure.into()),
+            ExternalRadio::Found { tracks, next } => {
+                let offered = tracks.len().min(RADIO_PAGE_MAX);
+                // Негодный трек (пустышка вместо удалённого видео) не убивает страницу.
+                let usable: Vec<RemoteTrack> =
+                    tracks.into_iter().take(RADIO_PAGE_MAX).filter_map(|track| remote_track(track).ok()).collect();
+                if usable.is_empty() && offered > 0 {
+                    return Err(CoreError::parse("external radio: no usable track"));
+                }
+                let next = next.map(|key| ExternalId::new(&key)).transpose()?;
+                Ok(RadioPage { tracks: usable, next })
             }
         }
     }

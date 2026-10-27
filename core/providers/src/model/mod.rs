@@ -5,6 +5,7 @@
 mod capabilities;
 mod external_id;
 mod health;
+mod radio;
 mod search_result;
 mod source_option;
 mod stream;
@@ -12,6 +13,7 @@ mod stream;
 pub use capabilities::Capabilities;
 pub use external_id::ExternalId;
 pub use health::{Health, HealthPolicy};
+pub use radio::RadioPage;
 pub use search_result::{ResultKind, SearchQuery, SearchResult};
 pub use source_option::{Network, RemoteTrack, SourceOption, playback_order};
 pub use stream::StreamRequest;

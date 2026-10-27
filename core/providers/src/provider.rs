@@ -1,12 +1,12 @@
 use plinth_types::{CoreError, ProviderId};
 
-use crate::model::{Capabilities, ExternalId, RemoteTrack, SearchQuery, SearchResult, StreamRequest};
+use crate::model::{Capabilities, ExternalId, RadioPage, RemoteTrack, SearchQuery, SearchResult, StreamRequest};
 
 /// Источник музыки в сети (E1.1, plan.md 6.1, docs/adr/0008-provider-trait.md).
 ///
-/// В v0.2 — только то, что нужно для «найти и сыграть». `download`, `browse`
-/// и `related` придут с Bandcamp (v0.5) методами по умолчанию «не умеет»:
-/// готовые провайдеры это не сломает.
+/// В v0.2 — только то, что нужно для «найти и сыграть». `radio` пришёл в Ю4а;
+/// `download` и `browse` придут с Bandcamp (v0.5). Все они — методы по умолчанию
+/// «не умеет»: готовые провайдеры это не сломает.
 ///
 /// Вызовы синхронные и блокируют: Kotlin зовёт ядро из IO-потока, как скан.
 /// Сеть — через [`crate::http::HttpClient`] поверх транспорта платформы.
@@ -34,4 +34,14 @@ pub trait Provider: Send + Sync {
     /// Адрес потока варианта источника из `resolve`. Берётся перед каждым
     /// воспроизведением.
     fn stream_url(&self, source: &ExternalId) -> Result<StreamRequest, CoreError>;
+
+    /// Радио от трека: подборка похожего. `seed` — идентификатор трека у провайдера: `external`
+    /// трека из `resolve`/поиска **или** источник из его вариантов (`SourceOption::external`) —
+    /// провайдер принимает оба, потому что каталог ядра хранит только источники. `page` — `next`
+    /// прошлой страницы, `None` — первая. По умолчанию провайдер радио не умеет: `Unavailable`,
+    /// и провайдеру это не в укор.
+    fn radio(&self, seed: &ExternalId, page: Option<&ExternalId>) -> Result<RadioPage, CoreError> {
+        let _ = (seed, page);
+        Err(CoreError::unavailable("radio is not supported"))
+    }
 }

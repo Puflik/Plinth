@@ -119,6 +119,22 @@ pub struct OnlineAlbumReply {
     pub problem: Option<OnlineProblem>,
 }
 
+/// Страница радио: треки подборки или беда (`tracks` пуст, когда `problem` есть).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct OnlineRadioReply {
+    pub tracks: Vec<OnlineTrackInfo>,
+    /// Ключ следующей страницы; `None` — подборка кончилась (или беда).
+    pub next: Option<String>,
+    pub problem: Option<OnlineProblem>,
+}
+
+/// Где трек каталога играется: провайдер и его источник (вариант).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct OnlineOrigin {
+    pub provider: String,
+    pub source: String,
+}
+
 /// Вариант источника: FLAC, MP3, Ogg одного трека.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct OnlineVariant {
@@ -214,6 +230,47 @@ impl Core {
                 }
                 Err(error) => Err(error),
             }
+        })
+    }
+
+    /// Страница радио от `seed` провайдера `provider` (id трека или его источника); `page` — ключ
+    /// прошлой страницы, `None` — первая. Провайдер, который не ответил или радио не умеет, — `problem`
+    /// в ответе, как у альбома. Источники выключены, негодный аргумент, `Internal` — ошибка вызова.
+    /// Каталог не меняется: треки заводит приложение.
+    pub fn online_radio(
+        &self,
+        provider: String,
+        seed: String,
+        page: Option<String>,
+    ) -> Result<OnlineRadioReply, CoreError> {
+        panic::guard(|| {
+            let registry = self.online().ok_or_else(off)?;
+            let provider = ProviderId::new(&provider)?;
+            let seed = ExternalId::new(&seed)?;
+            let page = page.map(|key| ExternalId::new(&key)).transpose()?;
+            match registry.radio(&provider, &seed, page.as_ref()) {
+                Ok(page) => Ok(OnlineRadioReply {
+                    tracks: page.tracks.into_iter().map(track_info).collect(),
+                    next: page.next.map(|key| key.as_str().to_owned()),
+                    problem: None,
+                }),
+                Err(error @ (CoreError::Network { .. } | CoreError::Unavailable { .. } | CoreError::Parse { .. })) => {
+                    Ok(OnlineRadioReply { tracks: Vec::new(), next: None, problem: Some(problem_of(&error)) })
+                }
+                Err(error) => Err(error),
+            }
+        })
+    }
+
+    /// Где трек каталога играется: источники провайдеров по порядку каталога. Файл с диска и
+    /// неизвестный трек — пустой список. Онлайн-источники включены быть не обязаны.
+    pub fn online_origins(&self, track: TrackId) -> Result<Vec<OnlineOrigin>, CoreError> {
+        panic::guard(|| {
+            let sources = self.with(|state| state.db.online_sources(track))?;
+            Ok(sources
+                .into_iter()
+                .map(|source| OnlineOrigin { provider: source.provider.to_string(), source: source.external_id })
+                .collect())
         })
     }
 

@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use plinth_types::{CoreError, ProviderId, Timestamp};
 
 use crate::Provider;
-use crate::model::{ExternalId, Health, HealthPolicy, RemoteTrack, SearchQuery, SearchResult, StreamRequest};
+use crate::model::{
+    ExternalId, Health, HealthPolicy, RadioPage, RemoteTrack, SearchQuery, SearchResult, StreamRequest,
+};
 
 /// Ответ одного провайдера на поиск.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,6 +24,7 @@ pub struct ProviderSearch {
 ///   ответы остальных;
 /// - `resolve` и `stream` — действие человека над конкретным треком: их
 ///   провайдер спрашивается и в `Down`, только в `stream` — последним;
+/// - `radio` — тоже действие человека: провайдер спрашивается и в `Down`, но в здоровье исход не идёт;
 /// - здоровье — по исходам вызовов ([`Health::after`]); замок держится
 ///   только на чтение и запись здоровья, не на время вызова провайдера.
 pub struct Registry {
@@ -94,6 +97,18 @@ impl Registry {
     ) -> Result<Vec<RemoteTrack>, CoreError> {
         let provider = self.find(provider)?;
         self.observe(provider.as_ref(), now, provider.resolve(item))
+    }
+
+    /// Страница радио от `seed`: провайдера спрашивают и в `Down` (действие человека над конкретным треком, как у
+    /// `resolve`), но исход в здоровье не идёт — ни успех, ни сбой. У радио свой эндпоинт и свой повтор в
+    /// приложении; поломка радио не должна убирать провайдера из поиска, а успех не должен снимать его отдых.
+    pub fn radio(
+        &self,
+        provider: &ProviderId,
+        seed: &ExternalId,
+        page: Option<&ExternalId>,
+    ) -> Result<RadioPage, CoreError> {
+        self.find(provider)?.radio(seed, page)
     }
 
     /// Адрес потока первого источника, который ответил (plan.md 6.4: отказ —
