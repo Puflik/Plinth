@@ -1,6 +1,7 @@
-"""Планировщик Ю3б: урезает записи YouTube до килобайт и убирает личное. Не в репозитории.
+"""Планировщик Ю3б/Ю4б: урезает записи YouTube до килобайт и убирает личное.
 
-python trim.py <rec-dir> <out-dir>
+python trim.py <rec-dir> <out-dir>        весь набор (нужны все записи Ю3б и Ю4б)
+python trim.py <rec-dir> <out-dir> mix    только Mix (Ю4б): <out-dir>/mix/*.json и <out-dir>/routes-mix.tsv
 
 Записи (rec/) делает Recorder.java: настоящий экстрактор v0.26.5 на настольной JVM, каждый обмен —
 файл NNN.json. Здесь из них собираются наборы для тестов: ровно то, что читает экстрактор.
@@ -12,6 +13,7 @@ import sys
 
 REC = sys.argv[1]
 OUT = sys.argv[2]
+ONLY_MIX = len(sys.argv) > 3 and sys.argv[3] == "mix"
 os.makedirs(OUT, exist_ok=True)
 
 PRIVATE_IP = re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")
@@ -211,6 +213,110 @@ def album_fixtures(rec_name, tag):
     write_json("album/items-%s.json" % tag, {"onResponseReceivedActions": [{"appendContinuationItemsAction": {"continuationItems": [prune_lockup(i) for i in items if "lockupViewModel" in i]}}]})
 
 
+# ---------- Mix (Ю4б) ----------
+def text_of(o):
+    """Текст объекта YouTube — строка, simpleText или склеенные runs — без ссылок, подсказок и доступности."""
+    if isinstance(o, str):
+        return o
+    if "simpleText" in o:
+        return {"simpleText": o["simpleText"]}
+    return {"runs": [{"text": r["text"]} for r in o.get("runs", [])]}
+
+
+def mix_item(r):
+    """Элемент Mix до того, что читает YoutubeStreamInfoItemExtractor, и до ссылки на следующую страницу."""
+    out = {"videoId": r["videoId"], "title": text_of(r["title"])}
+    for key in ("longBylineText", "shortBylineText", "lengthText"):
+        if key in r:
+            out[key] = text_of(r[key])
+    we = r["navigationEndpoint"]["watchEndpoint"]
+    out["navigationEndpoint"] = {"watchEndpoint": {k: we[k] for k in ("videoId", "playlistId", "index", "params") if k in we}}
+    overlays = []
+    for ov in r.get("thumbnailOverlays", []):
+        ts = ov.get("thumbnailOverlayTimeStatusRenderer")
+        if ts:
+            overlays.append({"thumbnailOverlayTimeStatusRenderer": {"text": text_of(ts.get("text", {})), "style": ts.get("style", "DEFAULT")}})
+    if overlays:
+        out["thumbnailOverlays"] = overlays
+    if "badges" in r:
+        out["badges"] = prune(r["badges"])
+    return {"playlistPanelVideoRenderer": out}
+
+
+def mix_object(rec_name, n):
+    j = response_json(rec_name, n)
+    pl = j["contents"]["twoColumnWatchNextResults"]["playlist"]["playlist"]
+    return {"contents": {"twoColumnWatchNextResults": {"playlist": {"playlist": {
+        "title": text_of(pl["title"]), "playlistId": pl["playlistId"], "currentIndex": pl.get("currentIndex", 0), "isInfinite": True,
+        "contents": [mix_item(i["playlistPanelVideoRenderer"]) for i in pl["contents"] if "playlistPanelVideoRenderer" in i]}}}}}
+
+
+def mix_items(obj):
+    return obj["contents"]["twoColumnWatchNextResults"]["playlist"]["playlist"]["contents"]
+
+
+def renderer(obj, i):
+    return mix_items(obj)[i]["playlistPanelVideoRenderer"]
+
+
+def make_deleted(r):
+    r["title"] = {"simpleText": "[Deleted video]"}
+    r.pop("longBylineText", None)
+    r.pop("shortBylineText", None)
+
+
+def make_live(r):
+    """Идёт прямой эфир: длительности нет, пометка LIVE в бейдже и в оверлее."""
+    r.pop("lengthText", None)
+    r["badges"] = [{"metadataBadgeRenderer": {"style": "BADGE_STYLE_TYPE_LIVE_NOW", "label": "LIVE NOW"}}]
+    r["thumbnailOverlays"] = [{"thumbnailOverlayTimeStatusRenderer": {"text": {"runs": [{"text": "LIVE"}]}, "style": "LIVE"}}]
+
+
+def make_no_length(r):
+    r.pop("lengthText", None)
+    r.pop("thumbnailOverlays", None)
+
+
+def make_untitled(r):
+    r["title"] = {"simpleText": ""}
+
+
+def mix():
+    """Страницы Mix `RD<видео>` из записей и маршруты к ним; первыми в routes.tsv: их `next` совпадает по `videoId` с `next.*` видео."""
+    for tag, vid, rec_name, pages in (("lucky", "4D7u5KF7SP8", "mix_4D7u5KF7SP8_3", 3), ("krovi", "xtxjm7ciwmc", "mix_xtxjm7ciwmc_2", 2)):
+        for p in range(1, pages + 1):
+            # 001 — sw.js, страницы — со 002
+            write_json("mix/%s-%d.json" % (tag, p), mix_object(rec_name, p + 1))
+            if p == 1:
+                contains = ['"playlistId":"RD%s"' % vid, '"videoId":"%s"' % vid]
+            else:
+                # тело следующей страницы строит экстрактор: videoId последнего элемента прошлой страницы
+                last = json.loads(rec(rec_name, p + 1)["requestBody"])["videoId"]
+                contains = ['"videoId":"%s"' % last, '"playlistId":"RD%s"' % vid]
+            route("mix.%s.%d" % (tag, p), "POST", "www.youtube.com", "/youtubei/v1/next", contains, ["mix/%s-%d.json" % (tag, p)])
+
+    # Сделано правкой настоящих страниц (не настоящее, README в resources/youtube): то, что страница Mix может принести, кроме песен.
+    odd = mix_object("mix_4D7u5KF7SP8_3", 2)
+    make_deleted(renderer(odd, 3))
+    make_live(renderer(odd, 5))
+    make_no_length(renderer(odd, 7))
+    make_untitled(renderer(odd, 9))
+    write_json("mix/lucky-1-odd.json", odd)
+
+    skipped = mix_object("mix_4D7u5KF7SP8_3", 3)
+    for i in range(1, len(mix_items(skipped))):
+        (make_deleted, make_live, make_no_length, make_untitled)[i % 4](renderer(skipped, i))
+    write_json("mix/lucky-2-skipped.json", skipped)
+
+    # Продолжение, в котором нет ничего нового: только последний элемент прошлой страницы (экстрактор отдаёт пустую страницу и ключ дальше).
+    quiet = mix_object("mix_4D7u5KF7SP8_3", 3)
+    quiet["contents"]["twoColumnWatchNextResults"]["playlist"]["playlist"]["contents"] = mix_items(quiet)[:1]
+    write_json("mix/lucky-2-quiet.json", quiet)
+
+    # Ответ без списка (нет playlist.playlist): без согласия экстрактор говорит «нужно согласие» — ContentNotAvailable.
+    write_json("mix/no-playlist.json", {"responseContext": {}, "contents": {"twoColumnWatchNextResults": {"results": {"results": {"contents": []}}}}})
+
+
 # ---------- маршруты ----------
 ROUTES = []
 
@@ -219,7 +325,16 @@ def route(name, method, host, path, contains, files):
     ROUTES.append("\t".join([name, method, host, path, ";;".join(contains), "|".join(files)]))
 
 
+def write_routes(name, header):
+    with open(os.path.join(OUT, name), "w", encoding="utf-8", newline="\n") as f:
+        f.write(header + "\n".join(ROUTES) + "\n")
+
+
 def main():
+    mix()
+    if ONLY_MIX:
+        write_routes("routes-mix.tsv", "")
+        return
     # разведка
     bootstrap("search_DaftxPunkxRandomxAccessxMemories_songs", 1, "bootstrap/suggest.json")
     s = "stream_4D7u5KF7SP8_2"

@@ -1,5 +1,10 @@
 # Маршруты проигрывателя записей. Столбцы через табуляцию:
 # имя  метод  хост  путь  что должно встретиться в запросе (через ';;')  файлы ответа (через '|': 1-й, 2-й и т. д. вызов, дальше — последний)
+mix.lucky.1	POST	www.youtube.com	/youtubei/v1/next	"playlistId":"RD4D7u5KF7SP8";;"videoId":"4D7u5KF7SP8"	mix/lucky-1.json
+mix.lucky.2	POST	www.youtube.com	/youtubei/v1/next	"videoId":"khnokW3Mw24";;"playlistId":"RD4D7u5KF7SP8"	mix/lucky-2.json
+mix.lucky.3	POST	www.youtube.com	/youtubei/v1/next	"videoId":"TWbsUhi_p_g";;"playlistId":"RD4D7u5KF7SP8"	mix/lucky-3.json
+mix.krovi.1	POST	www.youtube.com	/youtubei/v1/next	"playlistId":"RDxtxjm7ciwmc";;"videoId":"xtxjm7ciwmc"	mix/krovi-1.json
+mix.krovi.2	POST	www.youtube.com	/youtubei/v1/next	"videoId":"6VqiMQoMXmw";;"playlistId":"RDxtxjm7ciwmc"	mix/krovi-2.json
 suggest	POST	music.youtube.com	/youtubei/v1/music/get_search_suggestions		bootstrap/suggest.json
 visitor.android	POST	youtubei.googleapis.com	/youtubei/v1/visitor_id	"clientName":"ANDROID"	bootstrap/visitor-android.json
 visitor.visionos	POST	www.youtube.com	/youtubei/v1/visitor_id	"clientName":"VISIONOS"	bootstrap/visitor-visionos.json

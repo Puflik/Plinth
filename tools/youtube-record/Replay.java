@@ -1,4 +1,5 @@
 import org.schabi.newpipe.extractor.InfoItem;
+import org.schabi.newpipe.extractor.ListExtractor;
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
 import org.schabi.newpipe.extractor.downloader.Downloader;
@@ -82,6 +83,7 @@ public class Replay {
                 case "albums": search(a[1], YoutubeSearchQueryHandlerFactory.MUSIC_ALBUMS); break;
                 case "stream": stream(a[1]); break;
                 case "playlist": playlist(a[1]); break;
+                case "mix": mix(a[1]); break;
                 default: throw new IllegalArgumentException(a[0]);
             }
         } catch (Throwable t) {
@@ -135,5 +137,25 @@ public class Replay {
             System.out.printf("  #%d '%s' / '%s' / %ds / %s%n", i++, s.getName(), s.getUploaderName(), s.getDuration(), s.getUrl());
         }
         System.out.println("hasNextPage=" + ex.getInitialPage().hasNextPage());
+    }
+
+    /** `mix:<видео>[:страниц]` — Mix `RD<видео>` из записей: первая страница и следующие через `getPage`. */
+    static void mix(String spec) throws Exception {
+        String[] parts = spec.split(":");
+        String id = parts[0];
+        int pages = parts.length > 1 ? Integer.parseInt(parts[1]) : 2;
+        PlaylistExtractor ex = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/watch?v=" + id + "&list=RD" + id);
+        ex.fetchPage();
+        System.out.printf("class=%s name='%s'%n", ex.getClass().getSimpleName(), safe(ex::getName));
+        ListExtractor.InfoItemsPage<StreamInfoItem> page = ex.getInitialPage();
+        for (int p = 1; ; p++) {
+            System.out.printf("--- page %d: %d items, %d errors, hasNext=%s%n", p, page.getItems().size(), page.getErrors().size(), page.hasNextPage());
+            int i = 0;
+            for (StreamInfoItem s : page.getItems()) {
+                System.out.printf("  #%d %s '%s' / '%s' / %ds / %s%n", i++, s.getStreamType(), s.getName(), s.getUploaderName(), s.getDuration(), s.getUrl());
+            }
+            if (p >= pages || !page.hasNextPage()) break;
+            page = ex.getPage(page.getNextPage());
+        }
     }
 }
