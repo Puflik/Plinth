@@ -72,7 +72,8 @@ class FakeYoutubeSourceRadioTest {
 
     @Test
     fun `any video of the catalog and any radio track is a seed, in either form`() {
-        val seeds = listOf(SONG, SONG_NO_OPUS, ALBUM_TRACK_2, QUIET_TRACK, RADIO_1, RADIO_7, "$SONG/251", "$RADIO_3/140")
+        val seeds =
+            listOf(SONG, SONG_NO_OPUS, ALBUM_TRACK_2, QUIET_TRACK, RADIO_1, RADIO_7, "$SONG/251", "$RADIO_3/140")
 
         for (seed in seeds) {
             assertThat(source.radio(seed, null).tracks).isNotEmpty()
@@ -99,7 +100,8 @@ class FakeYoutubeSourceRadioTest {
     @Test
     fun `the seed is not on the page, whatever the Mix says`() {
         val everything = source.radio(SONG, null).tracks + source.resolve(SONG)
-        source.radioPages = mapOf(null to YoutubeRadioPage(everything, "more"), "more" to YoutubeRadioPage(everything, null))
+        source.radioPages =
+            mapOf(null to YoutubeRadioPage(everything, "more"), "more" to YoutubeRadioPage(everything, null))
 
         val byVideo = source.radio(SONG, null)
         val byVariant = source.radio("$SONG/251", "more")

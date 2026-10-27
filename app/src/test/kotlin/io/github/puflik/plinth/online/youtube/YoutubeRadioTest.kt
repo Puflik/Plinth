@@ -17,12 +17,12 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * `radio` на записанных ответах (Ю4б, `docs/work/yu4b.md`): Mix затравки страницами, каждая — настоящая страница YouTube
- * (`resources/youtube/mix/`, как они записаны — `README.md` там же). Что держится: затравка не возвращается ни на одной
- * странице; прямые эфиры, премьеры и безымянное не играются и не идут; повторы между страницами источник не трогает —
- * очередь знает, что в ней уже есть; ключ следующей страницы — короткая строка, а сама страница экстрактора лежит
- * в памяти источника (восемь ключей, три часа от рождения), и ключ можно использовать повторно; чужой, неизвестный и
- * просроченный ключи — `Unavailable("page")` без сети.
+ * `radio` на записанных ответах (Ю4б, `docs/work/yu4b.md`): Mix затравки страницами, каждая — настоящая страница
+ * YouTube (`resources/youtube/mix/`, как они записаны — `README.md` там же). Что держится: затравка не возвращается ни
+ * на одной странице; прямые эфиры, премьеры и безымянное не играются и не идут; повторы между страницами источник не
+ * трогает — очередь знает, что в ней уже есть; ключ следующей страницы — короткая строка, а сама страница экстрактора
+ * лежит в памяти источника (восемь ключей, три часа от рождения), и ключ можно использовать повторно; чужой,
+ * неизвестный и просроченный ключи — `Unavailable("page")` без сети.
  */
 class YoutubeRadioTest {
     private val replay = ReplayDownloader()
@@ -74,7 +74,8 @@ class YoutubeRadioTest {
             assertThat(track.duration!!).isGreaterThan(0.seconds)
             assertThat(track.album).isNull()
             assertThat(track.number).isNull()
-            assertThat(track.variants.map(YoutubeVariant::id)).containsExactly("${track.id}/251", "${track.id}/140")
+            assertThat(track.variants.map(YoutubeVariant::id))
+                .containsExactly("${track.id}/251", "${track.id}/140")
                 .inOrder()
         }
     }
@@ -147,7 +148,7 @@ class YoutubeRadioTest {
         assertThat(replay.seen).containsExactly("sw", "mix.krovi.1", "mix.krovi.2").inOrder()
     }
 
-    /** Одну песню Mix называет не раз: дедуп по очереди — дело того, кто её знает (`RadioFeeder`, Ю4в), не источника. */
+    /** Одну песню Mix называет не раз: дедуп по очереди — дело того, кто её знает (`RadioFeeder`, Ю4в). */
     @Test
     fun `repeats between pages come through as they are`() {
         val first = source.radio(LUCKY, null)
@@ -287,8 +288,8 @@ class YoutubeRadioTest {
 
         val page = oddSource.radio(LUCKY, null)
 
-        // Закрытое (`[Deleted video]`) выбрасывает сам экстрактор; прямой эфир, видео без длительности и без названия, и
-        // затравка — источник. Остальные двадцать идут в прежнем порядке.
+        // Закрытое (`[Deleted video]`) выбрасывает сам экстрактор; прямой эфир, видео без длительности и без
+        // названия, и затравку — источник. Остальные двадцать идут в прежнем порядке.
         val dropped = setOf("qFLhGq0060w", "wU26xVT_vBU", "qod03PVTLqk", "EfqsJm6BKng")
         assertThat(page.ids()).containsExactlyElementsIn(LUCKY_PAGE_1.filterNot { it in dropped }).inOrder()
         assertThat(page.tracks).hasSize(20)
@@ -448,7 +449,7 @@ class YoutubeRadioTest {
                 "khnokW3Mw24",
             )
 
-        /** Вторая страница (`mix/lucky-2.json`): первый элемент ответа — последний прошлой страницы, экстрактор его не отдаёт. */
+        /** Вторая страница (`mix/lucky-2.json`); первый элемент ответа — последний прошлой, его не отдают. */
         val LUCKY_PAGE_2 =
             listOf(
                 "KJwQzgz6UBg",

@@ -77,7 +77,7 @@ class YoutubeProviderRadioTest {
         assertThat(third.tracks.map { it.external }).containsExactly(RADIO_7)
     }
 
-    /** Каждая вариантная ссылка радио называет своё видео: чужой идентификатор в варианте склеил бы два трека каталога. */
+    /** Вариант радио называет своё видео: чужой идентификатор в варианте склеил бы два трека каталога. */
     @Test
     fun `every variant id of a radio track is the id of its own track and an itag`() {
         val tracks =
@@ -85,7 +85,9 @@ class YoutubeProviderRadioTest {
 
         assertThat(tracks).hasSize(7)
         for (track in tracks) {
-            assertThat(track.variants.map { it.external }).containsExactly("${track.external}/251", "${track.external}/140")
+            assertThat(
+                track.variants.map { it.external },
+            ).containsExactly("${track.external}/251", "${track.external}/140")
         }
     }
 
@@ -100,7 +102,8 @@ class YoutubeProviderRadioTest {
         source.failure = parse
         val gotParse = assertThrows(ProviderException.Parse::class.java) { provider.radio(SONG, null) }
         source.failure = unavailable
-        val gotUnavailable = assertThrows(ProviderException.Unavailable::class.java) { provider.radio(SONG, RADIO_KEY_2) }
+        val gotUnavailable =
+            assertThrows(ProviderException.Unavailable::class.java) { provider.radio(SONG, RADIO_KEY_2) }
 
         assertThat(gotNetwork.text).isEqualTo("http 429, retry after 30 s")
         assertThat(gotNetwork.cause).isSameInstanceAs(network)
@@ -142,7 +145,8 @@ class YoutubeProviderRadioTest {
                     YoutubeStream("https://rr1---sn-test.googlevideo.com/", emptyList(), YoutubeFormat.OPUS, 160)
             }
 
-        val failure = assertThrows(ProviderException.Unavailable::class.java) { YoutubeProvider(plain).radio(SONG, null) }
+        val failure =
+            assertThrows(ProviderException.Unavailable::class.java) { YoutubeProvider(plain).radio(SONG, null) }
         val direct = assertThrows(YoutubeException.Unavailable::class.java) { plain.radio(SONG, null) }
 
         assertThat(failure.text).isEqualTo("radio")
@@ -161,7 +165,8 @@ class YoutubeProviderRadioTest {
 
     @Test
     fun `an empty page with a key is still a page`() {
-        source.radioPages = mapOf(null to YoutubeRadioPage(emptyList(), "more"), "more" to YoutubeRadioPage(emptyList(), null))
+        source.radioPages =
+            mapOf(null to YoutubeRadioPage(emptyList(), "more"), "more" to YoutubeRadioPage(emptyList(), null))
 
         val first = provider.radio(SONG, null)
         val last = provider.radio(SONG, first.next)

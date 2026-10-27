@@ -78,11 +78,18 @@ class FakeYoutubeSource : YoutubeSource {
     ): YoutubeRadioPage {
         calls += "radio:$seed:$page"
         failure?.let { throw it }
-        val video = SEED.matchEntire(seed)?.groupValues?.get(1)?.takeIf { it in SEED_VIDEOS }
-        if (video == null) throw YoutubeException.Unavailable("id")
+        val video = seedVideo(seed)
         val found = radioPages[page] ?: throw YoutubeException.Unavailable("page")
         return found.copy(tracks = found.tracks.filter { it.id != video })
     }
+
+    private fun seedVideo(seed: String): String =
+        SEED
+            .matchEntire(seed)
+            ?.groupValues
+            ?.get(1)
+            ?.takeIf { it in SEED_VIDEOS }
+            ?: throw YoutubeException.Unavailable("id")
 
     companion object {
         const val SONG = "dQw4w9WgXcQ"
@@ -93,7 +100,9 @@ class FakeYoutubeSource : YoutubeSource {
         const val QUIET = "OLAK5uy_quiet_Album-2"
         const val QUIET_TRACK = "trkBBBBBBB2"
 
-        /** Радио: семь треков (из них 1–3 на первой странице, 4–6 на второй, 7 на последней), 200, 210, … 260 секунд. */
+        /**
+         * Радио: семь треков (1–3 на первой странице, 4–6 на второй, 7 на последней), 200, 210, … 260 секунд.
+         */
         const val RADIO_1 = "radioAAAAA1"
         const val RADIO_2 = "radioAAAAA2"
         const val RADIO_3 = "radioAAAAA3"
@@ -180,8 +189,16 @@ class FakeYoutubeSource : YoutubeSource {
         /** Видео, от которых радио открывается: одиночные видео каталога и сами треки радио. */
         private val SEED_VIDEOS = setOf(SONG, SONG_NO_OPUS, ALBUM_TRACK_2, ALBUM_TRACK_3, QUIET_TRACK) + RADIO_IDS
 
+        private const val RADIO_BASE_SECONDS = 190L
+        private const val RADIO_STEP_SECONDS = 10L
+
         private fun radioTrack(number: Int) =
-            track(RADIO_IDS[number - 1], "Radio $number", "Radio Artist", 190L + 10L * number)
+            track(
+                RADIO_IDS[number - 1],
+                "Radio $number",
+                "Radio Artist",
+                RADIO_BASE_SECONDS + RADIO_STEP_SECONDS * number,
+            )
 
         private val RADIO_PAGES: Map<String?, YoutubeRadioPage> =
             mapOf(
