@@ -5,11 +5,21 @@
 //! `map` на сущность («трек → { лайк, оценка }») нельзя: созданный
 //! параллельно на двух устройствах, один из двух затрёт другой целиком.
 //!
-//! - `likes`, `subscriptions`, `blocks`, `superseded` — множества: ключ есть —
-//!   элемент есть. Добавление побеждает параллельное удаление: удаление стирает
-//!   только ту запись, которую видело. `superseded` (Р9д) только пополняется:
-//!   ключ — `DeviceId` установки, чей журнал начат заново из базы, и пометку
-//!   никто не снимает.
+//! - `likes`, `subscriptions`, `blocks` — множества: элемент есть, пока у него есть
+//!   читаемый слот. Элемент с id `K` лежит слотами, как регистр (ниже): `K@<установка>`
+//!   — добавление этой установки — и `K` без суффикса — слот журнала до Р1.6б
+//!   (читается, новым кодом не пишется). Установка пишет только свой слот и только
+//!   если у элемента нет слотов вовсе — ни своего, ни чужого, читаемого или нет, —
+//!   поэтому параллельных вставок одного ключа `yrs` нет и разводить по номеру
+//!   клиента нечего: добавление побеждает параллельное удаление при любой истории
+//!   установок, а не только при общей. Удаление стирает все слоты, которые видит;
+//!   слот, которого оно не видело, остаётся и держит элемент. `since` подписки и
+//!   записи чёрного списка берётся из слота с наибольшим `(OpMeta.at, установка)`,
+//!   как значение регистра.
+//! - `superseded` (Р9д) — множество без слотов, только пополняется: ключ —
+//!   `DeviceId` установки, чей журнал начат заново из базы, и пометку никто не
+//!   снимает; параллельные вставки одного ключа теряют лишь копию записи, ключ
+//!   остаётся.
 //! - `ratings`, `playlists`, `entries`, `settings`, `passports` — регистр на ключ:
 //!   действует запись с наибольшим временем (`OpMeta.at`), при равенстве — большей
 //!   установки. Регистр с id `K` лежит слотами: `K@<установка>` — запись этой
@@ -19,9 +29,10 @@
 //!   не теряется, а победителя выбирает чтение. Запись, видевшая значение,
 //!   получает время не меньше его времени + 1 мс — отстающие часы не дают старому
 //!   победить новое. Удаление стирает все слоты, которые видит; параллельная
-//!   запись, которой оно не видело, остаётся — как у множеств. Слоты id в правке
-//!   ищутся пробой ключей по суффиксам установок карты (`Suffixes`): они
-//!   собираются одним проходом по карте на правку, а не на каждую операцию.
+//!   запись, которой оно не видело, остаётся — как у множеств. Слоты id (регистра
+//!   или элемента множества) в правке ищутся пробой ключей по суффиксам установок
+//!   карты (`Suffixes`): они собираются одним проходом по карте на правку, а не на
+//!   каждую операцию.
 //! - `plays`, `decisions` — только дописываются: прослушивания и решения
 //!   о склейке неизменны, их порядок в массиве ничего не значит.
 //!
@@ -105,9 +116,9 @@ impl Roots {
     }
 
     /// Кладёт операции одной правки в документ; сколько из них что-то изменили.
-    /// Слоты регистров правка ищет по суффиксам установок своей карты, собранным
-    /// одним проходом по ключам при первом обращении (`Slots`), — прохода на
-    /// каждую операцию нет.
+    /// Слоты регистров и элементов множеств правка ищет по суффиксам установок своей
+    /// карты, собранным одним проходом по ключам при первом обращении (`Slots`), —
+    /// прохода на каждую операцию нет.
     ///
     /// Всё или ничего (Р1.11б): у транзакции `yrs` нет отката, а её правки ложатся
     /// в документ при `Drop`, так что операция, отказавшая посреди пакета, оставила
@@ -247,8 +258,14 @@ impl Roots {
         slots: &mut Slots,
     ) -> Result<bool, CoreError> {
         let changed = match op {
-            Op::Like { track } => add(&self.likes, txn, track.to_string(), || encode(meta, |_| ())),
-            Op::Unlike { track } => self.likes.remove(txn, &track.to_string()).is_some(),
+            Op::Like { track } => {
+                let found = open(&self.likes, &mut slots.likes, txn, meta.device);
+                add_member(found, txn, &track.to_string(), meta, || encode(meta, |_| ()))
+            }
+            Op::Unlike { track } => {
+                let found = open(&self.likes, &mut slots.likes, txn, meta.device);
+                remove_slots(found, txn, &track.to_string())
+            }
             Op::Rate { track, rating: Some(rating) } => {
                 let key = track.to_string();
                 let found = open(&self.ratings, &mut slots.ratings, txn, meta.device);
@@ -300,14 +317,24 @@ impl Roots {
                 self.decisions.push_back(txn, buffer(encode(meta, |w| w.decision(decision))));
                 true
             }
-            Op::Subscribe(subscription) => add(&self.subscriptions, txn, subscription.artist.to_string(), || {
-                encode(meta, |w| w.since(subscription.since))
-            }),
-            Op::Unsubscribe { artist } => self.subscriptions.remove(txn, &artist.to_string()).is_some(),
-            Op::Block(entry) => {
-                add(&self.blocks, txn, block_key(entry.target), || encode(meta, |w| w.since(entry.since)))
+            Op::Subscribe(subscription) => {
+                let found = open(&self.subscriptions, &mut slots.subscriptions, txn, meta.device);
+                add_member(found, txn, &subscription.artist.to_string(), meta, || {
+                    encode(meta, |w| w.since(subscription.since))
+                })
             }
-            Op::Unblock { target } => self.blocks.remove(txn, &block_key(*target)).is_some(),
+            Op::Unsubscribe { artist } => {
+                let found = open(&self.subscriptions, &mut slots.subscriptions, txn, meta.device);
+                remove_slots(found, txn, &artist.to_string())
+            }
+            Op::Block(entry) => {
+                let found = open(&self.blocks, &mut slots.blocks, txn, meta.device);
+                add_member(found, txn, &block_key(entry.target), meta, || encode(meta, |w| w.since(entry.since)))
+            }
+            Op::Unblock { target } => {
+                let found = open(&self.blocks, &mut slots.blocks, txn, meta.device);
+                remove_slots(found, txn, &block_key(*target))
+            }
             Op::Set(setting) => {
                 let key = setting_key(*setting);
                 let found = open(&self.settings, &mut slots.settings, txn, meta.device);
@@ -418,8 +445,10 @@ impl Roots {
             unreadable += 1;
         };
 
-        state.likes =
-            keyed(&self.likes, txn, &mut skip, |key, value| record(value, |_| Ok(())).and_then(|()| key.parse()));
+        state.likes = registers(&self.likes, txn, &mut skip, |id, value| {
+            let (meta, ()) = slot(value, |_| Ok(()))?;
+            Ok((meta, id.parse()?))
+        });
         state.ratings = registers(&self.ratings, txn, &mut skip, |id, value| {
             let track = id.parse()?;
             let (meta, rating) = slot(value, |r| r.rating())?;
@@ -432,11 +461,15 @@ impl Roots {
         state.entries = registers(&self.entries, txn, &mut skip, entry);
         state.plays = listed(&self.plays, txn, &mut skip, |value| record(value, |r| r.play()));
         state.decisions = listed(&self.decisions, txn, &mut skip, |value| record(value, |r| r.decision()));
-        state.subscriptions = keyed(&self.subscriptions, txn, &mut skip, |key, value| {
-            Ok(Subscription { artist: key.parse()?, since: record(value, |r| r.since())? })
+        state.subscriptions = registers(&self.subscriptions, txn, &mut skip, |id, value| {
+            let artist = id.parse()?;
+            let (meta, since) = slot(value, |r| r.since())?;
+            Ok((meta, Subscription { artist, since }))
         });
-        state.blocklist = keyed(&self.blocks, txn, &mut skip, |key, value| {
-            Ok(BlockEntry { target: block_target(key)?, since: record(value, |r| r.since())? })
+        state.blocklist = registers(&self.blocks, txn, &mut skip, |id, value| {
+            let target = block_target(id)?;
+            let (meta, since) = slot(value, |r| r.since())?;
+            Ok((meta, BlockEntry { target, since }))
         });
         state.settings = registers(&self.settings, txn, &mut skip, |_, value| slot(value, |r| r.setting()));
         state.passports = registers(&self.passports, txn, &mut skip, |id, value| {
@@ -469,7 +502,8 @@ fn missing(what: &str) -> CoreError {
     CoreError::unavailable(format!("journal: no such {what}"))
 }
 
-/// Добавляет элемент множества; `false` — он уже есть.
+/// Добавляет элемент множества без слотов (`superseded`): ключ у всех один; `false` —
+/// он уже есть.
 fn add(map: &MapRef, txn: &mut TransactionMut, key: String, record: impl FnOnce() -> Vec<u8>) -> bool {
     if map.contains_key(txn, &key) {
         return false;
@@ -482,27 +516,29 @@ fn put(map: &MapRef, txn: &mut TransactionMut, key: String, record: Vec<u8>) -> 
     true
 }
 
-/// Разделитель id регистра и установки в ключе слота: `<id>@<установка>`.
+/// Разделитель id регистра или элемента множества и установки в ключе слота:
+/// `<id>@<установка>`.
 const SLOT: char = '@';
 
 /// Сколько треков в запросе паспортов ещё «единицы»: ключи карты сравниваются
 /// с ними прямо, без хеш-таблицы (`Roots::passports_of`).
 const FEW_TRACKS: usize = 8;
 
-/// Id регистра — часть ключа слота до `@`; у слота журнала до Р1.6 весь ключ.
+/// Id регистра или элемента множества — часть ключа слота до `@`; у слота журнала
+/// до Р1.6 (у множеств — до Р1.6б) весь ключ.
 fn id_of(key: &str) -> &str {
     key.split_once(SLOT).map_or(key, |(id, _)| id)
 }
 
-/// Ключ слота регистра `id` у установки `device`.
+/// Ключ слота регистра или элемента множества `id` у установки `device`.
 fn own_key(id: &str, device: DeviceId) -> String {
     format!("{id}{SLOT}{device}")
 }
 
-/// Суффиксы `@<установка>` ключей карты регистра: чьи слоты в ней лежат. Слоты
-/// регистра `id` — это ключи `id` (журнал до Р1.6) и `id@<суффикс>` для суффиксов
-/// отсюда, поэтому поиск слотов — проба нескольких ключей (установок единицы), а
-/// не проход по карте на каждую операцию.
+/// Суффиксы `@<установка>` ключей карты регистра или множества: чьи слоты в ней
+/// лежат. Слоты `id` — это ключи `id` (журнал до Р1.6, у множеств до Р1.6б) и
+/// `id@<суффикс>` для суффиксов отсюда, поэтому поиск слотов — проба нескольких
+/// ключей (установок единицы), а не проход по карте на каждую операцию.
 ///
 /// Собирается одним проходом по ключам при первом обращении к карте в правке
 /// ([`Slots`]) и больше не меняется: правка пишет только в слот своей установки,
@@ -532,8 +568,8 @@ impl Suffixes {
     }
 }
 
-/// Суффиксы пяти карт регистров в одной правке: каждая собирается при первом
-/// обращении к своей карте.
+/// Суффиксы восьми карт слотов — пяти регистров и трёх множеств — в одной правке:
+/// каждая собирается при первом обращении к своей карте.
 #[derive(Default)]
 struct Slots {
     ratings: Option<Suffixes>,
@@ -541,6 +577,9 @@ struct Slots {
     entries: Option<Suffixes>,
     settings: Option<Suffixes>,
     passports: Option<Suffixes>,
+    likes: Option<Suffixes>,
+    subscriptions: Option<Suffixes>,
+    blocks: Option<Suffixes>,
 }
 
 /// Что пакет операций уже сделал бы с плейлистами и записями, поверх документа,
@@ -577,7 +616,7 @@ impl Plan {
     }
 }
 
-/// Карта регистра вместе с суффиксами её слотов в этой правке.
+/// Карта регистра или множества вместе с суффиксами её слотов в этой правке.
 #[derive(Clone, Copy)]
 struct Register<'a> {
     map: &'a MapRef,
@@ -585,14 +624,14 @@ struct Register<'a> {
 }
 
 impl Register<'_> {
-    /// Ключи, где может лежать слот регистра `id`; лежит ли там что-то, решает карта.
+    /// Ключи, где может лежать слот `id`; лежит ли там что-то, решает карта.
     fn keys<'a>(&'a self, id: &'a str) -> impl Iterator<Item = String> + 'a {
         std::iter::once(id.to_owned()).chain(self.suffixes.0.iter().map(move |suffix| format!("{id}{SLOT}{suffix}")))
     }
 }
 
-/// Открывает карту регистра в правке установки `device`: суффиксы собираются
-/// при первом обращении.
+/// Открывает карту регистра или множества в правке установки `device`: суффиксы
+/// собираются при первом обращении.
 fn open<'a, R: ReadTxn>(
     map: &'a MapRef,
     suffixes: &'a mut Option<Suffixes>,
@@ -602,7 +641,7 @@ fn open<'a, R: ReadTxn>(
     Register { map, suffixes: suffixes.get_or_insert_with(|| Suffixes::scan(map, txn, device)) }
 }
 
-/// Есть ли у регистра `id` слот — читаемый или нет.
+/// Есть ли у регистра или элемента множества `id` слот — читаемый или нет.
 fn has_slot<R: ReadTxn>(register: Register<'_>, txn: &R, id: &str) -> bool {
     register.keys(id).any(|key| register.map.contains_key(txn, &key))
 }
@@ -672,8 +711,25 @@ fn add_register(
     put(map, txn, own, record())
 }
 
-/// Стирает все слоты регистра `id`, которые видит, читаемые и нет; `false` —
-/// слотов не было. Слот, которого не видело (параллельная запись), остаётся.
+/// Добавляет элемент множества `id` слотом установки `meta.device`; `false` — у
+/// элемента уже есть слот: свой, чужой или журнала до Р1.6б, читаемый или нет. Чужой
+/// слот установка не «закрепляет» своим: добавляет только то, чего не видит.
+fn add_member(
+    register: Register<'_>,
+    txn: &mut TransactionMut,
+    id: &str,
+    meta: &OpMeta,
+    record: impl FnOnce() -> Vec<u8>,
+) -> bool {
+    if has_slot(register, txn, id) {
+        return false;
+    }
+    put(register.map, txn, own_key(id, meta.device), record())
+}
+
+/// Стирает все слоты регистра или элемента множества `id`, которые видит, читаемые
+/// и нет; `false` — слотов не было. Слот, которого не видело (параллельная запись
+/// или добавление), остаётся.
 fn remove_slots(register: Register<'_>, txn: &mut TransactionMut, id: &str) -> bool {
     let mut removed = false;
     for key in register.keys(id) {
@@ -697,9 +753,11 @@ fn record<T>(value: &Out, payload: impl FnOnce(&mut Reader<'_>) -> Result<T, Cor
     slot(value, payload).map(|(_, value)| value)
 }
 
-/// Регистры `map`, упорядоченные по id: из слотов одного id действует читаемый
-/// с наибольшим `(at, установка)`. `read` получает id регистра (ключ до `@`) и
-/// значение слота; слот, который не разбирается, уходит в `skip`.
+/// Регистры и множества `map`, упорядоченные по id: из слотов одного id действует
+/// читаемый с наибольшим `(at, установка)` — значение регистра, а у множества —
+/// элемент с его `since`. `read` получает id регистра или элемента (ключ до `@`) и
+/// значение слота; слот, который не разбирается, уходит в `skip`, каждый один раз —
+/// и когда у id есть другой, читаемый слот.
 fn registers<T, R: ReadTxn>(
     map: &MapRef,
     txn: &R,
@@ -724,8 +782,8 @@ fn registers<T, R: ReadTxn>(
         .collect()
 }
 
-/// Записи `map`, упорядоченные по ключу. Ключ, который не разбирается, и
-/// нечитаемая запись уходят в `skip`.
+/// Записи `map` без слотов (`superseded`), упорядоченные по ключу. Ключ, который
+/// не разбирается, и нечитаемая запись уходят в `skip`.
 fn keyed<T, R: ReadTxn>(
     map: &MapRef,
     txn: &R,
