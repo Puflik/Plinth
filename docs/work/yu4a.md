@@ -1,8 +1,5 @@
 # yu4a — радио как способность провайдера: ядро и мост (Ю4, часть 1 из 3)
 
-> **СТАТУС (2026-10-27): Rust-тесты готовы и проверены прототипом; Kotlin-тесты ещё пишутся.** Исполнителя
-> не звать, пока эта строка не исчезла (её снимает планировщик, когда в ветке есть все защищённые тесты).
-
 > Файл задачи для исполнителя (Sonnet). Пишет планировщик; исполнитель меняет только
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
 
@@ -13,7 +10,7 @@
 > в «На что смотреть при чтении плана (Opus)».
 
 - **Ветка:** `work/yu4a` · **Ворктри:** `C:\claude\Plinth-yu4a`
-- **Основа:** `main` на `e95c935` · **Коммит тестов:** `<заполняется>` (второй в ветке; первый — черновик этого файла)
+- **Основа:** `main` на `e95c935` · **Коммит тестов:** `d719377` (последний, Kotlin; Rust-тесты — `4509c9c`; до них в ветке только черновики этого файла)
 - **Откуда:** `tasks.md`, Ю4 «Радио от трека»; спайк `docs/work/yu3a.md` п. 6; ADR 0008 (метод `related`
   «придёт позже методом по умолчанию»); план 6.1, 9.2, 11.1.
 
@@ -219,7 +216,10 @@ sealed interface OnlineRadio {
 }
 
 // в OnlineRepository:
-/** Радио от [seed] провайдера [provider] (id трека или его источника); [page] — ключ прошлой страницы, `null` — первая. */
+/**
+ * Радио от [seed] провайдера [provider] (id трека или его источника); [page] — ключ прошлой страницы,
+ * `null` — первая.
+ */
 suspend fun radio(provider: String, seed: String, page: String? = null): OnlineRadio
 
 /** Где трек каталога играется; файл с диска и неизвестный трек — пусто. */
@@ -343,6 +343,9 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 - `cargo clippy`/`fmt`, `ktlintCheck`, `detekt`, `lintGithubDebug` чисты;
 - `OnlineRadioCoreTest` проходит на эмуляторе;
 - в приложении по-прежнему ничего не видно: меню, очередь, YouTube — те же (`YoutubeProvider` не менялся);
+- числа для сверки: Rust — 5 тестов в `yu4a_radio`, 19 в `yu4a_tests` (всего в `plinth-ffi` 180); Kotlin — 6 + 4 + 6 + 4
+  на JVM (`ExternalProviderRadioTest`, `CoreOnlineRadioMappingTest`, `FakeOnlineRepositoryRadioTest`,
+  `GatedOnlineRepositoryRadioTest`) и 4 инструментальных (`OnlineRadioCoreTest`);
 - скорость: не критерий — радио не на горячем пути.
 
 ## Остановиться и написать, если
@@ -367,11 +370,17 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
    минут. Mix — другой эндпоинт, чем поиск; не слишком ли строго?
 4. **Затравка — «источник или id трека»** (двойной смысл `seed`): каталог хранит только варианты, поэтому ядро не
    знает id видео. Принимать оба должен провайдер (YouTube: `VIDEO_ID` или `VARIANT`). Нет ли чище?
-5. **`ExternalProvider::radio` без тела.** UniFFI тел по умолчанию не принимает (компилятор), поэтому три двойника платформы
+5. **`ExternalProvider::radio` без тела (решение плана изменилось по ходу проверки).** UniFFI тел по умолчанию не принимает (компилятор), поэтому три двойника платформы
    в старых тестах Ю3 получили вставку `fn radio` → «не умею»; они теперь защищённые. Альтернатива — отдельный маленький
    внешний трейт только для радио (ещё один объект на провайдера) — отвергнута как лишняя. Согласен?
 6. **Название `radio` вместо `related`** — поправка к ADR 0008 и плану 6.1 (`related(id) → [SearchResult]` →
    `radio(seed, page) → RadioPage`); текст поправки напишет Opus при слиянии.
+7. **Инвариант про текст паники убран из плана** (по ходу проверки): `panic::guard` кладёт текст паники в `Internal` у всех
+   вызовов платформы (`search`, `resolve`, `stream`), и радио не исключение. Это существующее поведение, этой задачей оно не
+   меняется; в Kotlin исключения до границы не доходят (`toRust()` ловит `Exception`), паника возможна только от `Error`.
+   Если нужно ужесточить — отдельная задача.
+8. **Тесты на эмуляторе и фейк.** `FakeOnlineRepository` получает `scriptRadio`, `radioCalls`, `RadioCall`, `origins` из
+   `add`: на нём будут стоять тесты очереди (yu4c), поэтому поведение закреплено `FakeOnlineRepositoryRadioTest`.
 
 ## Временная реализация и проверка тестов
 
@@ -385,7 +394,14 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 попадает в `Internal` через `panic::guard` и сейчас, не только у радио — тест этого не требует; (3) `versions_of` неизвестного
 трека — пустой список, поэтому `online_origins` для него `Ok([])`; (4) `TrackId` — `Copy`.
 
-**Kotlin:** _дописывается._
+**Kotlin (проверено 2026-10-27).** Прототип — патчем в общей папке заметок (`yu4a-reference-implementation-kotlin.patch`, в ветке
+его нет): `OnlineRadioPage`, `OnlineRadioReply`, `OnlineOrigin`, `CoreOnline.radio`/`origins`, `OnlineProvider.radio` по умолчанию и
+`toRust()`, `OnlineRadio`, `OnlineRepository.radio`/`origins`, `CoreOnlineRepository`, `GatedOnlineRepository.radio`,
+`FakeOnlineRepository.scriptRadio`/`radioCalls`/`origins`. Против него: `testGithubDebugUnitTest` на четырёх новых классах — 20 из 20
+(6 + 4 + 6 + 4); `compileGithubDebugAndroidTestKotlin` собирается; `OnlineRadioCoreTest` на эмуляторе `Medium_Phone_API_36.0`
+(`-no-window`, `ANDROID_SERIAL=emulator-5554`, фильтр `…class=io.github.puflik.plinth.ffi.OnlineRadioCoreTest`; сборка 4 мин 43 с,
+эмулятор потом выключен) — 4 из 4; `ktlintCheck` и `detekt` на моих тестах чисты (длинные строки поправлены; в прототипе нашёлся
+порядок импортов в `FakeOnlineRepository.kt` — исполнителю при реализации). Без прототипа тесты не собираются: новый API.
 
 ## Дальше: yu4b и yu4c (наброски; подробно распишут их планировщики)
 
