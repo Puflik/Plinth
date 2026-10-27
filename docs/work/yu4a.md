@@ -529,5 +529,36 @@ lintGithubDebug --continue`, `JAVA_HOME` jdk-21.0.8):
 - Четыре новых класса — 20 из 20: `ExternalProviderRadioTest` 6, `CoreOnlineRadioMappingTest` 4,
   `FakeOnlineRepositoryRadioTest` 6, `GatedOnlineRepositoryRadioTest` 4.
 
-**Дальше в работе** (будет дописано отдельным коммитом): инструментальный тест `OnlineRadioCoreTest`
-на эмуляторе.
+**Эмулятор** (`Medium_Phone_API_36.0`, `-no-window -no-audio -no-snapshot-save`, `ANDROID_SERIAL=emulator-5554`
+в той же команде, что Gradle; фильтр по пакету, не списком классов):
+`connectedGithubDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.package=io.github.puflik.plinth.ffi"`
+— `BUILD SUCCESSFUL` за 2 мин 51 с. Число проверено по `TEST-*.xml`, а не по «зелёной» сборке:
+выполнилось **35 тестов в 8 классах, 0 упавших, 0 пропущенных**; `OnlineRadioCoreTest` — **4 из 4**
+(страницы доходят до репозитория с ключом и затравкой дословно; беда провайдера — `OnlineRadio.Failed`;
+провайдер без радио, чужой и выключенные источники — `PROVIDER_DOWN`; `origins` после `add` отдаёт
+источники, радио в каталог ничего не заводит). Остальные классы пакета (`PlinthCoreTest`,
+`ExternalProviderCoreTest`, `CoreScanTest`, …) не пострадали. После прогона эмулятор погашен
+(`adb emu kill`; процессов нет, `adb devices` пуст). На устройства автора ничего не ставилось:
+Gradle был привязан к `emulator-5554`, а до запуска и после прогона `adb devices` других устройств
+не показывал.
+
+**Готово, когда — сверка.** Защищённые тесты зелёные: Rust 6 + 19, Kotlin JVM 6 + 4 + 6 + 4, на
+эмуляторе 4. Остальные тесты Rust — как были (1000 зелёных); Kotlin — как были, кроме известных
+`DataStore*SettingsTest` на Windows. `cargo clippy`/`fmt`, `ktlintCheck`, `detekt`, `lintGithubDebug`
+чисты. В приложении ничего не видно: `YoutubeProvider` и всё из «Не трогать» не тронуты —
+`git diff cc1b495 HEAD --name-only` содержит ровно шесть Rust-файлов, шесть Kotlin-файлов из «Менять»
+и этот файл; защищённые тесты и `Cargo.lock`, `libs.versions.toml`, `CHANGELOG.md` не менялись.
+
+**На что глянуть при ревью:**
+
+- Единственный новый `@Suppress` — `("TooGenericExceptionCaught", "SwallowedException")` на
+  `toRust().radio`, ровно как требует «Решение», Г (тот же комментарий, что у `search`/`resolve`/`stream`).
+  Новых `unwrap`, `expect`, `panic!`, `#[allow]`, `#[ignore]` в диффе нет.
+- `DataStore*SettingsTest`: упало 7, в README названо 4 — причина та же (`IOException` переименования
+  временного файла, `FileStorage.kt:114`), радио к ним отношения не имеет; арбитр — CI на Linux.
+- Для yu4c: «провайдер не умеет радио» и «провайдер не ответил» приложению неразличимы — оба
+  `PROVIDER_DOWN` (так закреплено `yu4a_tests`: платформа без `radio` — `ProviderDown`). Что радио
+  есть у YouTube, приложение знает не из ответа, а из `OnlineProviderIds` — так и задумано в
+  «Отвергнуто» (поле `Capabilities` отвергнуто); до yu4b `YoutubeProvider` радио не умеет.
+- Вне задачи, не тронуто: ADR 0008 (`related` → `radio`), план 6.1/9.2, `CHANGELOG.md`, `tasks.md` —
+  правит Opus при слиянии.
