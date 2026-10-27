@@ -446,4 +446,60 @@ Select-String -Path app\build\outputs\mapping\githubRelease\mapping.txt -Pattern
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+**Итог: сделано, все пункты «Готово, когда» выполнены; условий «Остановиться и написать» не наступило, вопросов к
+планировщику и Opus нет.** Ночь 2026-10-28, автор не отвечал.
+
+**Сделано** — коммит `d3d123a` в `work/yu4b` (четыре файла из «Менять»: `YoutubeSource.kt`, `NewPipeYoutubeSource.kt`,
+`CallBudget.kt`, `online/YoutubeProvider.kt`; +168 −4). Основа — патч планировщика `yu4b-reference-implementation.patch`:
+`git apply` лёг на коммит тестов без конфликтов; каждая строка сверена с «Решением» (таблица, А–В), «Инвариантами» и
+находками 4, 7, 8 — расхождений нет: затравка и ключ проверяются до сети и до срока вызова; `getPage` по сохранённой
+`Page` без `fetchPage()`; ключ выдаётся только после разбора страницы; ёмкость 8, срок 3 часа от выдачи, привязка к видео
+затравки, повторное использование; `Song.toTrack(number: Int?)`; `setConsentAccepted` не тронут. Поверх патча — две правки
+только в KDoc: у `YoutubeSource` «три вопроса» перестало быть правдой (добавлено «и радио (Ю4б)»), у `NewPipeYoutubeSource`
+абзац о радио (страницы Mix по одному запросу, ключи только в памяти). Поведения они не меняют.
+
+**Красное до реализации.** `compileGithubDebugUnitTestKotlin` на `4ccec92` — 179 ошибок компиляции в тех же четырёх файлах,
+что назвал планировщик (`FakeYoutubeSource` 18, `FakeYoutubeSourceRadioTest` 32, `YoutubeProviderRadioTest` 9,
+`YoutubeRadioTest` 120): нет `YoutubeRadioPage`, `YoutubeSource.radio`, `YoutubeProvider.radio`, параметра `radio` у
+`YoutubeBudgets` (в плане ≈ 145: счёт ошибок у компилятора плавает, набор файлов тот же).
+
+**Проверки JVM** (Windows, `.\gradlew.bat ktlintCheck detekt testGithubDebugUnitTest lintGithubDebug --continue`):
+
+- `ktlintCheck`, `detekt`, `lintGithubDebug` — чисто.
+- `testGithubDebugUnitTest` — 937 тестов, 7 упали, 0 пропущено (по `TEST-*.xml` и HTML-отчёту). Упали ровно
+  `DataStore*SettingsTest` (`Folder` 1, `Online` 3, `Sort` 1, `Onboarding` 2): `IOException: Unable to rename
+  …preferences_pb.tmp`, `FileStorage.kt:114` — известное на Windows; вне `DataStore*` не упало ничего. (В плане и у
+  yu4a записано «1 пропущен», у меня 0; на выводы не влияет.)
+- Числа сошлись: `YoutubeRadioTest` 25 из 25, `YoutubeProviderRadioTest` 10 из 10, `FakeYoutubeSourceRadioTest` 8 из 8;
+  старые `YoutubeProviderTest` 13 из 13 (в нём анонимный `YoutubeSource` без `radio`) и `YoutubeBoundaryTest` 4 из 4.
+
+**Эмулятор** (`Medium_Phone_API_36.0`, `-no-window -no-audio -no-snapshot-save`, `ANDROID_SERIAL=emulator-5554` в той же
+команде; `adb devices` — только он): пакет `io.github.puflik.plinth.ffi` — 40 тестов, 0 упавших, 0 пропущенных (по
+`TEST-*.xml`); `YoutubeRadioCoreTest` — 5 из 5. Пропуск пробы без аргумента отдельным запуском не проверял (в «Проверках»
+его нет); в коде это `assumeTrue` в `@Before`.
+
+**Проба с настоящей сетью** (один раз, `class=…YoutubeRadioLiveProbe`, `liveYoutube=true`; в XML — выполнена, не
+пропущена, 6,4 с): зелёная.
+
+- Первая страница — **24 трека, 3312 мс**; вторая по ключу — **23 трека, 3112 мс**. Ключи `ar1seVpcdGEa` и `5oTM021kjCOy`
+  (12 знаков, разные); затравки на страницах нет.
+- Первые названия (logcat, тег `YoutubeRadioLive`): `fHI8X4OXluQ` The Weeknd — «The Weeknd - Blinding Lights (Official
+  Audio)»; `qPRNIHxLhmc` The Weeknd — «I Feel It Coming»; `XsMpXczOIPs` Coldplay — «Adventure of a Lifetime»;
+  `EfqsJm6BKng` John Newman — «Love Me Again»; `KWuyx6yZ21U` Coldplay — «A Sky Full of Stars».
+- Находка 8 подтверждена ещё раз: `getPage` по сохранённой `Page` без `fetchPage()` работает на Android с настоящим
+  загрузчиком. Для сверки: прототип планировщика — 1931 и 837 мс, Ю3а — 0,8–0,9 с. В этом прогоне оба вызова вышли
+  ≈ 3 с (на первой странице два запроса, на продолжении один), то есть медленнее, чем у планировщика; код тот же, одна
+  выборка — разброс сети. Критерия скорости нет; срок вызова 10 с держит с запасом.
+- На второй странице 23 трека из 24: что именно отсёк источник (затравку, эфир, трек без длительности), не выяснял —
+  подборка живая, правила пропуска те же, что на записях.
+- Эмулятор после этого выключен (`adb emu kill`): процесса нет, `adb devices` пуст.
+
+**R8** (`.\gradlew.bat assembleGithubRelease`): собралось за 1 мин 1 с, предупреждений нет вовсе (`w:` — 0, файла
+`missing_rules.txt` нет, значит, новых против `main` тоже нет); неподписанный APK 18 358 757 байт (как у планировщика;
+бюджет 30 МБ держится). В `mapping.txt`: `YoutubeMixPlaylistExtractor -> ox4`, `YoutubeRadioPage -> ey4`,
+`NewPipeYoutubeSource.radio(java.lang.String,java.lang.String)` (строка 281325).
+
+**Дисциплина.** Защищённые тесты, `FakeYoutubeSource`, записи Mix и `routes.tsv` не тронуты: `git diff b348e4d HEAD` по их
+путям пуст. С `4ccec92` изменены ровно четыре файла из «Менять» (и этот отчёт). `OnlineProviderIds`, меню, очередь, ядро и
+`proguard-rules.pro` не менялись. В рабочем дереве остался неотслеживаемый каталог `.kotlin/` (мусор Gradle) — не
+коммитил. Фоновых процессов не оставлено.
