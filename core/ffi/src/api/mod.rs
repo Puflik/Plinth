@@ -27,3 +27,5 @@ mod test_api;
 mod yu3g_tests;
 #[cfg(test)]
 mod yu3v_tests;
+#[cfg(test)]
+mod yu4a_tests;

@@ -22,8 +22,8 @@ use plinth_providers::{Provider, Registry};
 use plinth_types::{Bitrate, CoreError, Format, Mbid, ProviderId, QualityTier, Timestamp};
 
 use super::external_api::{
-    ExternalAdapter, ExternalCapabilities, ExternalFailure, ExternalProvider, ExternalResolve, ExternalSearch,
-    ExternalStream,
+    ExternalAdapter, ExternalCapabilities, ExternalFailure, ExternalProvider, ExternalRadio, ExternalResolve,
+    ExternalSearch, ExternalStream,
 };
 use super::online_api::{
     NetAnswer, NetHeader, NetRequest, NetTransport, OnlineCancel, OnlineKind, OnlineProblem, OnlineResult,
@@ -191,6 +191,10 @@ impl ExternalProvider for Platform {
             return ExternalStream::Failed { failure: unavailable("variant") };
         }
         ExternalStream::Found { address: address_of(&source) }
+    }
+
+    fn radio(&self, _: String, _: Option<String>) -> ExternalRadio {
+        ExternalRadio::Failed { failure: unavailable("radio") }
     }
 }
 
@@ -1178,6 +1182,10 @@ impl ExternalProvider for Hopeless {
 
     fn stream(&self, _: String) -> ExternalStream {
         ExternalStream::Failed { failure: unavailable("none") }
+    }
+
+    fn radio(&self, _: String, _: Option<String>) -> ExternalRadio {
+        ExternalRadio::Failed { failure: unavailable("radio") }
     }
 }
 

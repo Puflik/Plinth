@@ -17,7 +17,8 @@ use plinth_providers::testing::FixtureTransport;
 use plinth_types::{CoreError, Format, QualityTier};
 
 use super::external_api::{
-    ExternalCapabilities, ExternalFailure, ExternalProvider, ExternalResolve, ExternalSearch, ExternalStream,
+    ExternalCapabilities, ExternalFailure, ExternalProvider, ExternalRadio, ExternalResolve, ExternalSearch,
+    ExternalStream,
 };
 use super::online_api::{
     NetAnswer, NetHeader, NetRequest, NetTransport, OnlineCancel, OnlineKind, OnlineProblem, OnlineResult,
@@ -114,6 +115,10 @@ impl ExternalProvider for Platform {
                 valid_for_ms: Some(7_200_000),
             },
         }
+    }
+
+    fn radio(&self, _: String, _: Option<String>) -> ExternalRadio {
+        ExternalRadio::Failed { failure: ExternalFailure::Unavailable { text: "radio".to_owned() } }
     }
 }
 

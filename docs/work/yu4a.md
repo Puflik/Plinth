@@ -1,10 +1,7 @@
 # yu4a — радио как способность провайдера: ядро и мост (Ю4, часть 1 из 3)
 
-> **СТАТУС: черновик планировщика (2026-10-25), исполнителя не звать.** Решения и сигнатуры
-> написаны; защищённые тесты ещё НЕ написаны (раздел «Тесты» говорит, какими они будут), временная
-> реализация не проверена, «Коммит тестов» пуст. Что осталось и какие факты кода уже выяснены —
-> в заметке `yu4a-planner-handover.md` в общей папке заметок сессий. Пока в ветке нет коммита с
-> тестами, эта строка остаётся.
+> **СТАТУС (2026-10-27): Rust-тесты готовы и проверены прототипом; Kotlin-тесты ещё пишутся.** Исполнителя
+> не звать, пока эта строка не исчезла (её снимает планировщик, когда в ветке есть все защищённые тесты).
 
 > Файл задачи для исполнителя (Sonnet). Пишет планировщик; исполнитель меняет только
 > раздел «Отчёт исполнителя». Порядок работы — `docs/work/README.md`.
@@ -113,11 +110,8 @@ pub struct RadioPage {
 
 ```rust
     /// Радио от трека `seed` (id трека или его источника); `page` — ключ из прошлого ответа.
-    /// Не умеет — `Failed { Unavailable }` (тело по умолчанию).
-    fn radio(&self, seed: String, page: Option<String>) -> ExternalRadio {
-        let _ = (seed, page);
-        ExternalRadio::Failed { failure: ExternalFailure::Unavailable { text: "radio is not supported".to_owned() } }
-    }
+    /// Не умеет — `Failed { Unavailable }`: у внешнего трейта UniFFI методов по умолчанию не бывает.
+    fn radio(&self, seed: String, page: Option<String>) -> ExternalRadio;
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum ExternalRadio {
@@ -126,10 +120,11 @@ pub enum ExternalRadio {
 }
 ```
 
-**Тело по умолчанию у метода внешнего трейта — проверено временной реализацией** (раздел «Временная реализация»):
-результат записан там. Если UniFFI его не принял, метод идёт без тела, а в `Platform` из `yu3v_tests.rs` и
-`yu3g_tests.rs` добавляется `fn radio(...)`, возвращающий `Failed { Unavailable }` (это единственная правка старых
-тестов; больше — стоп).
+**Метод `ExternalProvider::radio` — без тела.** Проверено компилятором: `#[uniffi::export]` отвечает «uniffi::export'd
+trait methods can't have a default implementation». Поэтому в трёх двойниках платформы старых тестов Ю3 (`yu3v_tests.rs`:
+`Platform`, `Hopeless`; `yu3g_tests.rs`: `Platform`) планировщик добавил `fn radio(..)` → `Failed { Unavailable }` и импорт
+`ExternalRadio` — это в коммите тестов, оба файла теперь защищённые (вставка — единственное, что в них изменено).
+Провайдер приложения «не умеет» радио через метод по умолчанию на стороне Kotlin (`OnlineProvider.radio`, раздел Г).
 
 `impl Provider for ExternalAdapter` — метод `radio`:
 
@@ -261,14 +256,15 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
 - `online_radio`, `online_origins` и всё, что их зовёт в этой задаче, **ничего не пишут** в каталог и журнал.
 - Беда провайдера (`Network`, `Unavailable`, `Parse`) — `problem` ответа, а не исключение; выключенные источники,
   `Internal` и негодные аргументы — ошибка вызова.
-- В тексте ошибки нет затравки, ключа, названий и текста паники платформы; затравка и ключ доходят до платформы
-  **дословно** (в том числе не ASCII).
+- В тексте ошибки нет затравки, ключа и названий; затравка и ключ доходят до платформы **дословно** (в том числе
+  не ASCII). Паника платформы — `Internal` вызова, как у `search`/`resolve`/`stream`; её текст идёт в ошибку и лог через
+  `panic::guard`, как и раньше (этой задачей не меняется).
 - Страница: не больше 100 треков, порядок платформы сохранён; негодный трек выброшен без потери страницы; страница
   только из негодных — `Parse`; негодный ключ — `Parse`.
 - Провайдер без `radio` отвечает `Unavailable` и здоровью не вредит; сбой радио считается как сбой `resolve`
   (три подряд — отдых провайдера); радио спрашивается и у отдыхающего провайдера (действие человека).
-- Существующее поведение не меняется: поиск, альбом, поток, здоровье. Старые тесты Rust и Kotlin проходят без правок
-  (единственное допустимое исключение — вставка `radio` в `Platform` старых тестов, см. «Решение», Б).
+- Существующее поведение не меняется: поиск, альбом, поток, здоровье. Старые тесты Rust и Kotlin проходят
+  (в трёх двойниках платформы старых тестов Rust планировщик уже добавил `fn radio`, см. «Решение», Б).
 
 ## Файлы
 
@@ -279,8 +275,6 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
   - Kotlin: `app/src/main/kotlin/io/github/puflik/plinth/ffi/CoreOnline.kt`, `.../ffi/CoreOnlineProvider.kt`,
     `.../online/OnlineRepository.kt`, `.../online/CoreOnlineRepository.kt`, `.../online/GatedOnlineRepository.kt`,
     `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineRepository.kt`;
-  - только если тело по умолчанию у `ExternalProvider::radio` не принято UniFFI: `core/ffi/src/api/yu3v_tests.rs`,
-    `core/ffi/src/api/yu3g_tests.rs` (вставка `fn radio`).
 - **Не трогать:** `online/YoutubeProvider.kt`, `online/youtube/*`, `online/OnlineProviders.kt`,
   `online/OnlineProviderIds.kt` (yu4b, yu4c); `queue/*`, `audio/*`, `ui/*` (yu4c); `Cargo.lock`,
   `gradle/libs.versions.toml`; `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `docs/adr/*`, `docs/plan/*`, `CLAUDE.md`
@@ -288,6 +282,7 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
 - **Защищённые тесты** (из коммита тестов; не менять, не удалять, не глушить):
   - `core/providers/tests/yu4a_radio.rs`
   - `core/ffi/src/api/yu4a_tests.rs` (и строка `mod yu4a_tests;` в `core/ffi/src/api/mod.rs` — она в коммите тестов)
+  - `core/ffi/src/api/yu3v_tests.rs`, `core/ffi/src/api/yu3g_tests.rs` — только вставка `fn radio` и импорт `ExternalRadio`
   - `app/src/test/kotlin/io/github/puflik/plinth/ffi/ExternalProviderRadioTest.kt`
   - `app/src/test/kotlin/io/github/puflik/plinth/ffi/CoreOnlineRadioMappingTest.kt`
   - `app/src/test/kotlin/io/github/puflik/plinth/online/FakeOnlineRepositoryRadioTest.kt`
@@ -311,7 +306,7 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
 - негодный трек выброшен, страница жива; страница только из негодных — `Broken`; пустая страница с ключом и без;
 - больше 100 треков — первые 100; негодный ключ платформы — `Broken`;
 - таблица бед платформы → `NoNetwork`/`ProviderDown`/`RateLimited`/`Broken` (как у альбома); `Internal` — ошибка;
-- паника платформы — `Internal` без её текста, следующий вызов работает;
+- паника платформы — `Internal` вызова, следующий вызов работает;
 - источники выключены — `Unavailable` ошибкой; чужой провайдер — `ProviderDown`; негодные аргументы — `Parse`, платформа не зовётся;
 - платформа без `radio` — `ProviderDown`, поиск по ней жив, здоровье цело;
 - три сбоя подряд — отдых, четвёртый вызов доходит и получает страницу;
@@ -354,7 +349,6 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 
 - защищённый тест кажется неверным;
 - сгенерированные Kotlin-имена не те, что в тестах (`ExternalRadio.Found(tracks, next)`, `OnlineRadioReply`, `OnlineOrigin`);
-- UniFFI не принимает тело по умолчанию и для этого нужно больше, чем вставка `fn radio` в `Platform` старых тестов;
 - нужно менять `Capabilities` или файл вне списка «Менять»;
 - проверки упали дважды подряд.
 
@@ -373,14 +367,25 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
    минут. Mix — другой эндпоинт, чем поиск; не слишком ли строго?
 4. **Затравка — «источник или id трека»** (двойной смысл `seed`): каталог хранит только варианты, поэтому ядро не
    знает id видео. Принимать оба должен провайдер (YouTube: `VIDEO_ID` или `VARIANT`). Нет ли чище?
-5. **`online_radio` и `ExternalProvider::radio` с телом по умолчанию.** Проверено временной реализацией (ниже);
-   если UniFFI тело не принял — правка двух старых тестов.
+5. **`ExternalProvider::radio` без тела.** UniFFI тел по умолчанию не принимает (компилятор), поэтому три двойника платформы
+   в старых тестах Ю3 получили вставку `fn radio` → «не умею»; они теперь защищённые. Альтернатива — отдельный маленький
+   внешний трейт только для радио (ещё один объект на провайдера) — отвергнута как лишняя. Согласен?
 6. **Название `radio` вместо `related`** — поправка к ADR 0008 и плану 6.1 (`related(id) → [SearchResult]` →
    `radio(seed, page) → RadioPage`); текст поправки напишет Opus при слиянии.
 
 ## Временная реализация и проверка тестов
 
-_Заполняет планировщик после проверки: что собиралось, что падало, где лежит патч._
+**Rust (проверено 2026-10-27).** Прототип лежит патчем в общей папке заметок сессий
+(`yu4a-reference-implementation-rust.patch`, в ветке его нет): `RadioPage`, `Provider::radio`, `Registry::radio`, `ExternalRadio`,
+`ExternalProvider::radio` (без тела), `ExternalAdapter::radio`, `OnlineRadioReply`, `OnlineOrigin`, `online_radio`, `online_origins`.
+Против него: `cargo test -p plinth-providers --test yu4a_radio` — 5 из 5; `cargo test -p plinth-ffi` — 180 из 180 (19 из них
+в `yu4a_tests`, остальные — старые вместе с тремя двойниками); `cargo clippy --workspace --all-targets -- -D warnings` и
+`cargo fmt --all -- --check` чисты (шум CRLF по чужим файлам не в счёт). Без прототипа тесты не собираются: новый API.
+Что прототип выяснил: (1) тело по умолчанию у метода `ExternalProvider` UniFFI не принимает; (2) текст паники платформы
+попадает в `Internal` через `panic::guard` и сейчас, не только у радио — тест этого не требует; (3) `versions_of` неизвестного
+трека — пустой список, поэтому `online_origins` для него `Ok([])`; (4) `TrackId` — `Copy`.
+
+**Kotlin:** _дописывается._
 
 ## Дальше: yu4b и yu4c (наброски; подробно распишут их планировщики)
 
