@@ -461,25 +461,25 @@ fn a_platform_that_does_not_do_radio_is_down_for_radio_only_and_never_blamed() {
 }
 
 #[test]
-fn three_failures_in_a_row_rest_the_provider_but_radio_still_asks_it() {
+fn radio_failures_do_not_rest_the_provider_and_the_search_goes_on() {
     let dir = Scratch::new();
     let radio = Radio::new();
     radio.fail_with(Some(network("http 503")));
     radio.answer(None, found(vec![info("aaaaaaaaaaa", "One")], None));
     let core = connected(&dir, vec![dynamic(&radio)]);
 
-    for _ in 0..3 {
+    for _ in 0..5 {
         assert_eq!(ask(&core, None).unwrap().problem, Some(OnlineProblem::ProviderDown));
     }
     let sections = core.online_search("piano".to_owned(), 10, OnlineCancel::new()).unwrap();
-    assert_eq!(sections[0].problem, Some(OnlineProblem::ProviderDown), "провайдер отдыхает");
-
     radio.fail_with(None);
     let reply = ask(&core, None).unwrap();
 
+    assert_eq!(sections.len(), 1);
+    assert_eq!(sections[0].problem, None, "поломка радио не убирает провайдера из поиска");
     assert_eq!(reply.problem, None);
     assert_eq!(reply.tracks.len(), 1);
-    assert_eq!(radio.calls().len(), 4, "четвёртый вызов дошёл до отдыхающего: это действие человека над треком");
+    assert_eq!(radio.calls().len(), 6, "радио спрашивают каждый раз");
 }
 
 // --- Каталог --------------------------------------------------------------------------

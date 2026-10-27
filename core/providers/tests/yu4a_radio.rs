@@ -1,7 +1,8 @@
 //! Ю4а (`docs/work/yu4a.md`): «радио» — способность провайдера. Метод `Provider::radio` по умолчанию
-//! «не умеет», `Registry::radio` спрашивает названного провайдера и считает исход в его здоровье, как
-//! `resolve`. `RadioPage`, `Provider::radio` и `Registry::radio` — новый API (сигнатуры в файле задачи):
-//! пока их нет, тесты крейта не собираются.
+//! «не умеет». `Registry::radio` спрашивает названного провайдера, как `resolve`, — и в `Down` тоже, — но в
+//! здоровье исход не пишет: у радио свой эндпоинт и свой повтор в приложении, и поломка радио не должна
+//! убирать провайдера из поиска. `RadioPage`, `Provider::radio` и `Registry::radio` — новый API (сигнатуры в
+//! файле задачи): пока их нет, тесты крейта не собираются.
 
 #![allow(clippy::unwrap_used, reason = "тест: упавший unwrap и есть упавший тест")]
 
@@ -51,20 +52,31 @@ impl Provider for Silent {
     }
 }
 
-/// Провайдер с радио: по затравке `SEED` — две страницы (с ключом `KEY` между ними); `fail(true)` — сбой сети.
+/// Провайдер с радио: по затравке `SEED` — две страницы (с ключом `KEY` между ними). `fail_radio(true)` — сбой
+/// сети на радио, `fail_resolve(true)` — на `resolve` (им тесты роняют здоровье).
 struct Radio {
     id: ProviderId,
     calls: Mutex<Vec<String>>,
-    failing: Mutex<bool>,
+    radio_failing: Mutex<bool>,
+    resolve_failing: Mutex<bool>,
 }
 
 impl Radio {
     fn new(name: &str) -> Arc<Self> {
-        Arc::new(Self { id: id_of(name), calls: Mutex::new(Vec::new()), failing: Mutex::new(false) })
+        Arc::new(Self {
+            id: id_of(name),
+            calls: Mutex::new(Vec::new()),
+            radio_failing: Mutex::new(false),
+            resolve_failing: Mutex::new(false),
+        })
     }
 
-    fn fail(&self, failing: bool) {
-        *self.failing.lock().unwrap() = failing;
+    fn fail_radio(&self, failing: bool) {
+        *self.radio_failing.lock().unwrap() = failing;
+    }
+
+    fn fail_resolve(&self, failing: bool) {
+        *self.resolve_failing.lock().unwrap() = failing;
     }
 
     fn calls(&self) -> Vec<String> {
@@ -86,7 +98,7 @@ impl Provider for Radio {
     }
 
     fn resolve(&self, _: &ExternalId) -> Result<Vec<RemoteTrack>, CoreError> {
-        Ok(Vec::new())
+        if *self.resolve_failing.lock().unwrap() { Err(CoreError::network("http 503")) } else { Ok(Vec::new()) }
     }
 
     fn stream_url(&self, _: &ExternalId) -> Result<StreamRequest, CoreError> {
@@ -96,7 +108,7 @@ impl Provider for Radio {
     fn radio(&self, seed: &ExternalId, page: Option<&ExternalId>) -> Result<RadioPage, CoreError> {
         let key = page.map_or_else(|| "-".to_owned(), ToString::to_string);
         self.calls.lock().unwrap().push(format!("{seed}:{key}"));
-        if *self.failing.lock().unwrap() {
+        if *self.radio_failing.lock().unwrap() {
             return Err(CoreError::network("http 503"));
         }
         match (seed.as_str(), page.map(ExternalId::as_str)) {
@@ -123,26 +135,13 @@ fn a_provider_that_does_not_do_radio_says_unavailable() {
 // --- Реестр ---------------------------------------------------------------------------
 
 #[test]
-fn the_registry_does_not_blame_a_provider_for_not_doing_radio() {
-    let silent = id_of("silent.test");
-    let registry = Registry::new(vec![Arc::new(Silent { id: silent.clone() })], HealthPolicy::default()).unwrap();
-
-    for second in 0..5 {
-        let answer = registry.radio(&silent, &external(SEED), None, at(second));
-        assert!(matches!(answer, Err(CoreError::Unavailable { .. })), "{answer:?}");
-    }
-
-    assert!(matches!(registry.health(&silent), Some(Health::Ok)), "Unavailable провайдеру не в укор");
-}
-
-#[test]
 fn the_registry_asks_the_named_provider_and_hands_the_pages_over() {
     let radio = Radio::new("radio.test");
     let registry = registry_of(&radio);
 
-    let first = registry.radio(&radio.id, &external(SEED), None, at(0)).unwrap();
+    let first = registry.radio(&radio.id, &external(SEED), None).unwrap();
     let key = first.next.clone().expect("the first page has a next one");
-    let second = registry.radio(&radio.id, &external(SEED), Some(&key), at(1)).unwrap();
+    let second = registry.radio(&radio.id, &external(SEED), Some(&key)).unwrap();
 
     assert_eq!(first.tracks, vec![track("aaaaaaaaaaa"), track("bbbbbbbbbbb")]);
     assert_eq!(key, external(KEY));
@@ -156,33 +155,62 @@ fn a_stranger_is_unavailable_and_nobody_is_asked() {
     let radio = Radio::new("radio.test");
     let registry = registry_of(&radio);
 
-    let answer = registry.radio(&id_of("stranger.test"), &external(SEED), None, at(0));
+    let answer = registry.radio(&id_of("stranger.test"), &external(SEED), None);
 
     assert!(matches!(answer, Err(CoreError::Unavailable { .. })), "{answer:?}");
     assert!(radio.calls().is_empty());
 }
 
 #[test]
-fn radio_failures_count_against_the_provider_but_a_resting_one_is_still_asked() {
+fn a_provider_that_does_not_do_radio_is_not_blamed_for_it() {
+    let silent = id_of("silent.test");
+    let registry = Registry::new(vec![Arc::new(Silent { id: silent.clone() })], HealthPolicy::default()).unwrap();
+
+    for _ in 0..5 {
+        let answer = registry.radio(&silent, &external(SEED), None);
+        assert!(matches!(answer, Err(CoreError::Unavailable { .. })), "{answer:?}");
+    }
+
+    assert_eq!(registry.health(&silent), Some(Health::Ok));
+}
+
+#[test]
+fn radio_failures_do_not_touch_the_health_of_the_provider() {
     let radio = Radio::new("radio.test");
-    radio.fail(true);
+    radio.fail_radio(true);
     let registry = registry_of(&radio);
 
-    for second in 0..3 {
-        let answer = registry.radio(&radio.id, &external(SEED), None, at(second));
+    for _ in 0..5 {
+        let answer = registry.radio(&radio.id, &external(SEED), None);
         assert!(matches!(answer, Err(CoreError::Network { .. })), "{answer:?}");
     }
-    assert!(
-        matches!(registry.health(&radio.id), Some(health) if health.is_down_at(at(3))),
-        "три сбоя подряд — отдых провайдера"
-    );
 
-    radio.fail(false);
-    let page = registry.radio(&radio.id, &external(SEED), None, at(4)).unwrap();
+    assert_eq!(registry.health(&radio.id), Some(Health::Ok), "поломка радио не убирает провайдера из поиска");
+    assert_eq!(radio.calls().len(), 5, "и не мешает спрашивать его дальше");
+}
 
+#[test]
+fn a_resting_provider_is_still_asked_and_radio_neither_heals_it_nor_prolongs_its_rest() {
+    let radio = Radio::new("radio.test");
+    let registry = registry_of(&radio);
+    radio.fail_resolve(true);
+    for second in 0..3 {
+        let answer = registry.resolve(&radio.id, &external(SEED), at(second));
+        assert!(matches!(answer, Err(CoreError::Network { .. })), "{answer:?}");
+    }
+    let resting = registry.health(&radio.id);
+    assert!(resting.is_some_and(|health| health.is_down_at(at(3))), "три сбоя resolve подряд — отдых: {resting:?}");
+
+    radio.fail_radio(true);
+    let failed = registry.radio(&radio.id, &external(SEED), None);
+    radio.fail_radio(false);
+    let page = registry.radio(&radio.id, &external(SEED), None).unwrap();
+
+    assert!(matches!(failed, Err(CoreError::Network { .. })), "{failed:?}");
     assert_eq!(page.tracks.len(), 2);
-    assert_eq!(radio.calls().len(), 4, "отдыхающего спрашивают: это действие человека над треком");
-    assert!(matches!(registry.health(&radio.id), Some(Health::Ok)), "удача лечит сразу");
+    assert_eq!(radio.calls().len(), 2, "отдыхающего спрашивают: это действие человека над треком");
+    assert_eq!(registry.health(&radio.id), resting, "ни успех, ни сбой радио здоровье не меняют");
+    assert!(registry.health(&radio.id).is_some_and(|health| !health.is_down_at(at(303))), "и срок отдыха не растёт");
 }
 
 // --- Помощники ------------------------------------------------------------------------
