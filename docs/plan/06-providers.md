@@ -13,8 +13,8 @@ Provider:
     stream_url(source, quality) → URL + headers
     download(source, quality) → bytes
     browse(section) → [Item]            // чарты, новинки, коллекция
-    related(external_id) → [SearchResult]  // провайдерское радио
-    capabilities() → {качества, форматы, умеет ли related, ...}
+    radio(seed, page) → RadioPage          // провайдерское радио (Ю4а; было related → [SearchResult])
+    capabilities() → {качества, форматы, ...}  // радио не объявляется: не умеет — Unavailable
     health() → OK / Degraded / Down
 ```
 
