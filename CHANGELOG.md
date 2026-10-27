@@ -106,6 +106,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Retry button, and coming back from an album no longer runs the search again.
 - Searching or playing online right after Plinth starts no longer fails before
   the online sources are switched on.
+- A like, a subscription or a block list entry added on another installation,
+  say in a restored backup of your old phone, no longer vanishes because you had
+  removed it here before: an addition now always wins over a removal that never
+  saw it. Plinth 0.2 can't see likes, subscriptions and block list entries made
+  in this version and can't remove them, so update every device that shares your
+  library.
 
 ## [0.2.3] - 2026-10-15
 
