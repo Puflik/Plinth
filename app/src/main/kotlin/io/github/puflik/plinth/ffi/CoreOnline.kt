@@ -10,7 +10,9 @@ import io.github.puflik.plinth.ffi.generated.NetTransport as RustNetTransport
 import io.github.puflik.plinth.ffi.generated.OnlineAlbumReply as RustOnlineAlbumReply
 import io.github.puflik.plinth.ffi.generated.OnlineCancel as RustOnlineCancel
 import io.github.puflik.plinth.ffi.generated.OnlineKind as RustOnlineKind
+import io.github.puflik.plinth.ffi.generated.OnlineOrigin as RustOnlineOrigin
 import io.github.puflik.plinth.ffi.generated.OnlineProblem as RustOnlineProblem
+import io.github.puflik.plinth.ffi.generated.OnlineRadioReply as RustOnlineRadioReply
 import io.github.puflik.plinth.ffi.generated.OnlineResult as RustOnlineResult
 import io.github.puflik.plinth.ffi.generated.OnlineSearch as RustOnlineSearch
 import io.github.puflik.plinth.ffi.generated.OnlineTrackInfo as RustOnlineTrackInfo
@@ -67,6 +69,20 @@ class CoreOnline internal constructor(
         provider: String,
         item: String,
     ): OnlineAlbumReply = core.quietCall { rust -> rust.onlineAlbum(provider, item).toApp() }
+
+    /**
+     * Страница радио от [seed] провайдера [provider] (id трека или его источника); [page] — ключ прошлой страницы,
+     * `null` — первая. Беда провайдера — [OnlineRadioReply.problem]; выключено или негодный аргумент — [CoreFailure].
+     */
+    fun radio(
+        provider: String,
+        seed: String,
+        page: String? = null,
+    ): OnlineRadioReply = core.quietCall { rust -> rust.onlineRadio(provider, seed, page).toApp() }
+
+    /** Где трек каталога играется; файл с диска и неизвестный трек — пусто. */
+    fun origins(track: TrackId): List<OnlineOrigin> =
+        core.call { rust -> rust.onlineOrigins(track.value).map { it.toApp() } }
 
     /** Какие из [tracks] уже в каталоге — ID или `null`, в том же порядке; каталог не меняется. */
     fun known(
@@ -176,6 +192,24 @@ data class OnlineAlbumReply(
     val problem: OnlineProblem?,
 )
 
+/** Страница радио: треки подборки по порядку и ключ следующей страницы; `null` — подборка кончилась. */
+data class OnlineRadioPage(
+    val tracks: List<OnlineTrack>,
+    val next: String? = null,
+)
+
+/** Ответ на просьбу о радио: страница — или беда провайдера (тогда [page] пуста). */
+data class OnlineRadioReply(
+    val page: OnlineRadioPage,
+    val problem: OnlineProblem?,
+)
+
+/** Где трек каталога играется: провайдер и его источник (вариант). */
+data class OnlineOrigin(
+    val provider: String,
+    val source: String,
+)
+
 /** Секция поиска: провайдер и его результаты — или беда. */
 data class OnlineSection(
     val provider: String,
@@ -269,6 +303,11 @@ private fun NetAnswer.toRust(): RustNetAnswer =
 internal fun RustOnlineSearch.toApp() = OnlineSection(provider, results.map { it.toApp() }, problem?.toApp())
 
 internal fun RustOnlineAlbumReply.toApp() = OnlineAlbumReply(tracks.map { it.toApp() }, problem?.toApp())
+
+internal fun RustOnlineRadioReply.toApp() =
+    OnlineRadioReply(OnlineRadioPage(tracks.map { it.toApp() }, next), problem?.toApp())
+
+internal fun RustOnlineOrigin.toApp() = OnlineOrigin(provider, source)
 
 private fun RustOnlineResult.toApp() =
     OnlineResult(

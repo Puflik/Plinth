@@ -3,6 +3,7 @@ package io.github.puflik.plinth.online
 import io.github.puflik.plinth.audio.engine.StreamLookup
 import io.github.puflik.plinth.ffi.AudioFormat
 import io.github.puflik.plinth.ffi.OnlineKind
+import io.github.puflik.plinth.ffi.OnlineOrigin
 import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineResult
 import io.github.puflik.plinth.ffi.OnlineSection
@@ -18,6 +19,8 @@ import java.util.UUID
  *
  * Как ядро, начинает выключенным. Каталог — по вариантам: трек узнаётся по
  * любому из них. Адрес потока строится без сети, как у Internet Archive.
+ * Радио (Ю4а) отвечает по сценарию [scriptRadio] для любого провайдера и пишет
+ * вызовы в [radioCalls]; [origins] выводятся из [add].
  */
 class FakeOnlineRepository(
     private val albums: List<Album> = listOf(Album.CONCERT),
@@ -64,6 +67,27 @@ class FakeOnlineRepository(
 
     private val catalog = mutableMapOf<String, TrackId>()
     private val variants = mutableMapOf<TrackId, OnlineTrack>()
+    private val providers = mutableMapOf<TrackId, String>()
+    private val radioScripts = mutableMapOf<RadioCall, OnlineRadio>()
+
+    /** Вызовы [radio] по порядку, в том числе неудачные. */
+    val radioCalls = mutableListOf<RadioCall>()
+
+    data class RadioCall(
+        val provider: String,
+        val seed: String,
+        val page: String?,
+    )
+
+    /** Сценарий радио: ответ на `(provider, seed, page)`; без сценария — [OnlineProblem.PROVIDER_DOWN]. */
+    fun scriptRadio(
+        provider: String,
+        seed: String,
+        page: String?,
+        answer: OnlineRadio,
+    ) {
+        radioScripts[RadioCall(provider, seed, page)] = answer
+    }
 
     /** Подключён ли Internet Archive: главный включён и сам он не выключен. */
     private val active: Boolean get() = enabled && PROVIDER !in disabled
@@ -105,6 +129,25 @@ class FakeOnlineRepository(
         }
     }
 
+    override suspend fun radio(
+        provider: String,
+        seed: String,
+        page: String?,
+    ): OnlineRadio {
+        val call = RadioCall(provider, seed, page)
+        radioCalls += call
+        val problem = if (enabled && provider !in disabled) problem() else OnlineProblem.PROVIDER_DOWN
+        return when {
+            problem != null -> OnlineRadio.Failed(problem)
+            else -> radioScripts[call] ?: OnlineRadio.Failed(OnlineProblem.PROVIDER_DOWN)
+        }
+    }
+
+    override suspend fun origins(track: TrackId): List<OnlineOrigin> {
+        val provider = providers[track] ?: return emptyList()
+        return variants[track]?.variants.orEmpty().map { OnlineOrigin(provider, it.external) }
+    }
+
     override suspend fun known(
         provider: String,
         tracks: List<OnlineTrack>,
@@ -118,6 +161,7 @@ class FakeOnlineRepository(
             val id = idOf(track) ?: TrackId(UUID.randomUUID().toString())
             track.variants.forEach { catalog[it.external] = id }
             variants[id] = track
+            providers[id] = provider
             id
         }
 

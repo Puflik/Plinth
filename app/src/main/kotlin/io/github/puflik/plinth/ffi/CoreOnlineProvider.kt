@@ -3,6 +3,7 @@ package io.github.puflik.plinth.ffi
 import io.github.puflik.plinth.ffi.generated.ExternalCapabilities as RustCapabilities
 import io.github.puflik.plinth.ffi.generated.ExternalFailure as RustFailure
 import io.github.puflik.plinth.ffi.generated.ExternalProvider as RustProvider
+import io.github.puflik.plinth.ffi.generated.ExternalRadio as RustRadio
 import io.github.puflik.plinth.ffi.generated.ExternalResolve as RustResolve
 import io.github.puflik.plinth.ffi.generated.ExternalSearch as RustSearch
 import io.github.puflik.plinth.ffi.generated.ExternalStream as RustStream
@@ -41,6 +42,12 @@ interface OnlineProvider {
 
     /** Адрес и заголовки варианта [source] из [resolve]; каждый вызов даёт свежую ссылку. */
     fun stream(source: String): StreamAddress
+
+    /** Радио от трека [seed] — id трека или его источника; [page] — ключ прошлой страницы. Не умеет — `Unavailable`. */
+    fun radio(
+        seed: String,
+        page: String? = null,
+    ): OnlineRadioPage = throw ProviderException.Unavailable("radio")
 }
 
 /** Ступень качества провайдера — как `QualityTier` ядра. */
@@ -118,6 +125,18 @@ internal fun OnlineProvider.toRust(): RustProvider =
                 RustStream.Found(this@toRust.stream(source).toRust())
             } catch (e: Exception) {
                 RustStream.Failed(e.toFailure())
+            }
+
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") // Колбэк ядра не бросает: беда — в ответе.
+        override fun radio(
+            seed: String,
+            page: String?,
+        ): RustRadio =
+            try {
+                val answer = this@toRust.radio(seed, page)
+                RustRadio.Found(answer.tracks.map(OnlineTrack::toRust), answer.next)
+            } catch (e: Exception) {
+                RustRadio.Failed(e.toFailure())
             }
     }
 

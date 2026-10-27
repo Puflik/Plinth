@@ -7,6 +7,7 @@ import io.github.puflik.plinth.ffi.AudioFormat
 import io.github.puflik.plinth.ffi.CoreFailure
 import io.github.puflik.plinth.ffi.NetTransport
 import io.github.puflik.plinth.ffi.OnlineCancel
+import io.github.puflik.plinth.ffi.OnlineOrigin
 import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineProvider
 import io.github.puflik.plinth.ffi.OnlineSection
@@ -81,6 +82,24 @@ class CoreOnlineRepository(
                 OnlineAlbum.Failed(failure.problem())
             }
         }
+
+    override suspend fun radio(
+        provider: String,
+        seed: String,
+        page: String?,
+    ): OnlineRadio =
+        withContext(io) {
+            try {
+                val reply = core.online.radio(provider, seed, page)
+                reply.problem?.let { OnlineRadio.Failed(it) } ?: OnlineRadio.Page(reply.page.tracks, reply.page.next)
+            } catch (failure: CoreFailure) {
+                AppLog.w(TAG, "radio failed", failure)
+                OnlineRadio.Failed(failure.problem())
+            }
+        }
+
+    override suspend fun origins(track: TrackId): List<OnlineOrigin> =
+        attempt(io, TAG, "origins") { core.online.origins(track) } ?: emptyList()
 
     override suspend fun known(
         provider: String,

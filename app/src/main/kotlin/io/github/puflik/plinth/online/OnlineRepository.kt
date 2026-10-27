@@ -2,6 +2,7 @@ package io.github.puflik.plinth.online
 
 import io.github.puflik.plinth.audio.engine.StreamLookup
 import io.github.puflik.plinth.ffi.AudioFormat
+import io.github.puflik.plinth.ffi.OnlineOrigin
 import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.ffi.OnlineTrack
@@ -41,6 +42,19 @@ interface OnlineRepository {
         item: String,
     ): OnlineAlbum
 
+    /**
+     * Радио от [seed] провайдера [provider] (id трека или его источника); [page] — ключ прошлой страницы,
+     * `null` — первая.
+     */
+    suspend fun radio(
+        provider: String,
+        seed: String,
+        page: String? = null,
+    ): OnlineRadio
+
+    /** Где трек каталога играется; файл с диска и неизвестный трек — пусто. */
+    suspend fun origins(track: TrackId): List<OnlineOrigin>
+
     /** Какие из [tracks] уже в каталоге — ID или `null`, в том же порядке. Каталог не меняется. */
     suspend fun known(
         provider: String,
@@ -69,6 +83,18 @@ interface OnlineRepository {
         /** Сколько результатов просить у провайдера. */
         const val SEARCH_LIMIT = 20
     }
+}
+
+/** Страница радио: треки и ключ следующей страницы — или беда, которую объясняет экран. */
+sealed interface OnlineRadio {
+    data class Page(
+        val tracks: List<OnlineTrack>,
+        val next: String?,
+    ) : OnlineRadio
+
+    data class Failed(
+        val problem: OnlineProblem,
+    ) : OnlineRadio
 }
 
 /** Альбом провайдера: треки — или беда, которую объясняет экран. */

@@ -18,9 +18,9 @@ import kotlin.time.Duration.Companion.seconds
  * загрузчик плеера (сохранённый сетевой трек очереди) идут в ядро одновременно с ним: кто первый,
  * тот и прав. Ядро не различает «выключены» и «ещё не включены» — получить «источники
  * выключены» значило молча пустой поиск или `Unavailable` и пропуск трека. Порядок знает только
- * приложение, поэтому ждёт оно: [search], [album] и [stream] задерживаются до первого [setEnabled],
- * но не дольше [waitLimit] — вышел срок, вызов идёт дальше, и ядро решает само. Каталог ([known],
- * [add]) источников не требует и не ждёт.
+ * приложение, поэтому ждёт оно: [search], [album], [radio] и [stream] задерживаются до первого
+ * [setEnabled], но не дольше [waitLimit] — вышел срок, вызов идёт дальше, и ядро решает само.
+ * Каталог ([known], [add], [origins]) источников не требует и не ждёт.
  *
  * Ворота открывает любой исход [setEnabled], и упавший тоже: ждать больше нечего.
  */
@@ -55,6 +55,15 @@ class GatedOnlineRepository(
     ): OnlineAlbum {
         awaitSwitch()
         return inner.album(provider, item)
+    }
+
+    override suspend fun radio(
+        provider: String,
+        seed: String,
+        page: String?,
+    ): OnlineRadio {
+        awaitSwitch()
+        return inner.radio(provider, seed, page)
     }
 
     /** Блокирует поток загрузчика; [InterruptedException] идёт наружу — загрузчик прервали. */

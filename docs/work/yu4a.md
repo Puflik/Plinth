@@ -476,4 +476,58 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+**Rust — сделано** (коммит `ea73e69` в `work/yu4a`; шесть файлов из «Менять»:
+`core/providers/src/model/radio.rs` (новый), `model/mod.rs`, `provider.rs`, `registry.rs`,
+`core/ffi/src/api/external_api.rs`, `online_api.rs`). Основа — Rust-патч планировщика; каждая
+строка сверена с «Решением» и «Инвариантами». Расхождений с планом два, оба поправил я:
+
+- в патче не было правки шапки трейта `Provider` — внесена, как велит «Решение», А: «`radio`
+  пришёл в Ю4а; `download` и `browse` придут с Bandcamp (v0.5)»;
+- `next` в `online_radio` — `key.as_str().to_owned()`, как в «Решении», В (в патче `to_string()`:
+  значение то же, `Display` у `ExternalId` пишет строку как есть).
+
+Состав: `RadioPage`; `Provider::radio` с телом «не умею» (`Unavailable`); `Registry::radio` — как
+`resolve` по доступности (спрашивает и отдыхающего), но **без `observe`**: ни успех, ни сбой радио в
+здоровье не идёт (ответ Opus), комментарий к `Registry` дополнен; `ExternalProvider::radio` **без
+тела** (UniFFI тел не принимает; три двойника старых тестов Ю3 уже получили `fn radio` в коммите
+тестов), `ExternalRadio`, `RADIO_PAGE_MAX = 100`; `ExternalAdapter::radio` — `panic::guard`, первые
+100 треков, негодный трек выброшен, страница из одних негодных — `Parse`, негодный ключ — `Parse`,
+пустая страница с ключом пропускается; `online_radio` (беда провайдера — `problem`, выключенные
+источники, `Internal`, негодные аргументы — ошибка вызова) и `online_origins` (источники трека по
+порядку каталога; неизвестный трек и файл с диска — пусто). Каталог и журнал не пишутся.
+
+**Rust — проверки** (Windows, из `core/`):
+
+- Красное до правки: `cargo test -p plinth-providers --test yu4a_radio --no-run` и
+  `cargo test -p plinth-ffi --no-run` не собираются — нет `RadioPage`, `Provider::radio`,
+  `Registry::radio`, `ExternalRadio`, `online_radio`, `online_origins`, `OnlineRadioReply`,
+  `OnlineOrigin` (E0599, E0432, E0407, E0425).
+- После: `cargo test --workspace` — 1000 зелёных, 0 упавших, 1 `ignored` не мой (доктест
+  `providers/src/testing/contract.rs`). Числа из «Готово, когда» сошлись: `yu4a_radio` — 6 из 6,
+  `yu4a_tests` — 19 из 19, весь `plinth-ffi` — 180 из 180. `cargo clippy --workspace --all-targets
+  -- -D warnings` — чисто. `cargo fmt --all -- --check` — настоящих `Diff in` нет (код 1 — только
+  «Incorrect newline style» по CRLF-файлам рабочей копии); `cargo fmt` без `--check` не запускался.
+
+**Kotlin — сделано** (коммит с этим отчётом; шесть файлов из «Менять»: `ffi/CoreOnline.kt`,
+`ffi/CoreOnlineProvider.kt`, `online/OnlineRepository.kt`, `CoreOnlineRepository.kt`,
+`GatedOnlineRepository.kt`, `sharedTest/.../FakeOnlineRepository.kt`). Основа — Kotlin-патч
+планировщика, сверен с «Решением», Г. Поверх него мои правки: порядок импортов в фейке
+(`OnlineOrigin` после `OnlineKind` — на это указал планировщик; ktlint его бы не пропустил);
+KDoc у `GatedOnlineRepository` (перечень ждущих вызовов дополнен `radio`, каталог — `origins`) и
+у `FakeOnlineRepository` (радио по сценарию, `origins` из `add`) — иначе они описывали бы старое
+поведение. `YoutubeProvider` и всё из «Не трогать» не тронуты.
+
+**Kotlin — проверки (JVM)** (`.\gradlew.bat ktlintCheck detekt testGithubDebugUnitTest
+lintGithubDebug --continue`, `JAVA_HOME` jdk-21.0.8):
+
+- `ktlintCheck`, `detekt`, `lintGithubDebug` — чисто.
+- `testGithubDebugUnitTest` — 894 теста, 1 пропущен, **7 упали — все в `DataStore*SettingsTest`**
+  (`Folder` — 1, `Online` — 3, `Sort` — 1, `Onboarding` — 2): `IOException: Unable to rename
+  …preferences_pb.tmp` в `FileStorage.kt:114`. Это известный сбой Windows из README («Известное»);
+  там названо 4 теста, в этом прогоне 7 — переименование временного файла, к радио отношения нет
+  (вне `DataStore*` не упал ни один тест). Решает CI на Linux.
+- Четыре новых класса — 20 из 20: `ExternalProviderRadioTest` 6, `CoreOnlineRadioMappingTest` 4,
+  `FakeOnlineRepositoryRadioTest` 6, `GatedOnlineRepositoryRadioTest` 4.
+
+**Дальше в работе** (будет дописано отдельным коммитом): инструментальный тест `OnlineRadioCoreTest`
+на эмуляторе.
