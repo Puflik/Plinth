@@ -12,6 +12,8 @@ pub mod op;
 pub mod op_meta;
 mod passport;
 mod projection;
+#[cfg(test)]
+mod r1_6b_tests;
 mod rebuild;
 mod relink;
 mod stale;
