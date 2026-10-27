@@ -10,7 +10,7 @@
 > в «На что смотреть при чтении плана (Opus)».
 
 - **Ветка:** `work/yu4a` · **Ворктри:** `C:\claude\Plinth-yu4a`
-- **Основа:** `main` на `e95c935` · **Коммит тестов:** `d719377` (последний, Kotlin; Rust-тесты — `4509c9c`; до них в ветке только черновики этого файла)
+- **Основа:** `main` на `e95c935` · **Коммит тестов:** `72fe4cd` (последний: правка Rust-тестов по ответу Opus о здоровье; Kotlin-тесты — `d719377`, остальные Rust-тесты — `4509c9c`; до них в ветке только черновики этого файла)
 - **Откуда:** `tasks.md`, Ю4 «Радио от трека»; спайк `docs/work/yu3a.md` п. 6; ADR 0008 (метод `related`
   «придёт позже методом по умолчанию»); план 6.1, 9.2, 11.1.
 
@@ -85,8 +85,11 @@ pub struct RadioPage {
     }
 ```
 
-В `Registry` (`registry.rs`) — по образцу `resolve` (действие человека над конкретным треком: провайдера
-спрашивают и в `Down`, исход идёт в здоровье через `observe`):
+В `Registry` (`registry.rs`) — как `resolve` по доступности (действие человека над конкретным треком: провайдера
+спрашивают и в `Down`), **но в здоровье исход не идёт — ни успех, ни сбой** (ответ Opus, 2026-10-27). У Mix свой эндпоинт и
+свой повтор в приложении (yu4c: не чаще раза в 30 с), поэтому поломка Mix не должна на пять минут убирать YouTube из поиска, а
+успех радио не должен снимать отдых, который заработал поиск (`Unavailable` в `observe` и вовсе считается успехом). `observe`
+не зовётся, `now` не нужен:
 
 ```rust
     pub fn radio(
@@ -94,12 +97,11 @@ pub struct RadioPage {
         provider: &ProviderId,
         seed: &ExternalId,
         page: Option<&ExternalId>,
-        now: Timestamp,
     ) -> Result<RadioPage, CoreError>
 ```
 
-Неизвестный провайдер — `Unavailable` (как у `resolve`: `find`). Дополнить комментарий к `Registry`: `radio`
-— как `resolve`.
+Тело — `self.find(provider)?.radio(seed, page)`. Неизвестный провайдер — `Unavailable` (как у `resolve`: `find`). Дополнить
+комментарий к `Registry`: `radio` — тоже действие человека, спрашивается и в `Down`, здоровья не трогает.
 
 ### Б. Граница с платформой: `external_api.rs`
 
@@ -161,7 +163,7 @@ pub fn online_origins(&self, track: TrackId) -> Result<Vec<OnlineOrigin>, CoreEr
 
 - `online_radio` — как `online_album`: `panic::guard`; `self.online().ok_or_else(off)?`; `ProviderId::new`,
   `ExternalId::new` для затравки и ключа (негодные — `Parse`, платформа не зовётся);
-  `registry.radio(.., Timestamp::now())`; `Ok(page)` → `OnlineRadioReply { tracks: page.tracks.map(track_info), next: page.next.map(|key| key.as_str().to_owned()), problem: None }`;
+  `registry.radio(&provider, &seed, page.as_ref())`; `Ok(page)` → `OnlineRadioReply { tracks: page.tracks.map(track_info), next: page.next.map(|key| key.as_str().to_owned()), problem: None }`;
   `Err(Network | Unavailable | Parse)` → `problem_of(&error)` с пустыми треками; прочие ошибки (`Internal`, `Storage`)
   — ошибка вызова. Выключенные источники — `Unavailable("online sources are off")` ошибкой, как у альбома.
 - `online_origins` — читает каталог: `online_sources(track)` → `OnlineOrigin { provider, source: external_id }` в
@@ -261,8 +263,9 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
   `panic::guard`, как и раньше (этой задачей не меняется).
 - Страница: не больше 100 треков, порядок платформы сохранён; негодный трек выброшен без потери страницы; страница
   только из негодных — `Parse`; негодный ключ — `Parse`.
-- Провайдер без `radio` отвечает `Unavailable` и здоровью не вредит; сбой радио считается как сбой `resolve`
-  (три подряд — отдых провайдера); радио спрашивается и у отдыхающего провайдера (действие человека).
+- Радио в здоровье не идёт — ни успех, ни сбой (`Registry::radio` не зовёт `observe`): поломка Mix не убирает провайдера
+  из поиска, успех радио не снимает отдых и сбой его не продлевает. Провайдера спрашивают и в `Down` (действие
+  человека над треком). Провайдер без `radio` отвечает `Unavailable`.
 - Существующее поведение не меняется: поиск, альбом, поток, здоровье. Старые тесты Rust и Kotlin проходят
   (в трёх двойниках платформы старых тестов Rust планировщик уже добавил `fn radio`, см. «Решение», Б).
 
@@ -295,10 +298,12 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
 `ExternalRadio`, `online_radio`, `online_origins`, `OnlineRadio`, `OnlineRadioPage`, …) — сигнатуры выше.
 
 **`core/providers/tests/yu4a_radio.rs`** — реестр и трейт:
-- провайдер без `radio` отвечает `Unavailable`; реестр, спрошенный пять раз, оставляет ему здоровье `Ok`;
+- провайдер без `radio` отвечает `Unavailable`, и реестр, спрошенный пять раз, оставляет ему здоровье `Ok`;
 - реестр отдаёт затравку и ключ провайдеру дословно, первая страница → `next = Some`, по ключу — вторая, `next = None`;
-- неизвестный провайдер — `Unavailable`;
-- три сбоя радио (`Network`) подряд — провайдер отдыхает, а четвёртый вызов всё равно доходит до него.
+- неизвестный провайдер — `Unavailable`, никого не спрашивают;
+- пять сбоев радио (`Network`) подряд здоровье не меняют (`Ok`), провайдера по-прежнему спрашивают;
+- отдыхающий (три сбоя `resolve`) провайдер на радио отвечает, но ни сбой, ни успех радио не меняют ни здоровье, ни срок
+  отдыха.
 
 **`core/ffi/src/api/yu4a_tests.rs`** — `Core` с платформенным провайдером в памяти:
 - первая страница: треки как пришли (id, название, варианты), ключ, нет беды; по ключу — вторая и последняя;
@@ -309,7 +314,7 @@ suspend fun origins(track: TrackId): List<OnlineOrigin>
 - паника платформы — `Internal` вызова, следующий вызов работает;
 - источники выключены — `Unavailable` ошибкой; чужой провайдер — `ProviderDown`; негодные аргументы — `Parse`, платформа не зовётся;
 - платформа без `radio` — `ProviderDown`, поиск по ней жив, здоровье цело;
-- три сбоя подряд — отдых, четвёртый вызов доходит и получает страницу;
+- пять сбоев радио подряд не отдыхают провайдера: поиск по нему жив, шестой вызов получает страницу;
 - радио ничего не заводит в каталоге (`known_online_tracks` — пусто);
 - `online_origins`: у сетевого трека — его источники по порядку; у неизвестного — пусто; ядро без `connect_online` отвечает.
 
@@ -343,7 +348,7 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 - `cargo clippy`/`fmt`, `ktlintCheck`, `detekt`, `lintGithubDebug` чисты;
 - `OnlineRadioCoreTest` проходит на эмуляторе;
 - в приложении по-прежнему ничего не видно: меню, очередь, YouTube — те же (`YoutubeProvider` не менялся);
-- числа для сверки: Rust — 5 тестов в `yu4a_radio`, 19 в `yu4a_tests` (всего в `plinth-ffi` 180); Kotlin — 6 + 4 + 6 + 4
+- числа для сверки: Rust — 6 тестов в `yu4a_radio`, 19 в `yu4a_tests` (всего в `plinth-ffi` 180); Kotlin — 6 + 4 + 6 + 4
   на JVM (`ExternalProviderRadioTest`, `CoreOnlineRadioMappingTest`, `FakeOnlineRepositoryRadioTest`,
   `GatedOnlineRepositoryRadioTest`) и 4 инструментальных (`OnlineRadioCoreTest`);
 - скорость: не критерий — радио не на горячем пути.
@@ -357,6 +362,13 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 
 ## На что смотреть при чтении плана (Opus)
 
+**Ответы Opus (2026-10-27, предварительные, до исполнителя).** П. 3 — радио в здоровье не идёт: внесено в план и в тесты.
+П. 2 — формат очереди 2 с видом `radio`, без версии 3: принято (это yu4c). П. 4 — затравка есть `ExternalId` провайдера в
+любой его форме (id видео или вариант), разбирает провайдер: принято. П. 1 — `add_online_tracks` журнал не пишет
+(проверено: только `db.add_online_track`); рост каталога и показ исполнителей и альбомов из одних сетевых треков —
+вопрос yu4c, чистка каталога — отдельная задача после 0.3. П. 6 — поправку к ADR 0008 пишет Opus при слиянии. Ждёт ответа
+п. 5 и общий итог.
+
 1. **Каталог растёт радио.** `add` на каждую страницу заводит до 25 строк `Track`/`Version`/`Source`, а ещё
    исполнителей и альбомы по имени (`insert_online`: `artist_by_name`, `album_by_title`). Заметки в `online_repo.rs`
    говорят, что вкладки библиотеки сетевых треков не показывают, но показывают ли они исполнителей и альбомы, заведённые
@@ -366,8 +378,7 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 2. **`queue.bin` без подъёма версии.** Новый вид контекста `radio` в формате 2; понижение версии приложения
    теряет очередь молча. Альтернатива — версия 3 с чтением обеих: тогда понижение тоже теряет очередь, а
    обновление безопасно лишь при корректном чтении 2. Какой вариант принимаешь?
-3. **Здоровье.** Сбой радио идёт в здоровье YouTube так же, как `resolve`; три подряд положат и поиск по нему на пять
-   минут. Mix — другой эндпоинт, чем поиск; не слишком ли строго?
+3. **Здоровье — решено:** радио в здоровье не идёт (ответ выше). Раньше план вёл его через `observe`, как `resolve`.
 4. **Затравка — «источник или id трека»** (двойной смысл `seed`): каталог хранит только варианты, поэтому ядро не
    знает id видео. Принимать оба должен провайдер (YouTube: `VIDEO_ID` или `VARIANT`). Нет ли чище?
 5. **`ExternalProvider::radio` без тела (решение плана изменилось по ходу проверки).** UniFFI тел по умолчанию не принимает (компилятор), поэтому три двойника платформы
@@ -387,12 +398,15 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 **Rust (проверено 2026-10-27).** Прототип лежит патчем в общей папке заметок сессий
 (`yu4a-reference-implementation-rust.patch`, в ветке его нет): `RadioPage`, `Provider::radio`, `Registry::radio`, `ExternalRadio`,
 `ExternalProvider::radio` (без тела), `ExternalAdapter::radio`, `OnlineRadioReply`, `OnlineOrigin`, `online_radio`, `online_origins`.
-Против него: `cargo test -p plinth-providers --test yu4a_radio` — 5 из 5; `cargo test -p plinth-ffi` — 180 из 180 (19 из них
+Против него: `cargo test -p plinth-providers --test yu4a_radio` — 6 из 6; `cargo test -p plinth-ffi` — 180 из 180 (19 из них
 в `yu4a_tests`, остальные — старые вместе с тремя двойниками); `cargo clippy --workspace --all-targets -- -D warnings` и
 `cargo fmt --all -- --check` чисты (шум CRLF по чужим файлам не в счёт). Без прототипа тесты не собираются: новый API.
 Что прототип выяснил: (1) тело по умолчанию у метода `ExternalProvider` UniFFI не принимает; (2) текст паники платформы
 попадает в `Internal` через `panic::guard` и сейчас, не только у радио — тест этого не требует; (3) `versions_of` неизвестного
 трека — пустой список, поэтому `online_origins` для него `Ok([])`; (4) `TrackId` — `Copy`.
+Правка по ответу Opus о здоровье (2026-10-27): прототип обновлён — `Registry::radio(provider, seed, page)` без `now` и без
+`observe`, патч в заметках перезаписан; тесты на здоровье переписаны. Мутация «радио снова идёт в здоровье» валит ровно три
+теста (два в `yu4a_radio`, один в `yu4a_tests`); без мутации — 6 из 6 и 19 из 19, clippy и fmt чисты.
 
 **Kotlin (проверено 2026-10-27).** Прототип — патчем в общей папке заметок (`yu4a-reference-implementation-kotlin.patch`, в ветке
 его нет): `OnlineRadioPage`, `OnlineRadioReply`, `OnlineOrigin`, `CoreOnline.radio`/`origins`, `OnlineProvider.radio` по умолчанию и
@@ -443,6 +457,9 @@ $env:ANDROID_SERIAL = "emulator-5554"; .\gradlew.bat connectedGithubDebugAndroid
 - Пункт «Радио» в `TrackAction`/`TrackRow` (все списки), в строках `OnlineAlbumScreen`, в `PlayerMenu`; строки ru/en;
   сообщения о выключенном YouTube, сети, пустом ответе, остановке радио; очередь не меняется до первой страницы.
 - Холодный старт: восстановленная очередь радио на паузе; подгрузка начинается с первого `play` (через `Gated`).
+- Проверить: не показывают ли вкладки «Исполнители» и «Альбомы» исполнителей и альбомы, заведённые только сетевыми
+  треками радио (`insert_online` создаёт их по имени); чистка каталога — отдельная задача после 0.3. Радио в здоровье не
+  идёт (yu4a), поэтому повторы подгрузки ограничивает только сам `RadioFeeder`.
 
 ## Отчёт исполнителя
 
