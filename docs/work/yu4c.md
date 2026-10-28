@@ -518,4 +518,27 @@ Opus проверит на ревью.
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+**Сделано.** Основа — патч планировщика `yu4c-reference-implementation.patch` (28 файлов): `git apply` лёг на `db1ab48` чисто. Каждую строку сверил с «Решением» и «Инвариантами», расхождений нет: шаги `RadioFeeder` (порядок проверок, `Playing`/`Ended`, сеанс по значению контекста, пауза 30 с, один раз «открыть заново», ненужная страница — без паузы и без записи в каталог, `add` только новых, «конец» запоминается после `add` и до `extend`, три страницы повторов, предел 300, «Радио остановилось» один раз на конец); `RadioStarter.open` (нет названия → `NOT_FOUND`; YouTube выключен → `NEEDS_YOUTUBE` до любой сети; затравка из `origins`, иначе поиск; не больше 299; `expect` до `play` — `RadioStarter.kt:121–122`; `play`, а не `replace`); `extended`/`extend` (защита `base`, движок не трогается); `Place`; `queue.bin` (версия 2, три строки через `writeText`, ключ страницы на диск не идёт); тексты всех шести строк в обоих языках; пятый параметр `TrackActions` со значением по умолчанию.
+
+Поверх патча одна правка, и только в комментарии: у `PlaybackQueue.playing` дописано «не зависит от длины контекста» (так сказано в «Решении»; в патче фраза была только у `Place`), комментарий `Place` сокращён. Код не менял.
+
+**Коммиты** (`work/yu4c`, пуш без прокси): `a6f5387` — реализация (28 файлов: основной код и ресурсы); следующий коммит — этот отчёт.
+
+**Красное до реализации.** На `db1ab48` `compileGithubDebugUnitTestKotlin` не собирается: 223 ошибки `e:`, все в файлах `Yu4c*` (нет `QueueContext.Radio`, `PlaybackQueue.extended`, `PlaybackController.extend`, пакета `radio`, `AppError.Radio`, `TrackAction.RADIO`, `PlayerViewModel.onRadio`, `PlayerUiState.radio`; «too many arguments» — пятый аргумент `TrackActions`); вне `Yu4c*` ошибок нет.
+
+**Проверки** (PowerShell, `JAVA_HOME` из README; числа — по `TEST-*.xml`):
+
+| Что | Итог |
+|---|---|
+| `testGithubDebugUnitTest --tests "*Yu4c*"` | 68 из 68: `Yu4cQueueExtendTest` 9, `Yu4cRadioQueueStoreTest` 4, `Yu4cControllerExtendTest` 4, `Yu4cRadioPagesTest` 8, `Yu4cRadioFeederTest` 19, `Yu4cRadioStarterTest` 15, `Yu4cRadioUiTest` 8, `Yu4cRadioAlbumRowTest` 1 |
+| `ktlintCheck detekt testGithubDebugUnitTest lintGithubDebug --continue` | `ktlintCheck`, `detekt`, `lintGithubDebug` чисты; весь unit-набор — 1005 тестов, 1 пропущен, 7 упали — ровно известные `DataStoreFolderSettingsTest` (1), `DataStoreOnboardingSettingsTest` (2), `DataStoreOnlineSettingsTest` (3), `DataStoreSortSettingsTest` (1); `RussianTranslationTest` зелёный |
+| `assembleGithubDebug compileGithubDebugAndroidTestKotlin` | собираются (Hilt принимает `TrackActions(…, launcher = RadioLauncher.None)`) |
+| `assembleGithubRelease` | собирается; в `mapping.txt` есть `RadioFeeder` (→ `ee3`) и `RadioStarter` (→ `ue3`), рядом `RadioNotices`, `RadioPolicy`, `RadioSeed` |
+| эмулятор `Medium_Phone_API_36.0` (`-no-window`, `ANDROID_SERIAL=emulator-5554`, по классу за прогон) | `TrackRowMenuTest` 13 из 13, `PlayerMenuTest` 8 из 8, защищённый `Yu4cRadioMenuTest` 6 из 6; эмулятор погашен (`adb emu kill`), устройств автора не было |
+
+Защищённые тесты не тронуты: `git diff f3c9af9 HEAD -- <10 файлов защищённых тестов>` пуст. Изменены только файлы из «Менять» (28), `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `Cargo.lock`, `libs.versions.toml` не менялись; новых `@Suppress`, `@Ignore`, `!!` в основном коде нет (проверено по диффу).
+
+**Для ревью (Opus).**
+1. `radio/RadioPolicy.kt` — единственный файл, которого нет в списке «Менять» буквально: он новый, в пакете `radio`, и «Решение» (абзац про `detekt`, `MatchingDeclarationName`) само ставит `RadioPolicy` в этот файл. Других файлов вне списка нет.
+2. Порядок `feeder.expect(…)` → `playback.play(…)` (живая мутация 36) держу по «Решению», тесты его не ловят — проверить глазами на `RadioStarter.kt:121–122`.
+3. Вопросов к автору и к Opus нет; остановок по списку «Остановиться и написать» не было. Живая сеть YouTube и телефон автора мной не проверялись (по плану — после слияния).
