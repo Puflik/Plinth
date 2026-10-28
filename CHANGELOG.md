@@ -17,8 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   player menu, and the queue goes on with a YouTube Mix of similar songs.
   More songs load as you listen, without a break, and a radio queue
   survives a restart. Radio works only through YouTube and only when you
-  start it. For a song from your device Plinth looks it up by artist and
-  title, and that search goes to every online source that is switched on.
+  start it. For a song from your device Plinth looks it up on YouTube by
+  artist and title.
 - Settings: each online source, Internet Archive and YouTube, has its own
   switch. A source that is switched off gets no requests; its saved tracks
   stay in the library and play again when it is switched back on.
