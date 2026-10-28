@@ -36,6 +36,15 @@ interface OnlineRepository {
      */
     suspend fun search(query: String): List<OnlineSection>
 
+    /**
+     * Секция одного провайдера [provider] (Ю4г) — та же, что дал бы [search]; остальные провайдеры запроса не получают.
+     * `null` — секции нет: источники выключены, провайдер не подключён или выключен, запрос без слов. Ждёт ответа сети.
+     */
+    suspend fun searchIn(
+        provider: String,
+        query: String,
+    ): OnlineSection?
+
     /** Треки собрания [item] провайдера [provider] — по номерам. */
     suspend fun album(
         provider: String,

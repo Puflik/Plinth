@@ -55,14 +55,26 @@ class CoreOnlineRepository(
      * ([OnlineCancel]) и возвращается сразу; сам вызов доживает не дольше
      * остатка срока поиска и ничего не пишет.
      */
-    override suspend fun search(query: String): List<OnlineSection> {
+    override suspend fun search(query: String): List<OnlineSection> =
+        outliving("search") { cancel -> core.online.search(query, OnlineRepository.SEARCH_LIMIT, cancel) }.orEmpty()
+
+    override suspend fun searchIn(
+        provider: String,
+        query: String,
+    ): OnlineSection? =
+        outliving("searchIn") { cancel ->
+            core.online.searchIn(provider, query, OnlineRepository.SEARCH_LIMIT, cancel)
+        }
+
+    /** Вызов поиска [call], переживший отмену корутины (см. [search]); отказ ядра — `null`. */
+    private suspend fun <T : Any> outliving(
+        what: String,
+        call: (OnlineCancel) -> T?,
+    ): T? {
         val cancel = OnlineCancel()
-        val call =
-            calls.async {
-                quietly(TAG, "search") { core.online.search(query, OnlineRepository.SEARCH_LIMIT, cancel) }
-            }
+        val running = calls.async { quietly(TAG, what) { call(cancel) } }
         return try {
-            call.await().orEmpty()
+            running.await()
         } catch (cancelled: CancellationException) {
             cancel.cancel()
             throw cancelled

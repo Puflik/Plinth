@@ -5,7 +5,8 @@
 //! - `connect_online` включает источники (переключатель «Онлайн-источники»),
 //!   `disconnect_online` — выключает; выключены — поиск пуст, потока нет;
 //! - поиск по провайдерам — секциями, по секции на провайдера (ответ
-//!   автора); альбом — `resolve`;
+//!   автора); у одного названного провайдера (`online_search_in`, затравка
+//!   радио) — его секция, остальным запрос не уходит; альбом — `resolve`;
 //! - каталог при действии (ответ автора E1): `add_online_tracks` заводит
 //!   треки альбома, дальше они живут как локальные;
 //! - адрес потока — в момент загрузки (ответ автора E3): вариант по типу
@@ -211,6 +212,26 @@ impl Core {
         cancel: Arc<OnlineCancel>,
     ) -> Result<Vec<OnlineSearch>, CoreError> {
         self.online_search_within(query, limit, &cancel, SEARCH_BUDGET)
+    }
+
+    /// Секция одного провайдера `provider`: спрашивают только его, остальные запроса не получают (затравка радио ищется
+    /// у YouTube, а не у Internet Archive). Срок, отмена и пауза провайдера — как у [`Self::online_search`]. `None` —
+    /// секции нет: источники выключены, провайдер не подключён, запрос пуст или поиск отменён до ответа. Негодное имя
+    /// провайдера — ошибка вызова.
+    pub fn online_search_in(
+        &self,
+        provider: String,
+        query: String,
+        limit: u32,
+        cancel: Arc<OnlineCancel>,
+    ) -> Result<Option<OnlineSearch>, CoreError> {
+        panic::guard(|| {
+            let provider = ProviderId::new(&provider)?;
+            let Some(registry) = self.online() else { return Ok(None) };
+            let limits = Limits::within(SEARCH_BUDGET).cancelled_by(&cancel.cancel);
+            let query = SearchQuery::new(&query, limit).within(limits);
+            Ok(registry.search_in(&provider, &query, Timestamp::now()).map(section))
+        })
     }
 
     /// Треки собрания `item` провайдера `provider` (экран альбома). Провайдер,

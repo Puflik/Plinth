@@ -23,7 +23,8 @@ import javax.inject.Singleton
  * Пункт «Радио» (Ю4в): находит затравку у провайдера, берёт первую страницу и только тогда заменяет контекст
  * очереди — до этого очередь остаётся прежней. Затравка — источник провайдера у трека из каталога, а у файла с
  * диска и трека другого провайдера — первая песня из поиска по «исполнитель название» (по действию человека; поиск
- * идёт ко всем включённым провайдерам). Ответ человеку — вести [RadioNotices]; новое нажатие отменяет прежнее.
+ * идёт только у провайдера радио, остальным запрос не уходит). Ответ человеку — вести [RadioNotices]; новое нажатие
+ * отменяет прежнее.
  */
 @Singleton
 class RadioStarter
@@ -80,7 +81,7 @@ class RadioStarter
             title: String,
         ): Step<String> {
             val query = listOfNotNull(seed.item.artist?.takeIf(String::isNotBlank), title).joinToString(" ")
-            val section = online.search(query).firstOrNull { it.provider == provider }
+            val section = online.searchIn(provider, query)
             val found = section?.results?.firstOrNull { it.kind == OnlineKind.TRACK }
             return if (found != null) Step.Done(found.external) else Step.Stopped(unanswered(section?.problem))
         }

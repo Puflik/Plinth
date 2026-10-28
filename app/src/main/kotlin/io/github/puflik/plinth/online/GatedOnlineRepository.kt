@@ -18,8 +18,8 @@ import kotlin.time.Duration.Companion.seconds
  * загрузчик плеера (сохранённый сетевой трек очереди) идут в ядро одновременно с ним: кто первый,
  * тот и прав. Ядро не различает «выключены» и «ещё не включены» — получить «источники
  * выключены» значило молча пустой поиск или `Unavailable` и пропуск трека. Порядок знает только
- * приложение, поэтому ждёт оно: [search], [album], [radio] и [stream] задерживаются до первого
- * [setEnabled], но не дольше [waitLimit] — вышел срок, вызов идёт дальше, и ядро решает само.
+ * приложение, поэтому ждёт оно: [search], [searchIn], [album], [radio] и [stream] задерживаются до
+ * первого [setEnabled], но не дольше [waitLimit] — вышел срок, вызов идёт дальше, и ядро решает само.
  * Каталог ([known], [add], [origins]) источников не требует и не ждёт.
  *
  * Ворота открывает любой исход [setEnabled], и упавший тоже: ждать больше нечего.
@@ -47,6 +47,14 @@ class GatedOnlineRepository(
     override suspend fun search(query: String): List<OnlineSection> {
         awaitSwitch()
         return inner.search(query)
+    }
+
+    override suspend fun searchIn(
+        provider: String,
+        query: String,
+    ): OnlineSection? {
+        awaitSwitch()
+        return inner.searchIn(provider, query)
     }
 
     override suspend fun album(

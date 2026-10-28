@@ -22,6 +22,8 @@ pub struct ProviderSearch {
 ///   скорость ответа добавится, когда провайдеров станет больше одного;
 /// - поиск спрашивает всех, кроме `Down`, по одному; отказ одного не прячет
 ///   ответы остальных;
+/// - `search_in` — тот же поиск у одного названного провайдера (затравка радио): остальных не спрашивает и в их
+///   здоровье ничего не пишет, а `Down`, срок и отмена у него — как у поиска по всем;
 /// - `resolve` и `stream` — действие человека над конкретным треком: их
 ///   провайдер спрашивается и в `Down`, только в `stream` — последним;
 /// - `radio` — тоже действие человека: провайдер спрашивается и в `Down`, но в здоровье исход не идёт;
@@ -67,26 +69,45 @@ impl Registry {
         if query.is_blank() {
             return found;
         }
-        let limits = query.limits();
         for provider in &self.providers {
-            if limits.is_cancelled() {
-                break;
+            match self.ask(provider, query, now) {
+                Some(one) => found.push(one),
+                None => break,
             }
-            let id = provider.id().clone();
-            let outcome = if self.is_down(&id, now) {
-                Err(CoreError::unavailable(format!("provider {id} is down")))
-            } else if limits.left().is_some_and(|left| left.is_zero()) {
-                Err(CoreError::network("timed out"))
-            } else {
-                let answer = provider.search(query);
-                if limits.is_cancelled() {
-                    break;
-                }
-                self.observe(provider.as_ref(), now, answer)
-            };
-            found.push(ProviderSearch { provider: id, outcome });
         }
         found
+    }
+
+    /// Ответ только `provider`, как у [`Registry::search`]: остальные не получают запроса и в здоровье не меняются.
+    /// `None` — никого не спросили: запрос пуст, такого провайдера нет или поиск отменён до ответа. `Down`, срок и
+    /// отмена — как у `search`.
+    pub fn search_in(&self, provider: &ProviderId, query: &SearchQuery, now: Timestamp) -> Option<ProviderSearch> {
+        if query.is_blank() {
+            return None;
+        }
+        let provider = self.providers.iter().find(|candidate| candidate.id() == provider)?;
+        self.ask(provider, query, now)
+    }
+
+    /// Один шаг поиска: `None` — поиск отменён (до вопроса или пока провайдер отвечал), ответ не записан.
+    fn ask(&self, provider: &Arc<dyn Provider>, query: &SearchQuery, now: Timestamp) -> Option<ProviderSearch> {
+        let limits = query.limits();
+        if limits.is_cancelled() {
+            return None;
+        }
+        let id = provider.id().clone();
+        let outcome = if self.is_down(&id, now) {
+            Err(CoreError::unavailable(format!("provider {id} is down")))
+        } else if limits.left().is_some_and(|left| left.is_zero()) {
+            Err(CoreError::network("timed out"))
+        } else {
+            let answer = provider.search(query);
+            if limits.is_cancelled() {
+                return None;
+            }
+            self.observe(provider.as_ref(), now, answer)
+        };
+        Some(ProviderSearch { provider: id, outcome })
     }
 
     pub fn resolve(

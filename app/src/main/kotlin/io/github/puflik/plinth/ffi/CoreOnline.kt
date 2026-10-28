@@ -62,6 +62,21 @@ class CoreOnline internal constructor(
     }
 
     /**
+     * Секция одного провайдера [provider] (Ю4г): остальные запроса не получают. `null` — секции нет: источники
+     * выключены, провайдер не подключён, запрос пуст или поиск отменён до ответа; негодное имя — [CoreFailure].
+     * Срок и [cancel] — как у [search].
+     */
+    fun searchIn(
+        provider: String,
+        query: String,
+        limit: Int,
+        cancel: OnlineCancel = OnlineCancel(),
+    ): OnlineSection? {
+        require(limit > 0) { "limit: $limit" }
+        return core.call { rust -> rust.onlineSearchIn(provider, query, limit.toUInt(), cancel.rust)?.toApp() }
+    }
+
+    /**
      * Треки собрания [item] провайдера [provider] — или беда провайдера ([OnlineAlbumReply.problem]):
      * нет сети, не отвечает, просит подождать, ответ не понять. Выключено или неверный ID — [CoreFailure].
      */
