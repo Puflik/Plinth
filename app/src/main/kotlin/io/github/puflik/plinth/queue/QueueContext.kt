@@ -43,4 +43,14 @@ sealed interface QueueContext {
 
     /** Один файл, открытый мимо библиотеки через SAF. */
     data object File : QueueContext
+
+    /**
+     * Радио от трека (Ю4в): [provider] подбирает продолжение, [seed] — затравка так, как её понимает провайдер
+     * (id видео или его вариант `<видео>/<itag>`), [title] — название трека, от которого радио, для подписи.
+     */
+    data class Radio(
+        val provider: String,
+        val seed: String,
+        val title: String,
+    ) : QueueContext
 }

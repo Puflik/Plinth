@@ -173,6 +173,7 @@ private val MENU =
         TrackAction.PLAY_NEXT to R.string.track_play_next,
         TrackAction.ADD_TO_QUEUE to R.string.track_add_to_queue,
         TrackAction.REPLACE_QUEUE to R.string.track_replace_queue,
+        TrackAction.RADIO to R.string.track_radio,
     )
 
 private val PLAYLIST_ITEM = TrackAction.ADD_TO_PLAYLIST to R.string.track_add_to_playlist

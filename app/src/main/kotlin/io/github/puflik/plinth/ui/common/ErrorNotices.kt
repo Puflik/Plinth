@@ -19,6 +19,7 @@ import io.github.puflik.plinth.R
 import io.github.puflik.plinth.audio.engine.AudioSource
 import io.github.puflik.plinth.core.ErrorNotice
 import io.github.puflik.plinth.core.FailedTrack
+import io.github.puflik.plinth.core.RadioProblem
 import io.github.puflik.plinth.core.TrackProblem
 import io.github.puflik.plinth.ui.settings.DiagnosticsViewModel
 import io.github.puflik.plinth.ui.settings.rememberLogSaver
@@ -102,6 +103,16 @@ private fun Resources.text(notice: ErrorNotice): String =
         ErrorNotice.LibraryRestored -> getString(R.string.notice_library_restored)
         is ErrorNotice.JournalStartedOver ->
             getString(if (notice.carried) R.string.notice_journal_started_over else R.string.notice_journal_lost)
+        is ErrorNotice.Radio -> getString(radioText(notice.problem))
+    }
+
+@StringRes
+private fun radioText(problem: RadioProblem): Int =
+    when (problem) {
+        RadioProblem.NEEDS_YOUTUBE -> R.string.radio_needs_youtube
+        RadioProblem.NO_NETWORK -> R.string.radio_no_network
+        RadioProblem.NOT_FOUND -> R.string.radio_not_found
+        RadioProblem.STOPPED -> R.string.radio_stopped
     }
 
 /**

@@ -118,6 +118,12 @@ class PlayerViewModel
             return queue.current?.source
         }
 
+        /** «Радио» из меню плеера (Ю4в): от трека, что играет; очередь пуста — ничего. */
+        fun onRadio() {
+            val current = playback.queue.value.current
+            if (current != null) actions.radio(current)
+        }
+
         fun onPlayPause() = playback.togglePlayPause()
 
         fun onSeek(position: Duration) = playback.seekTo(position)

@@ -201,6 +201,12 @@
     <string name="track_play_next">Играть следующим</string>
     <string name="track_add_to_queue">Добавить в очередь</string>
     <string name="track_replace_queue">Заменить очередь</string>
+    <string name="track_radio">Радио</string>
+    <string name="radio_needs_youtube">Радио работает через YouTube — включите его в настройках</string>
+    <string name="radio_no_network">Нет сети — радио не запустить</string>
+    <string name="radio_not_found">Радио для этого трека не нашлось</string>
+    <string name="radio_stopped">Радио остановилось</string>
+    <string name="player_queue_radio">Радио от «%1$s» · песни берутся с YouTube</string>
     <string name="track_like">Нравится</string>
     <string name="track_unlike">Больше не нравится</string>
     <string name="queue_added">Добавлено в очередь</string>

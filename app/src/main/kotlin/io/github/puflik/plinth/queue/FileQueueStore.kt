@@ -201,6 +201,12 @@ class FileQueueStore(
                 writeText(context.id.value)
                 writeText(context.name)
             }
+            is QueueContext.Radio -> {
+                writeUTF("radio")
+                writeText(context.provider)
+                writeText(context.seed)
+                writeText(context.title)
+            }
         }
     }
 
@@ -216,6 +222,7 @@ class FileQueueStore(
             "playlist" -> QueueContext.Playlist(PlaylistId(readUTF()), readUTF())
             "liked" -> QueueContext.Liked
             "recent" -> QueueContext.Recent
+            "radio" -> QueueContext.Radio(readUTF(), readUTF(), readUTF())
             else -> throw IOException("неизвестный контекст $kind")
         }
 
@@ -277,7 +284,10 @@ class FileQueueStore(
     private fun DataOutputStream.writeText(text: String) = writeUTF(text.fitUtf())
 
     private companion object {
-        /** 2 — владелец альбома у элемента и контекст «исполнитель» (E5); файл версии 1 не читается. */
+        /**
+         * 2 — владелец альбома у элемента и контекст «исполнитель» (E5); файл версии 1 не читается. Контекст «радио»
+         * (Ю4в) добавлен без подъёма версии: прежняя версия не знает его вида и очередь не прочтёт.
+         */
         const val VERSION = 2
         const val NO_CONTEXT = "none"
         const val NO_DURATION = -1L

@@ -119,6 +119,25 @@ class PlaybackController
             saved.current?.let { prepare(it, PlaybackParams(startPosition = position, autoPlay = false)) }
         }
 
+        /**
+         * Дописать [items] в конец контекста [context] радио (Ю4в), пока в нём [base] треков: текущий трек не
+         * прерывается, движок не трогается. `false` — очередь успела уйти (другой контекст, правка списка), ничего
+         * не изменено.
+         */
+        fun extend(
+            context: QueueContext,
+            base: Int,
+            items: List<QueueItem>,
+        ): Boolean {
+            var applied = false
+            mutableQueue.update { queue ->
+                val extended = queue.extended(context, base, items)
+                applied = extended != null
+                extended ?: queue
+            }
+            return applied
+        }
+
         /** Добавить трек в ручной блок; если ничего не играло — он и заиграет. */
         fun perform(
             action: QueueAction,
@@ -141,7 +160,7 @@ class PlaybackController
             // Назад некуда (ручной трек без контекста): очередь не заменяется пустой,
             // играет тот же трек (ревью v0.2, №16).
             if (progress.value.position > RESTART_THRESHOLD || back == current || back.current == null) {
-                restart()
+                seekTo(Duration.ZERO)
             } else {
                 start(back)
             }
@@ -210,8 +229,6 @@ class PlaybackController
             val current = queue.value
             if (current.current != null) current.next(auto)?.let(::start)
         }
-
-        private fun restart() = seekTo(Duration.ZERO)
 
         /** Трек не сыграл (G3): пропустить или остановиться — решает [FailedRun]. */
         private fun skipOrStop(error: PlaybackError) {

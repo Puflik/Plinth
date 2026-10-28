@@ -41,9 +41,18 @@ data class PlaybackQueue(
     /**
      * Место того, что играет: ручной трек или место в контексте. Равные
      * значения — играет то же самое: shuffle меняет порядок обхода, но не
-     * место, а тот же трек дальше по контексту — уже другое место.
+     * место, а тот же трек дальше по контексту — уже другое место. Место не
+     * зависит от длины контекста: дописанное в конец радио (Ю4в) его не меняет,
+     * поэтому сохранённая секунда и идущее прослушивание подгрузку не замечают.
      */
-    val playing: Any? get() = playingManual ?: order.getOrNull(position)?.let { contextItems to it }
+    val playing: Any? get() = playingManual ?: order.getOrNull(position)?.let { Place(context, it, contextItems[it]) }
+
+    /** Место трека контекста: сам контекст, индекс в нём и трек на этом индексе. */
+    private data class Place(
+        val context: QueueContext?,
+        val index: Int,
+        val item: QueueItem,
+    )
 
     /** Что сыграет дальше без повтора: ручной блок, затем остаток контекста. */
     val upcoming: List<QueueItem> get() = upNext + order.drop(position + 1).map(contextItems::get)
@@ -65,6 +74,22 @@ data class PlaybackQueue(
             playingManual = null,
         )
     }
+
+    /**
+     * Дописать [items] в конец контекста [context] (радио, Ю4в). Порядок обхода дополняется концом; играющий
+     * трек, ручной блок и позиция не меняются. `null` — очередь за это время ушла: контекст другой или в нём
+     * уже не [base] треков.
+     */
+    fun extended(
+        context: QueueContext,
+        base: Int,
+        items: List<QueueItem>,
+    ): PlaybackQueue? =
+        if (this.context != context || contextItems.size != base) {
+            null
+        } else {
+            copy(contextItems = contextItems + items, order = order + (base until base + items.size))
+        }
 
     /** «Заменить очередь»: как [play], но ручной блок пропадает. */
     fun replace(

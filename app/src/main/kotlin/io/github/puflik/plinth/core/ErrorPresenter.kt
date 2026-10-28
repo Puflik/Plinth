@@ -64,6 +64,8 @@ class ErrorPresenter
                 AppError.LibraryRestored -> if (toldRestored) null else ErrorNotice.LibraryRestored
                 is AppError.JournalStartedOver ->
                     if (toldJournalStartedOver) null else ErrorNotice.JournalStartedOver(error.carried)
+                // Ответ на нажатие или конец радио: говорится каждый раз.
+                is AppError.Radio -> ErrorNotice.Radio(error.problem)
             }
 
         /**
@@ -75,7 +77,12 @@ class ErrorPresenter
             when (notice) {
                 ErrorNotice.LibraryRestored -> toldRestored = true
                 is ErrorNotice.JournalStartedOver -> toldJournalStartedOver = true
-                is ErrorNotice.Skipped, is ErrorNotice.Stopped, ErrorNotice.CoreFailed, ErrorNotice.NotSaved -> Unit
+                is ErrorNotice.Skipped,
+                is ErrorNotice.Stopped,
+                ErrorNotice.CoreFailed,
+                ErrorNotice.NotSaved,
+                is ErrorNotice.Radio,
+                -> Unit
             }
         }
 
@@ -143,5 +150,10 @@ sealed interface ErrorNotice {
      */
     data class JournalStartedOver(
         val carried: Boolean,
+    ) : ErrorNotice
+
+    /** Радио не началось или остановилось (Ю4в). */
+    data class Radio(
+        val problem: RadioProblem,
     ) : ErrorNotice
 }

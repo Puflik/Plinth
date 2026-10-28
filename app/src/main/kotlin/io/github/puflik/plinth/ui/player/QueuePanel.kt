@@ -48,11 +48,45 @@ fun QueuePanel(
     upcoming: List<QueueItem>,
     edits: QueueEdits,
     modifier: Modifier = Modifier,
+    radio: String? = null,
 ) {
     if (upcoming.isEmpty()) {
         PanelPlaceholder(R.string.player_queue_empty, modifier)
         return
     }
+    if (radio != null) {
+        Column(modifier = modifier) {
+            RadioCaption(radio)
+            QueueList(upcoming, edits, Modifier.weight(1f))
+        }
+    } else {
+        QueueList(upcoming, edits, modifier)
+    }
+}
+
+/** Над очередью радио: от какого трека оно и что подборку отдаёт YouTube (план 9.5: провайдер видит запрос). */
+@Composable
+private fun RadioCaption(title: String) {
+    Text(
+        text = stringResource(R.string.player_queue_radio, title),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun QueueList(
+    upcoming: List<QueueItem>,
+    edits: QueueEdits,
+    modifier: Modifier,
+) {
     val rowHeight = with(LocalDensity.current) { QUEUE_ROW.toPx() }
     val reorder = remember { ReorderState() }
     LazyColumn(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {

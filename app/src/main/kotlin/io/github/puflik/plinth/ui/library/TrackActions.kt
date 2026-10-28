@@ -10,6 +10,9 @@ import io.github.puflik.plinth.library.PlaylistRepository
 import io.github.puflik.plinth.library.UserDataRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.queue.QueueContext
+import io.github.puflik.plinth.queue.QueueItem
+import io.github.puflik.plinth.radio.RadioLauncher
+import io.github.puflik.plinth.radio.RadioSeed
 import io.github.puflik.plinth.ui.library.playlists.playlistName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -28,6 +31,7 @@ class TrackActions
         private val userData: UserDataRepository,
         private val playlists: PlaylistRepository,
         @ApplicationScope private val scope: CoroutineScope,
+        private val launcher: RadioLauncher = RadioLauncher.None,
     ) {
         /**
          * [action] над [track] из списка [tracks], который играет контекстом
@@ -43,8 +47,17 @@ class TrackActions
             when (action) {
                 TrackAction.LIKE, TrackAction.UNLIKE ->
                     scope.launch { userData.setLiked(track.id, liked = action == TrackAction.LIKE) }
+                TrackAction.RADIO -> launcher.start(RadioSeed(track.toQueueItem(), track.id))
                 else -> playback.act(action, context, tracks, track, at)
             }
+        }
+
+        /**
+         * «Радио» из плеера (Ю4в): от трека, что играет. Плеер знает элемент очереди, а не ID трека, — ID берётся по
+         * источнику: файл фонотеки — по пути, сетевой трек — свой; файл не из фонотеки и адрес ID не имеют.
+         */
+        fun radio(item: QueueItem) {
+            scope.launch { launcher.start(RadioSeed(item, userData.trackOf(item.source))) }
         }
 
         /** «В плейлист» (D4b): [track] — в конец [playlist]. */

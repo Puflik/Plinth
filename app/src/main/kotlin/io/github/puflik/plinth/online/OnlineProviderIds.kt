@@ -7,4 +7,7 @@ object OnlineProviderIds {
 
     /** Internet Archive — в ядре; остальные — провайдеры приложения (`onlineProviders()`). */
     val ALL: List<String> = listOf(ARCHIVE, YOUTUBE)
+
+    /** Кто умеет радио от трека (Ю4): подборку YouTube отдаёт Mix. */
+    val RADIO: Set<String> = setOf(YOUTUBE)
 }

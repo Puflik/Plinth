@@ -159,7 +159,7 @@ private fun PanelArea(
                 placeholder = R.drawable.ic_music_note,
                 modifier = modifier,
             )
-        PlayerPanel.QUEUE -> QueuePanel(state.upcoming, panels.edits, modifier)
+        PlayerPanel.QUEUE -> QueuePanel(state.upcoming, panels.edits, modifier, state.radio)
         PlayerPanel.LYRICS -> PanelPlaceholder(R.string.player_lyrics_later, modifier)
         PlayerPanel.SIMILAR -> PanelPlaceholder(R.string.player_similar_later, modifier)
         PlayerPanel.INFO -> PanelPlaceholder(R.string.player_info_later, modifier)

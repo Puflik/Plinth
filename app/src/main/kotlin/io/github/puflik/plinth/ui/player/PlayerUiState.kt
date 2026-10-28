@@ -6,6 +6,7 @@ import io.github.puflik.plinth.audio.engine.PlaybackProgress
 import io.github.puflik.plinth.audio.engine.PlaybackState
 import io.github.puflik.plinth.library.model.Album
 import io.github.puflik.plinth.queue.PlaybackQueue
+import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.queue.QueueItem
 import io.github.puflik.plinth.queue.RepeatMode
 import kotlin.time.Duration
@@ -26,6 +27,7 @@ import kotlin.time.Duration
  *   (или его ещё ищут), сердца нет.
  * @property online текущий трек сетевой (E3): файла у него нет, и ошибка
  *   «недоступен» говорит о сети, а не о файле.
+ * @property radio название трека, от которого идёт радио (Ю4в); `null` — играет не радио.
  */
 data class PlayerUiState(
     val title: String?,
@@ -43,6 +45,7 @@ data class PlayerUiState(
     val album: Album?,
     val liked: Boolean? = null,
     val online: Boolean = false,
+    val radio: String? = null,
 ) {
     /** Какая доля трека сыграна, `0..1`; без длительности — `0`. */
     val progressFraction: Float
@@ -70,6 +73,7 @@ data class PlayerUiState(
             hasTrack = queue.current != null,
             album = queue.current?.let { item -> item.album?.let { Album(it, item.albumOwner, trackCount = 0) } },
             online = queue.current?.source is AudioSource.Online,
+            radio = (queue.context as? QueueContext.Radio)?.title,
         )
     }
 }

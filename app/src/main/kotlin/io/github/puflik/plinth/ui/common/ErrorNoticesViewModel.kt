@@ -6,6 +6,7 @@ import io.github.puflik.plinth.audio.PlaybackController
 import io.github.puflik.plinth.core.ErrorNotice
 import io.github.puflik.plinth.core.ErrorPresenter
 import io.github.puflik.plinth.ffi.CoreErrors
+import io.github.puflik.plinth.radio.RadioNotices
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
@@ -18,9 +19,11 @@ class ErrorNoticesViewModel
     constructor(
         playback: PlaybackController,
         core: CoreErrors,
+        radio: RadioNotices,
         private val presenter: ErrorPresenter,
     ) : ViewModel() {
-        val notices: Flow<ErrorNotice> = merge(playback.errors, core.events).mapNotNull(presenter::present)
+        val notices: Flow<ErrorNotice> =
+            merge(playback.errors, core.events, radio.errors).mapNotNull(presenter::present)
 
         /** Строка [notice] показана до конца: вести о восстановлении считаются сказанными (Р9е). */
         fun shown(notice: ErrorNotice) = presenter.shown(notice)

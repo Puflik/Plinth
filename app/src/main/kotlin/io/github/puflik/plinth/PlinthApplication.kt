@@ -19,6 +19,7 @@ import io.github.puflik.plinth.history.ListeningRecorder
 import io.github.puflik.plinth.library.OldLibraryCleanup
 import io.github.puflik.plinth.library.UnavailableRescan
 import io.github.puflik.plinth.online.OnlineSwitch
+import io.github.puflik.plinth.radio.RadioFeeder
 import javax.inject.Inject
 import kotlin.time.Clock
 
@@ -79,6 +80,9 @@ class PlinthApplication :
     @Inject
     lateinit var onlineSwitch: OnlineSwitch
 
+    @Inject
+    lateinit var radioFeeder: RadioFeeder
+
     override fun onCreate() {
         super.onCreate()
         // Лог — первым: всё, что случится дальше при старте, уже в нём (G1).
@@ -101,6 +105,8 @@ class PlinthApplication :
         mirrorWriter.start()
         // Онлайн-источники — по переключателю в настройках (E3); до него ядро в сеть не ходит.
         onlineSwitch.start()
+        // Радио подгружает страницы, пока играет (Ю4в); восстановленная на паузе очередь ждёт первого play.
+        radioFeeder.start()
         // База фонотеки v0.1 на Room больше не нужна: фонотеку ведёт ядро (D3c).
         oldLibraryCleanup.start()
     }

@@ -23,9 +23,10 @@ import io.github.puflik.plinth.ui.library.playlists.PlaylistPicker
  * Меню ⋮ плеера (E5, Р6): «Нравится» и «В плейлист…» — для трека фонотеки
  * (`state.liked != null`; у файла не из фонотеки лайка и плейлиста нет, как нет
  * и сердца), потом «К альбому» и «К исполнителю» — то, что известно о треке.
- * Кнопка гаснет, только когда пунктов нет вовсе. Выбор пункта закрывает меню;
- * «В плейлист…» после этого показывает [playlistPicker], пока тот не вызвал
- * `onDismiss`. Сердце рядом с названием остаётся: меню его дублирует.
+ * Потом «Радио» (Ю4в) — у любого играющего трека с названием. Кнопка гаснет, только
+ * когда пунктов нет вовсе. Выбор пункта закрывает меню; «В плейлист…» после этого
+ * показывает [playlistPicker], пока тот не вызвал `onDismiss`. Сердце рядом с
+ * названием остаётся: меню его дублирует.
  */
 @Composable
 internal fun PlayerMenu(
@@ -34,14 +35,17 @@ internal fun PlayerMenu(
     onOpenAlbum: (Album) -> Unit,
     onOpenArtist: (String) -> Unit,
     playlistPicker: @Composable (onDismiss: () -> Unit) -> Unit,
+    onRadio: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
     val liked = state.liked
+    // Радио ищется по названию (Ю4в): без названия его нет.
+    val radio = onRadio.takeIf { state.title != null }
     Box {
         IconButton(
             onClick = { expanded = true },
-            enabled = liked != null || state.album != null || state.artist != null,
+            enabled = liked != null || state.album != null || state.artist != null || radio != null,
         ) {
             Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.library_more))
         }
@@ -68,6 +72,12 @@ internal fun PlayerMenu(
                     onOpenArtist(artist)
                 }
             }
+            radio?.let { start ->
+                MenuItem(R.string.track_radio) {
+                    expanded = false
+                    start()
+                }
+            }
         }
     }
     if (picker) playlistPicker { picker = false }
@@ -90,6 +100,7 @@ internal fun PlayerScreenMenu(
     onLike = viewModel::onLike,
     onOpenAlbum = onOpenAlbum,
     onOpenArtist = onOpenArtist,
+    onRadio = viewModel::onRadio,
     playlistPicker = { dismiss ->
         DisposableEffect(Unit) {
             viewModel.onPlaylistPickerShown()

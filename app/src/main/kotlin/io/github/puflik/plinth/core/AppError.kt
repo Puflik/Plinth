@@ -59,6 +59,26 @@ sealed interface AppError {
     data class JournalStartedOver(
         val carried: Boolean,
     ) : AppError
+
+    /** Радио не началось или остановилось (Ю4в): [problem] — почему; слова подбирает экран. */
+    data class Radio(
+        val problem: RadioProblem,
+    ) : AppError
+}
+
+/** Почему радио не началось или остановилось (Ю4в). */
+enum class RadioProblem {
+    /** YouTube выключен в настройках, а радио работает через него. */
+    NEEDS_YOUTUBE,
+
+    /** Соединения не вышло. */
+    NO_NETWORK,
+
+    /** Для трека нет радио: ничего не нашлось, провайдер не ответил или ответил пустой подборкой. */
+    NOT_FOUND,
+
+    /** Радио шло, загруженное кончилось, а продолжения нет. */
+    STOPPED,
 }
 
 /** Вид ошибки ядра — категории `CoreError` в Rust (ADR 0010). */

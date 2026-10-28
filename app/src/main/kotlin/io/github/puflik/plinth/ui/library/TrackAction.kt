@@ -26,6 +26,12 @@ enum class TrackAction {
 
     /** В плейлист (D4b): какой — выбирают в меню трека, пишет [TrackActions]. Очередь не трогают. */
     ADD_TO_PLAYLIST,
+
+    /**
+     * Радио от трека (Ю4в): запускает [TrackActions]; очередь меняется, только когда пришла первая страница, поэтому
+     * плеер сразу не открывается и «добавлено» не говорится.
+     */
+    RADIO,
     ;
 
     /** Трек заиграет сразу — после действия открывается плеер. */
@@ -69,6 +75,6 @@ fun PlaybackController.act(
         }
         TrackAction.PLAY_NEXT -> perform(QueueAction.PLAY_NEXT, track.toQueueItem())
         TrackAction.ADD_TO_QUEUE -> perform(QueueAction.ADD_TO_QUEUE, track.toQueueItem())
-        TrackAction.LIKE, TrackAction.UNLIKE, TrackAction.ADD_TO_PLAYLIST -> Unit
+        TrackAction.LIKE, TrackAction.UNLIKE, TrackAction.ADD_TO_PLAYLIST, TrackAction.RADIO -> Unit
     }
 }
