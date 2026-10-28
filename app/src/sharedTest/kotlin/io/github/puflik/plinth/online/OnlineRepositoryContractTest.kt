@@ -194,6 +194,52 @@ abstract class OnlineRepositoryContractTest {
             assertThat(online.search("concert").single().results).hasSize(1)
         }
 
+    /** Ю4г: поиск у одного провайдера — его секция, та же, что в поиске по всем. */
+    @Test
+    fun a_search_in_one_provider_gives_its_section_the_same_as_the_search_of_all() =
+        contract { online ->
+            val all = online.search("concert").single()
+
+            val one = online.searchIn(ARCHIVE, "concert")
+
+            assertThat(one).isEqualTo(all)
+            assertThat(one?.results?.single()?.external).isEqualTo(CONCERT)
+        }
+
+    @Test
+    fun a_search_in_a_provider_that_is_not_there_gives_nothing() =
+        contract { online ->
+            assertThat(online.searchIn("youtube", "concert")).isNull()
+        }
+
+    @Test
+    fun a_blank_query_in_one_provider_asks_nobody() =
+        contract { online ->
+            assertThat(online.searchIn(ARCHIVE, "  ")).isNull()
+        }
+
+    @Test
+    fun without_network_the_section_of_one_provider_says_so_and_is_not_an_error() =
+        contract(networkUp = false) { online ->
+            val section = checkNotNull(online.searchIn(ARCHIVE, "concert"))
+
+            assertThat(section.problem).isEqualTo(OnlineProblem.NO_NETWORK)
+            assertThat(section.results).isEmpty()
+        }
+
+    @Test
+    fun switched_off_there_is_no_section_of_one_provider() =
+        contract { online ->
+            online.setEnabled(false)
+            assertThat(online.searchIn(ARCHIVE, "concert")).isNull()
+
+            online.setEnabled(true, disabled = setOf(ARCHIVE))
+            assertThat(online.searchIn(ARCHIVE, "concert")).isNull()
+
+            online.setEnabled(true)
+            assertThat(online.searchIn(ARCHIVE, "concert")?.results).hasSize(1)
+        }
+
     /** Архив с включёнными источниками; [networkUp] — есть ли сеть. */
     private fun contract(
         networkUp: Boolean = true,

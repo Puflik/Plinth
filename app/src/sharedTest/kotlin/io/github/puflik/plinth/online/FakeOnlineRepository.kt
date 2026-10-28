@@ -116,6 +116,12 @@ class FakeOnlineRepository(
         return listOf(OnlineSection(PROVIDER, found, problem))
     }
 
+    /** Ю4г: секция одного провайдера — та же, что дал бы [search], или `null`, если такого провайдера нет. */
+    override suspend fun searchIn(
+        provider: String,
+        query: String,
+    ): OnlineSection? = search(query).firstOrNull { it.provider == provider }
+
     override suspend fun album(
         provider: String,
         item: String,

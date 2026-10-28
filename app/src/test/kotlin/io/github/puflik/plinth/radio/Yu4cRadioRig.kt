@@ -146,18 +146,34 @@ internal class RadioRig(
  * Сеть радио для тестов: поверх [FakeOnlineRepository] — поиск по сценарию [sections] (с записью запросов) и
  * ворота [radioGate], которые держат вызов радио, как медленная сеть. [radioStarted] — вызовы, что начались (в том
  * числе ждущие у ворот).
+ *
+ * Поиск затравки (Ю4г) идёт к одному провайдеру: [searchIn] отдаёт его секцию из [sections] и записывает провайдера в
+ * [searchedIn]; поиск по всем ([search]) записывается в [wide] — запуску радио он не нужен. Запрос попадает в [queries]
+ * в обоих случаях.
  */
 internal class RadioOnline(
     private val inner: FakeOnlineRepository,
 ) : OnlineRepository by inner {
     val queries = mutableListOf<String>()
+    val searchedIn = mutableListOf<String>()
+    val wide = mutableListOf<String>()
     var sections: List<OnlineSection> = emptyList()
     var radioGate: CompletableDeferred<Unit>? = null
     val radioStarted = mutableListOf<Pair<String, String?>>()
 
     override suspend fun search(query: String): List<OnlineSection> {
         queries += query
+        wide += query
         return sections
+    }
+
+    override suspend fun searchIn(
+        provider: String,
+        query: String,
+    ): OnlineSection? {
+        queries += query
+        searchedIn += provider
+        return sections.firstOrNull { it.provider == provider }
     }
 
     override suspend fun radio(

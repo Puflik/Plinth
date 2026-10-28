@@ -29,3 +29,5 @@ mod yu3g_tests;
 mod yu3v_tests;
 #[cfg(test)]
 mod yu4a_tests;
+#[cfg(test)]
+mod yu4g_tests;
