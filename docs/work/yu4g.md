@@ -357,4 +357,34 @@ Linux проходят.
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко)._
+**Сделано.** Основа — патч планировщика `yu4g-reference-implementation.patch` (7 файлов, +108/−24): `git apply` лёг на `997ac45` чисто. Каждую строку сверил с «Решением» и «Инвариантами», расхождений нет:
+
+- `Registry::ask` держит тот же порядок шагов, что был в теле `search`: отмена до вопроса → пауза `Down` (`Unavailable`) → вышедший срок («timed out», без вопроса и без вины) → вопрос → отмена после ответа (`None`, в здоровье не пишется) → `observe`. `search` зовёт его для каждого провайдера и на `None` обрывает обход — те же секции, порядок, срок, отмена и здоровье. `search_in`: пустой запрос и неизвестный провайдер — `None`, иначе `ask`; `Down` как у поиска.
+- `Core::online_search_in`: имя через `ProviderId::new` (негодное — `Err(Parse)`, до проверки «источники выключены»: порядок не закреплён), выключены — `Ok(None)`, срок `SEARCH_BUDGET`, отмена через `OnlineCancel`, `.map(section)`. `online_search` и `online_search_within` не тронуты.
+- Kotlin: `CoreOnline.searchIn` (`require(limit > 0)`, как у `search`); `OnlineRepository.searchIn` без реализации по умолчанию; `CoreOnlineRepository` — общий приватный помощник `outliving` на оба поиска (поиск по всем ведёт себя прежним образом — страж `CoreOnlineRepositoryCancelTest`); `GatedOnlineRepository.searchIn` за `awaitSwitch`; `RadioStarter.search` — `online.searchIn(provider, query)`.
+
+Поверх патча — только комментарии, код не менял: к `Registry` (пункт про `search_in`), к `GatedOnlineRepository` (`[searchIn]` в списке методов за воротами), шапка `online_api.rs` (поиск у одного провайдера). Комментарии к методам и к `RadioStarter` — из патча; «ко всем включённым» в изменённых файлах не осталось.
+
+**Коммиты** (`work/yu4g`, пуш без прокси): `e21d9de` — реализация (7 файлов, +114/−27); следующий коммит — этот отчёт.
+
+**Красное до реализации** (на `997ac45`, без патча; новый API — тесты не собираются): `cargo test -p plinth-providers --no-run` — 13 ошибок E0599 «no method named `search_in` found for struct `Registry`»; `cargo test -p plinth-ffi --no-run` — 4 ошибки E0599 на `online_search_in`; `compileGithubDebugUnitTestKotlin` — 40 ошибок `e:`: «`searchIn` overrides nothing» у двойников (`FakeOnlineRepository`, `RadioOnline` в `Yu4cRadioRig`) и «Unresolved reference `searchIn`» с производными в `OnlineRepositoryContractTest` и `Yu4gGatedSearchInTest`; других файлов в ошибках нет. Утверждениями красное доказывают мутации планировщика — их я не гонял («Проверки» их не требуют).
+
+**Проверки** (PowerShell, `JAVA_HOME` из README; числа — по выводу `cargo` и `TEST-*.xml`):
+
+| Что | Итог |
+|---|---|
+| `cargo test -p plinth-providers` | зелёный, 223 теста, 1 игнорируется (doctest, не мой): защищённые `yu4g_search_in.rs` 10 из 10; `registry::tests` 15, `r1_11a_*`, `yu3v_*`, `yu4a_radio` — как были |
+| `cargo test -p plinth-ffi` | 191 из 191, в том числе защищённые `api::yu4g_tests` 11 из 11 (`the_platform_is_asked_and_the_archive_is_not` — ноль запросов к Internet Archive) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | чист |
+| `cargo fmt --all -- --check` | код 1 из-за 283 строк «Incorrect newline style» по всем файлам (CRLF на Windows); `Diff in` — 0; с `--config newline_style=Auto` — код 0 |
+| `testGithubDebugUnitTest --tests "*Yu4g*" --tests "*Yu4c*" --tests "*GatedOnlineRepository*" --tests "*FakeOnlineRepository*"` | 116 из 116: `Yu4gRadioSeedSearchTest` 4, `Yu4gGatedSearchInTest` 4, Ю4в 68, `GatedOnlineRepository*` 15 (11 + 4), `FakeOnlineRepository*` 25 (19 + 6, из них 5 новых контрактных) |
+| `ktlintCheck detekt testGithubDebugUnitTest lintGithubDebug --continue` | `ktlintCheck`, `detekt`, `lintGithubDebug` чисты; весь unit-набор — 1018 тестов, 1 пропущен, 7 упали — ровно известные `DataStoreFolderSettingsTest` (1), `DataStoreOnlineSettingsTest` (3), `DataStoreSortSettingsTest` (1), `DataStoreOnboardingSettingsTest` (2) |
+| `assembleGithubDebug compileGithubDebugAndroidTestKotlin` | собираются (Hilt) |
+| эмулятор `Medium_Phone_API_36.0` (`-no-window`, `ANDROID_SERIAL=emulator-5554`, по классу за прогон) | защищённый `Yu4gSearchInCancelTest` 3 из 3, `CoreOnlineRepositoryContractTest` 19 из 19 (14 прежних + 5 новых), `CoreOnlineRepositoryCancelTest` 5 из 5; эмулятор погашен (`adb emu kill`, процессов не осталось), устройств автора не было |
+
+Защищённые тесты не тронуты: `git diff 87718e2 HEAD -- <файлы защищённых тестов и двойников коммита тестов>` пуст. Изменены только 7 файлов из «Менять» (и этот раздел файла задачи); `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `Cargo.lock`, `libs.versions.toml` не менялись; новых `@Suppress`, `@Ignore`, `#[allow]`, `#[ignore]`, `!!` в диффе нет.
+
+**Для ревью (Opus).**
+1. Вопрос 2 из «На что смотреть» (`Down` у `search_in` как у `search`) — оставлено по ответу, полученному от планировщика; код не менялся.
+2. Остановок по списку «Остановиться и написать» не было, вопросов нет. Живая сеть YouTube и телефон автора мной не проверялись (Ю6).
+3. Комментарий к `search` в `CoreOnlineRepository` («блокирующий вызов ядра живёт вне корутины поиска…») остался над `search`, хотя механизм теперь в `outliving`; у помощника своя строка «см. [search]». Оставил как в патче.
