@@ -181,3 +181,9 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
+
+// Страж R8RulesGuardTest читает app/proguard-rules.pro, а Gradle об этом не знает:
+// без входа задача test из кэша пропустила бы правку правил.
+tasks.withType<Test>().configureEach {
+    inputs.file("proguard-rules.pro").withPathSensitivity(PathSensitivity.RELATIVE)
+}
