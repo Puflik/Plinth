@@ -42,16 +42,22 @@ data class PlaybackQueue(
      * Место того, что играет: ручной трек или место в контексте. Равные
      * значения — играет то же самое: shuffle меняет порядок обхода, но не
      * место, а тот же трек дальше по контексту — уже другое место. Место не
-     * зависит от длины контекста: дописанное в конец радио (Ю4в) его не меняет,
-     * поэтому сохранённая секунда и идущее прослушивание подгрузку не замечают.
+     * зависит от остальных треков контекста: дописанное в конец радио (Ю4в),
+     * убранный или унесённый в ручной блок трек (Ю4е) его не меняют, поэтому
+     * сохранённая секунда и идущее прослушивание этих правок не замечают.
      */
-    val playing: Any? get() = playingManual ?: order.getOrNull(position)?.let { Place(context, it, contextItems[it]) }
+    val playing: Any?
+        get() = playingManual ?: order.getOrNull(position)?.let { Place(context, contextItems[it], occurrence(it)) }
 
-    /** Место трека контекста: сам контекст, индекс в нём и трек на этом индексе. */
+    /**
+     * Место трека контекста: сам контекст, трек и то, который раз он стоит в
+     * контексте (в плейлисте один трек бывает дважды). Индекс в контексте в
+     * место не входит: он сдвигается, когда убирают трек перед играющим.
+     */
     private data class Place(
         val context: QueueContext?,
-        val index: Int,
         val item: QueueItem,
+        val occurrence: Int,
     )
 
     /** Что сыграет дальше без повтора: ручной блок, затем остаток контекста. */
@@ -200,6 +206,12 @@ data class PlaybackQueue(
             contextItems = contextItems.withoutAt(removed),
             order = order.withoutAt(orderIndex).map { if (it > removed) it - 1 else it },
         )
+    }
+
+    /** Сколько таких же треков, как на месте [index], стоит в [contextItems] раньше него. */
+    private fun occurrence(index: Int): Int {
+        val item = contextItems[index]
+        return (0 until index).count { contextItems[it] == item }
     }
 
     private fun <T> List<T>.withoutAt(index: Int): List<T> = toMutableList().apply { removeAt(index) }
