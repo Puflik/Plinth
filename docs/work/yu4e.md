@@ -355,5 +355,47 @@ $env:JAVA_HOME = "C:\Program Files\Android\openjdk\jdk-21.0.8"
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод
-проверок (коротко)._
+**Сделано.** Основа — патч планировщика `yu4e-reference-implementation.patch` (1 файл, +17/−5). «Код (дословно)» внёс правкой
+файла, а не `git apply`; дифф `PlaybackQueue.kt` после этого построчно совпадает с патчем (сравнение без строк `index`).
+Каждую строку сверил с «Решением» и «Инвариантами», расхождений нет:
+
+- `Place(context, item, occurrence)` — поля и их порядок как в «Код (дословно)»; `index` из места ушёл.
+- `playing`: ручной трек по-прежнему сам трек (`playingManual ?:`), для трека контекста — `Place(context, contextItems[it],
+  occurrence(it))`; без состояния и побочных действий.
+- `occurrence(index)` — число записей, равных `contextItems[index]` по `==`, среди `contextItems[0 until index]`; стоит после
+  `withoutContextAt`. Дописанное в конец (`extended`, переход ручного трека в контекст) число «до места» не меняет.
+- Комментарии у `playing` и `Place` — дословно из «Код (дословно)»: индекс назван тем, что в место не входит.
+- Потребители не тронуты и читают место только через `==`: `QueueKeeper.saveQueues` (113, 118), `ListenTracker.current` (52),
+  `ListeningRecorder` (49). Других обращений к `playing` в `app/src/main` нет (`grep`).
+- В классе 15 функций (предел `detekt` — 19).
+
+Поверх патча ничего не добавлял.
+
+**Коммиты** (`work/yu4e`, пуш без прокси): `b2f89e6` — реализация (1 файл, +17/−5); следующий коммит — этот отчёт.
+
+**Красное до реализации** (на `3446c9a`, без правки; тесты собираются): `testGithubDebugUnitTest --tests "*Yu4e*"` — 13 тестов,
+8 красных, 5 зелёных стражей, как в плане. `Yu4eQueuePlaceTest` (5 красных): `removing a track that stands lower…` и `a lower
+track moved into the manual block…` — место `index=3` стало `index=2`; `removing another track does not move the place of a
+repeated one` — `index=2` стало `index=1`; `no removal moves…` — первое падение `shuffled: remove(0)`; `no move moves…` — первое
+падение `with a manual block: move(2, 0)`. `Yu4eControllerEditTest` (3 красных): секунда «ожидалось 2m 30s, записан 0s» (два
+теста) и история `[opera-3, opera-3, opera-4]` вместо `[opera-3, opera-4]`. Зелёные и на старом коде: `removing a track that
+stands higher…`, `a track that stands twice…`, `the same track twice in a row…`, `shuffle does not move the place of a repeated
+track`, `extending with another copy…`.
+
+**Проверки** (PowerShell, `JAVA_HOME` из README; числа — по `TEST-*.xml`, а не по «зелёной» сборке):
+
+| Что | Итог |
+|---|---|
+| `testGithubDebugUnitTest --tests "*Yu4e*" --tests "*Yu4c*" --tests "*PlaybackQueue*" --tests "*QueueKeeper*" --tests "*ListenTracker*" --tests "*ListeningRecorder*" --tests "*FileQueueStore*"` | 141 из 141, 16 классов, 0 пропущено: Ю4е 13 (`Yu4eQueuePlaceTest` 10, `Yu4eControllerEditTest` 3), Ю4в `Yu4c*` 68, `QueueKeeperTest` 13, `ListeningRecorderTest` 3, `ListenTrackerTest` 9, `FileQueueStoreTest` 12, `PlaybackQueue*` 23 (16 + 7). Первый прогон вернулся из кэша сборки (`FROM-CACHE`: ключ совпал с прогоном планировщика на тех же исходниках), поэтому повторил с `--rerun` — выполнено заново, числа те же |
+| `ktlintCheck detekt testGithubDebugUnitTest lintGithubDebug --continue` (запущено как `ktlintCheck detekt --rerun lintGithubDebug --rerun testGithubDebugUnitTest --rerun --continue`) | весь unit-набор — 1031 тест, 1 пропущен (`R8OutputGuardTest`, был и раньше), 7 упали — ровно известные `DataStoreFolderSettingsTest` (1), `DataStoreOnlineSettingsTest` (3), `DataStoreSortSettingsTest` (1), `DataStoreOnboardingSettingsTest` (2); других красных нет. `detekt` выполнен — 0 замечаний. `ktlintCheck` вернул `UP-TO-DATE`, поэтому отдельно `--rerun` для `runKtlintCheckOver{Main,Test,AndroidTest}SourceSet` — чисто. `lintAnalyze*`, `lintReportGithubDebug`, `lintGithubDebug` отдельно выполнены заново (`--rerun`): 0 ошибок, 26 прежних предупреждений, на `PlaybackQueue.kt` — ни одного |
+
+Защищённые тесты не тронуты: `git diff 5777788 HEAD -- <файлы защищённых тестов>` пуст. Изменён один файл из «Менять»
+(`PlaybackQueue.kt`) и этот раздел файла задачи; `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, потребители ключа и
+`FileQueueStore` не менялись; новых `@Suppress`, `@Ignore`, `!!` в добавленных строках нет; `git diff --check` чист.
+
+**Для ревью (Opus).**
+1. Остановок по списку «Остановиться и написать» не было, вопросов нет.
+2. Мутации планировщика (`yu4e-mutate.py`) не гонял — «Проверки» их не требуют. Утверждениями красное доказывают причины
+   выше, зелёное — 141 из 141.
+3. Не проверено: настоящий движок и телефон автора (Ю6); CI ветки после пуша не ждал.
+4. Эмулятор не запускал и устройств автора не трогал; `git config` не менял; фоновых команд не оставил.
