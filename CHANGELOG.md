@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Removing a song from the queue with shuffle on no longer counts the
+  playing song as skipped in your listening history, and Plinth no longer
+  forgets how far into it you were.
 - A journal file damaged in the middle no longer drops everything after the
   damage quietly: Plinth keeps what comes before it and sets the damaged file
   aside.
