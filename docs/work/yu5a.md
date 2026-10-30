@@ -606,5 +606,91 @@ Archive (до 15 с) держит «Ищем…» и у YouTube, а секцию
 
 ## Отчёт исполнителя
 
-_Заполняет исполнитель: что сделано, что не вышло и почему, коммиты, вывод проверок (коротко); результат живой проверки
-на эмуляторе — отдельным абзацем._
+**Сделано.** Основа — патч планировщика `yu5a-reference-implementation.patch` (8 файлов правятся, 2 новых; +367/−33).
+`git apply --check` на `7cb3547` прошёл, применил `git apply` как есть; поверх патча ничего не добавлял и не менял. Каждую
+строку сверил с «Решением» и «Инвариантами», расхождений нет:
+
+- `SongState`, `SongEvent`, `songKey`, `OnlineSongs(online, actions)` — как в «Типы и сигнатуры (дословно)»; конструктор
+  `SearchViewModel` и сигнатура `SearchScreen` не менялись; `SearchUiState.songs` — последним; `TrackLabel.provider` —
+  последним, со значением `null` по умолчанию (шесть аргументов по-прежнему собираются).
+- `withSong`: не `TRACK` — выход до `begin` (альбом в `songs` не попадает); песня занята — ничего; `songs.end(key)` в
+  `finally`; `Done(action)` шлёт только `onSong`, после `act`; оба `onSongTo…` событий не шлют (`done = null`).
+- `OnlineSongs.track`: в память — только удача; беда `resolve` — `Failed(provider, беда)`; пустой ответ или `add` вернул
+  `null`/не один ID — `Failed(BROKEN)`; в каталог идёт одна песня (`listOf(song)`), второе действие провайдера не спрашивает.
+- `SearchScreen`: события собирает `LaunchedEffect(viewModel)`; `Done` — в `rememberUpdatedState(feedback)`, `Failed` —
+  `Toast` через `LocalResources`; один `when` (`problemRes`) на слова беды секции и на `Toast`; плеер при касании песни не
+  открывается — только по событию; строку по `kind` выбирает `section()`, ключи строк прежние.
+- `OnlineMark`: `track_online_from` с именем при `source != null`, иначе `track_online`; `TrackRow.Trailing` — как в
+  «Решении» дословно; `toLibraryTrack` перенесена как есть; строки экрана альбома несут `album.provider`.
+- Строки — три, как в таблице, в обоих языках (в том числе «…» = U+2026); `track_online` провайдера не называет.
+
+**Коммиты** (`work/yu5a`, пуш без прокси прошёл): `661e3b7` — реализация (10 файлов: 8 правок, 2 новых — ровно список
+«Менять»); следующий коммит — этот отчёт.
+
+**Красное до реализации** (на `7cb3547`, без правок): `compileGithubDebugUnitTestKotlin` — `BUILD FAILED`, 48 ошибок, все —
+`Unresolved reference` нового API: `SongEvent`, `songKey`, `songEvents`, `SongState`, `songs`, `onSong`, `onSongToPlaylist`,
+`onSongToNewPlaylist`, `TrackLabel.provider` (и следствия — «Cannot infer type» там, где тип зависит от них). Других ошибок
+сборки нет.
+
+**Проверки** (PowerShell, `JAVA_HOME` из README; задачи — с `--rerun` сразу после имени; числа — по `TEST-*.xml`, а не по
+«зелёной» сборке; «выполнено» отличаю от «из кэша»):
+
+| Что | Итог |
+|---|---|
+| `testGithubDebugUnitTest --rerun --tests "*Yu5a*"` | **20 из 20** (`Yu5aSearchSongsTest` 15, `Yu5aAlbumLabelTest` 2, `Yu5aSourceMarkTextTest` 3), 0 красных и пропущенных; задача теста выполнена. `compileGithubDebugKotlin` — `FROM-CACHE` (исходники те же, что у прототипа планировщика), `compileGithubDebugUnitTestKotlin` выполнена |
+| `testGithubDebugUnitTest --rerun` (весь набор) | 1051 тест; 7 красных — все `DataStore*SettingsTest` (Folder 1, Online 3, Sort 1, Onboarding 2; известные на Windows), 1 пропущен (`R8OutputGuardTest`, `assume`: R8 не запускали — прежний). `RussianTranslationTest` 4 из 4; `SearchViewModelTest` 8, `…RetryTest` 6, `…CancelTest` 3, `OnlineAlbumViewModelTest` 7, `Yu4cRadioAlbumRowTest` 1 — зелёные |
+| `:app:runKtlintCheckOverMainSourceSet`, `…TestSourceSet`, `…AndroidTestSourceSet` (`--rerun`), `ktlintCheck`, `detekt --rerun` | выполнены, чисто (задачи по вариантам `…GithubSourceSet`, `…FdroidSourceSet` — `UP-TO-DATE`); detekt — 0 замечаний |
+| `:app:lintAnalyzeGithubDebug`, `…UnitTest`, `…AndroidTest` (`--rerun`), `lintReportGithubDebug`, `lintGithubDebug` | выполнены; 0 ошибок, 26 предупреждений, ни одного в изменённых файлах (в `strings.xml` — прежние `player_title`, `library_scan_progress`: unused) |
+| `assembleGithubDebug compileGithubDebugAndroidTestKotlin` | `BUILD SUCCESSFUL`, но обе задачи уже `UP-TO-DATE` (APK собраны шагами выше и ставились на эмулятор; `hiltJavaCompileGithubDebug` — `UP-TO-DATE`). Hilt проверен в деле: инструментальными тестами и живым запуском (`hiltViewModel()` создал `SearchViewModel`) |
+| вариант `fdroid` (CI гоняет оба) | `testFdroidDebugUnitTest --rerun`: те же 1051 / те же 7 `DataStore*` / 1 пропущен, `Yu5a*` 20 из 20; `lintAnalyzeFdroidDebug --rerun` + `lintFdroidDebug`: 0 ошибок, 26 предупреждений; `assembleFdroidDebug` собрался |
+| эмулятор `Medium_Phone_API_36.0` (`-no-window`, `ANDROID_SERIAL=emulator-5554`, по одному классу за прогон, `--rerun`) | `Yu5aSearchSongsScreenTest` **6 из 6**, `Yu5aOnlineMarkTest` **5 из 5**, `SearchFieldTest` 1 из 1, `TrackRowMenuTest` 13 из 13. Сверх «Проверок», пакетами: `ui.library` 25 из 25 (`TrackRowMenuTest` 13, `LibraryContentTest` 3, `TrackListTest` 1, `PlaylistRowMenuTest` 3, `Yu5aOnlineMarkTest` 5), `ui.player` 22 из 22 (`PlayerMenuTest` 8, `Yu4cRadioMenuTest` 6, `PlayerFrameTest` 3, `R9aPlayerRestoreTest` 3, `PlayerHeartRestoreTest` 2) |
+
+Защищённые тесты не тронуты: `git diff 6000137 HEAD -- <шесть файлов>` пуст. Изменены только файлы из «Менять» (и этот раздел
+файла задачи); `CHANGELOG.md`, `tasks*.md`, `docs/decisions.md`, `FakeOnlineRepository.kt`, `TestConcert.kt` и старые тесты не
+менялись; новых `@Suppress`, `@Ignore`, `!!`, TODO в добавленных строках нет; `git diff --check` чист.
+
+**Живая проверка на эмуляторе** (`Medium_Phone_API_36.0`, `-no-window`, устройств автора не было; `installGithubDebug`,
+настоящий YouTube; мастер → «Skip all» → «Don’t allow» → вкладка Search → «piano»; экран читал через `uiautomator dump`):
+
+- Секция Internet Archive — 20 строк-альбомов, как раньше; под ней секция YouTube: песни — строки с названием, исполнителем,
+  облаком «From YouTube», длительностью и ⋮ (видел шесть: «ICARUS» 3:07, «Before spring ends (Piano ver.)» 2:40, «Zwo's
+  Prayer for the nation» 5:03, «Beanie - Rain Version» 1:52, «Corazón de Niño» 3:42, «Piano that may not be played that
+  well» 0:43), ниже — альбомы со значком диска, без облака и без ⋮.
+- Касание песни («Beanie - Rain Version»): на ≈ 2,2 с под строкой полоса «Getting the song…», к ≈ 4,6 с её нет, плеер открыт и
+  идёт к ≈ 6,8 с (позиция 0:01 → 0:09 за ≈ 8 с — звук идёт в реальном времени; в мини-плеере трек и «Pause»). Повтор
+  («ICARUS» после возврата сети): полоса на 2,3 с, плеер на 4,5 с (0:00 → 0:08). Шаг опроса экрана ≈ 2 с — точнее не замерено;
+  пауза после `resolve` до звука < 5 с, в «Остановиться» не попадает.
+- Меню ⋮ песни: *Play next, Add to queue, Replace queue, Radio, Add to playlist…, Like*.
+- ⋮ → *Radio* у «Zwo's Prayer for the nation»: через ≈ 5 с в мини-плеере эта песня («Pause»); в очереди «Radio from “Zwo's
+  Prayer for the nation” · songs come from YouTube» и подборка («HEALING TAKES TIME», «BOLOKA IZWE LETHU», «YOU SHALL
+  OVERCOME», «QHUBEKA (Keep On Holding On)», «Still Grateful»…), у четырёх видимых строк облако «Online track» (пятая обрезана).
+- ⋮ → *Like* у «Corazón de Niño»: меню потом предлагает *Unlike*; плеер не открылся, играло прежнее; песня в «Liked» с облаком
+  «Online track».
+- ⋮ → *Add to playlist…* → *New playlist* → «Road» → *Create*: «Piano that may not be played that well» в плейлисте «Road» с
+  облаком «Online track».
+- Касание альбома «30 Most Famous Classical Piano Pieces»: экран альбома YouTube Music — «Luke Faulkner · 30 tracks», «Play»,
+  строки треков с «From YouTube» (облако называет провайдера по `album.provider`), длительностью и ⋮; «Play» — плеер открыт,
+  первый трек («Piano Sonata No. 14, Op. 27 No. 2 "Moonlight Sonata"…») играет (0:02 → 0:06 из 4:53). Альбом не пуст, не падает.
+  Для yu5e: года нет (в строке «исполнитель · N tracks»), обложек нет, число треков известно после загрузки, а не до.
+- Беда: режим полёта на эмуляторе, касание ещё не полученной песни («ICARUS») — `Toast` «No network.» (скриншот через ≈ 1 с),
+  плеер не открылся, у строки нет застрявшей полосы, прежний трек продолжал играть; сеть вернулась — то же касание сыграло
+  (беда не запомнилась, инвариант 3).
+- Замечено, к задаче не относится: песни, заведённые лайком или игрой, в секции «In your library» поиска не появились
+  («Nothing in your library.»); после первого возврата из плеера список поиска оказался сдвинут на ≈ 209 px (строка и ещё
+  20 px) — при втором возврате положение не менялось, причину не искал (ни ключи строк, ни состояние прокрутки задача не меняет).
+
+**Для ревью (Opus).**
+1. Остановок по списку «Остановиться и написать» не было; вопросов нет: расхождений с «Решением» не нашёл.
+2. Мутации планировщика (`yu5a-mutate.py`) не гонял — «Проверки» их не требуют; патч совпал с прототипом, под которым они
+   прогонялись. Выбор строки по `kind`, озвучку облака и `Toast` на `Failed` охраняют только инструментальные тесты, а
+   `Toast` — не охраняет ничем: проверен живьём (выше).
+3. Не менял, но стоит знать: `OnlineSongs.begin` — «проверил и занял» без атомарности (`working.value += key`): безопасно, пока
+   вызовы идут с главного потока (`viewModelScope`; `SearchViewModel.answer` держится на том же допущении); `SongHandlers`
+   пересоздаётся при каждой перекомпозиции `SearchScreen` (не `remember`) — безвредно, класс ключом не служит.
+4. Не проверено: телефон автора и кириллица в поиске (Ю6); поворот экрана во время `resolve` (потеря события — принята);
+   release/R8 (`assembleGithubRelease`/`assembleFdroidRelease`, `R8OutputGuardTest` — на CI).
+5. CI: пуш `661e3b7` запустил прогон (≈ 17 мин); пуш отчёта его отменит (`cancel-in-progress`) и запустит новый на голове
+   ветки — результата не ждал.
+6. Эмулятор погашен (`adb emu kill`, процессов `qemu`/`emulator` нет); `io.github.puflik.plinth` (без `.debug`) уже стоял на
+   AVD до меня — не трогал, `.debug` после инструментальных прогонов Gradle удалил сам; устройств автора не касался; `git config`
+   не менял; фоновых команд не оставил.
