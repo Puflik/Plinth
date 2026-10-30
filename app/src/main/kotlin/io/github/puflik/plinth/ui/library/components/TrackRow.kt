@@ -28,6 +28,7 @@ import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.common.formatTime
 import io.github.puflik.plinth.ui.library.TrackAction
 import io.github.puflik.plinth.ui.library.playlists.PlaylistPicker
+import io.github.puflik.plinth.ui.online.providerName
 import kotlin.time.Duration
 
 /**
@@ -123,7 +124,12 @@ private fun MoreButton(
     }
 }
 
-/** Что показывает [TrackRow]: подписи, лайк и откуда звук. */
+/**
+ * Что показывает [TrackRow]: подписи, лайк и откуда звук.
+ *
+ * @property provider чей сетевой трек (ID провайдера, как его знает ядро); `null` — экран этого не знает (списки
+ *   фонотеки, очередь): облако тогда говорит просто «сетевой» (Ю5а).
+ */
 data class TrackLabel(
     val title: String,
     val artist: String?,
@@ -131,6 +137,7 @@ data class TrackLabel(
     val duration: Duration?,
     val liked: Boolean,
     val online: Boolean,
+    val provider: String? = null,
 ) {
     companion object {
         fun of(track: LibraryTrack) =
@@ -145,7 +152,7 @@ private fun Trailing(
     more: @Composable () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (label.online) OnlineMark()
+        if (label.online) OnlineMark(source = label.provider?.let(::providerName))
         label.duration?.let { Text(formatTime(it)) }
         more()
     }

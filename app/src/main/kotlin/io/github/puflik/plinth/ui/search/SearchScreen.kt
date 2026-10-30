@@ -1,5 +1,6 @@
 package io.github.puflik.plinth.ui.search
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,11 +27,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -37,13 +43,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import io.github.puflik.plinth.R
+import io.github.puflik.plinth.ffi.OnlineKind
 import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineResult
 import io.github.puflik.plinth.ffi.OnlineSection
+import io.github.puflik.plinth.ffi.PlaylistId
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.ui.library.TrackAction
+import io.github.puflik.plinth.ui.library.components.TrackLabel
 import io.github.puflik.plinth.ui.library.components.TrackRow
 import io.github.puflik.plinth.ui.library.components.rememberTrackActionFeedback
+import io.github.puflik.plinth.ui.library.playlists.PlaylistPicker
 import io.github.puflik.plinth.ui.online.FirmwareNetworkNote
 import io.github.puflik.plinth.ui.online.OnlineAlbumHeader
 import io.github.puflik.plinth.ui.online.providerName
@@ -53,7 +63,9 @@ import io.github.puflik.plinth.ui.online.rememberFirmwareNetworkBlock
  * Поиск (C4.4, E3): название, исполнитель, альбом. Сначала «В библиотеке» —
  * сразу, ниже — секция провайдера, когда ответит сеть (ответ автора E3).
  * Касание трека — звук и плеер, касание альбома провайдера — его экран.
- * Онлайн-источники выключены — секций нет, экран такой же, как до E3.
+ * Песня провайдера (`OnlineKind.TRACK`) — строка трека с тем же меню (Ю5а): касание играет её,
+ * плеер открывается, когда песня получена. Онлайн-источники выключены — секций нет,
+ * экран такой же, как до E3.
  */
 @Composable
 fun SearchScreen(
@@ -72,6 +84,31 @@ fun SearchScreen(
         viewModel.onTrack(track, action)
         feedback(action)
     }
+    // Песня попадает в каталог по ответу сети: плеер открывается и «добавлено» говорится, когда действие сделано.
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val currentFeedback by rememberUpdatedState(feedback)
+    LaunchedEffect(viewModel) {
+        viewModel.songEvents.collect { event ->
+            when (event) {
+                is SongEvent.Done -> currentFeedback(event.action)
+                is SongEvent.Failed ->
+                    Toast
+                        .makeText(
+                            context,
+                            resources.getString(problemRes(event.problem), providerName(event.provider)),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+            }
+        }
+    }
+    val songs =
+        SongHandlers(
+            states = state.songs,
+            onAction = viewModel::onSong,
+            onPlaylist = viewModel::onSongToPlaylist,
+            onNewPlaylist = viewModel::onSongToNewPlaylist,
+        )
     Column(modifier = modifier.fillMaxSize()) {
         OutlinedTextField(
             state = query,
@@ -84,7 +121,7 @@ fun SearchScreen(
             state.online != OnlineResults.None ->
                 LazyColumn {
                     library(state.results, onTrack)
-                    online(state.online, onOpenAlbum, viewModel::onRetryOnline)
+                    online(state.online, songs, onOpenAlbum, viewModel::onRetryOnline)
                 }
             state.results.isNotEmpty() -> LazyColumn { tracks(state.results, onTrack) }
             state.searched -> Message(stringResource(R.string.search_nothing_found))
@@ -115,18 +152,20 @@ private fun LazyListScope.tracks(
 
 private fun LazyListScope.online(
     online: OnlineResults,
+    songs: SongHandlers,
     onOpenAlbum: (OnlineAlbumHeader) -> Unit,
     onRetry: () -> Unit,
 ) {
     when (online) {
         OnlineResults.None -> Unit
         OnlineResults.Searching -> item(key = SEARCHING_KEY) { Searching() }
-        is OnlineResults.Found -> online.sections.forEach { section(it, onOpenAlbum, onRetry) }
+        is OnlineResults.Found -> online.sections.forEach { section(it, songs, onOpenAlbum, onRetry) }
     }
 }
 
 private fun LazyListScope.section(
     section: OnlineSection,
+    songs: SongHandlers,
     onOpenAlbum: (OnlineAlbumHeader) -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -138,13 +177,16 @@ private fun LazyListScope.section(
         section.results.isEmpty() ->
             item(key = "empty-${section.provider}") { Note(stringResource(R.string.search_nothing_found)) }
         else ->
-            items(section.results, key = { "${section.provider}/${it.external}" }) { result ->
-                ResultRow(result) { onOpenAlbum(header(section.provider, result)) }
+            items(section.results, key = { songKey(section.provider, it) }) { result ->
+                when (result.kind) {
+                    OnlineKind.TRACK -> SongItem(section.provider, result, songs)
+                    OnlineKind.ALBUM -> ResultRow(result) { onOpenAlbum(header(section.provider, result)) }
+                }
             }
     }
 }
 
-/** Собрание провайдера — строка альбома: название, «исполнитель · год». */
+/** Собрание провайдера (`OnlineKind.ALBUM`) — строка альбома: название, «исполнитель · год». */
 @Composable
 private fun ResultRow(
     result: OnlineResult,
@@ -163,6 +205,58 @@ private fun ResultRow(
         leadingContent = { Icon(painterResource(R.drawable.ic_album), contentDescription = null) },
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/** Что экран делает с песнями секций (Ю5а): что о них известно и три действия — из меню, в плейлист, в новый. */
+private class SongHandlers(
+    val states: Map<String, SongState>,
+    val onAction: (String, OnlineResult, TrackAction) -> Unit,
+    val onPlaylist: (String, OnlineResult, PlaylistId) -> Unit,
+    val onNewPlaylist: (String, OnlineResult, String) -> Unit,
+)
+
+/**
+ * Песня провайдера — строка трека (Ю5а): облако с именем провайдера, длительность, ⋮ с меню; пока песню получают
+ * у провайдера, под строкой идёт полоса хода.
+ */
+@Composable
+private fun SongItem(
+    provider: String,
+    result: OnlineResult,
+    songs: SongHandlers,
+) {
+    val state = songs.states[songKey(provider, result)] ?: SongState()
+    Column {
+        TrackRow(
+            label =
+                TrackLabel(
+                    title = result.title,
+                    artist = result.artist,
+                    album = null,
+                    duration = result.duration,
+                    liked = state.liked,
+                    online = true,
+                    provider = provider,
+                ),
+            onAction = { songs.onAction(provider, result, it) },
+        ) { dismiss ->
+            PlaylistPicker(
+                onAdd = { songs.onPlaylist(provider, result, it.id) },
+                onAddToNew = { songs.onNewPlaylist(provider, result, it) },
+                onDismiss = dismiss,
+            )
+        }
+        if (state.busy) {
+            val progress = stringResource(R.string.online_song_getting)
+            LinearProgressIndicator(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .semantics { contentDescription = progress },
+            )
+        }
+    }
 }
 
 /**
@@ -191,12 +285,15 @@ private fun ProblemNote(
 private fun problemText(
     problem: OnlineProblem,
     provider: String,
-): String =
+): String = stringResource(problemRes(problem), provider)
+
+/** Слова беды: у «нет сети» имени провайдера нет, остальные его называют — лишний аргумент строке не мешает. */
+private fun problemRes(problem: OnlineProblem): Int =
     when (problem) {
-        OnlineProblem.NO_NETWORK -> stringResource(R.string.online_no_network)
-        OnlineProblem.PROVIDER_DOWN -> stringResource(R.string.online_provider_down, provider)
-        OnlineProblem.RATE_LIMITED -> stringResource(R.string.online_rate_limited, provider)
-        OnlineProblem.BROKEN -> stringResource(R.string.online_broken, provider)
+        OnlineProblem.NO_NETWORK -> R.string.online_no_network
+        OnlineProblem.PROVIDER_DOWN -> R.string.online_provider_down
+        OnlineProblem.RATE_LIMITED -> R.string.online_rate_limited
+        OnlineProblem.BROKEN -> R.string.online_broken
     }
 
 private fun header(

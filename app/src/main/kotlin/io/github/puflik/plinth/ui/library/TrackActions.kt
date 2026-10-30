@@ -15,6 +15,7 @@ import io.github.puflik.plinth.radio.RadioLauncher
 import io.github.puflik.plinth.radio.RadioSeed
 import io.github.puflik.plinth.ui.library.playlists.playlistName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -51,6 +52,12 @@ class TrackActions
                 else -> playback.act(action, context, tracks, track, at)
             }
         }
+
+        /**
+         * Лайк трека (D4a): сердце тех строк, что строит не список фонотеки, а экран сам (песни секции поиска, Ю5а) —
+         * у них нет своего [UserDataRepository].
+         */
+        fun liked(track: TrackId): Flow<Boolean> = userData.liked(track)
 
         /**
          * «Радио» из плеера (Ю4в): от трека, что играет. Плеер знает элемент очереди, а не ID трека, — ID берётся по

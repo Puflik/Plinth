@@ -3,7 +3,10 @@ package io.github.puflik.plinth.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.puflik.plinth.ffi.OnlineKind
+import io.github.puflik.plinth.ffi.OnlineResult
 import io.github.puflik.plinth.ffi.OnlineSection
+import io.github.puflik.plinth.ffi.PlaylistId
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.online.OnlineRepository
@@ -15,6 +18,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -37,11 +42,13 @@ import javax.inject.Inject
  * @property searched результаты относятся к непустому запросу: пустой список
  *   значит «ничего не нашлось», а не «ещё не искали».
  * @property online секции провайдеров под библиотекой (E3).
+ * @property songs песни секций, с которыми работали, по [songKey] (Ю5а); у остальных — `SongState()`.
  */
 data class SearchUiState(
     val results: List<LibraryTrack> = emptyList(),
     val searched: Boolean = false,
     val online: OnlineResults = OnlineResults.None,
+    val songs: Map<String, SongState> = emptyMap(),
 )
 
 /** Поиск в сети под библиотекой (E3): ответ сети приходит позже библиотеки. */
@@ -116,10 +123,16 @@ class SearchViewModel
                 .onEach { shownOnline = it }
                 .onStart { emit(shownOnline) }
 
+        // Песни секций (Ю5а): `resolve` один раз на песню, ход и сердце строки.
+        private val songs = OnlineSongs(online, actions)
+
         val uiState: StateFlow<SearchUiState> =
-            combine(found, inNetwork) { found, online ->
-                SearchUiState(found.results, found.searched, online)
+            combine(found, inNetwork, songs.states) { found, online, songs ->
+                SearchUiState(found.results, found.searched, online, songs)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SearchUiState())
+
+        /** Чем кончились действия над песнями секций: экран открывает плеер, говорит «добавлено» или беду. */
+        val songEvents: SharedFlow<SongEvent> = songs.events
 
         /** Текст поля — как набран; обратно в поле он не возвращается (Н3). */
         fun onQuery(text: String) {
@@ -140,6 +153,53 @@ class SearchViewModel
             action: TrackAction,
         ) {
             actions.act(action, QueueContext.Search(query.value.trim()), uiState.value.results, track)
+        }
+
+        /**
+         * [action] над песней [result] секции провайдера [provider] (Ю5а): сначала песня попадает в каталог
+         * (`resolve` у провайдера — в первый раз), потом действие, как над треком списка: контекст — поиск, в нём
+         * одна песня. Кончилось — [songEvents]. Альбом — не песня: ничего. Над песней, что уже получают, — ничего.
+         */
+        fun onSong(
+            provider: String,
+            result: OnlineResult,
+            action: TrackAction,
+        ) = withSong(provider, result, SongEvent.Done(action)) { track ->
+            actions.act(action, QueueContext.Search(query.value.trim()), listOf(track), track)
+        }
+
+        /** «В плейлист» → [playlist] для песни [result] секции: в каталог и в конец плейлиста. */
+        fun onSongToPlaylist(
+            provider: String,
+            result: OnlineResult,
+            playlist: PlaylistId,
+        ) = withSong(provider, result, done = null) { actions.addToPlaylist(it, playlist) }
+
+        /** «В плейлист» → «Новый плейлист» [name] для песни [result] секции. */
+        fun onSongToNewPlaylist(
+            provider: String,
+            result: OnlineResult,
+            name: String,
+        ) = withSong(provider, result, done = null) { actions.addToNewPlaylist(it, name) }
+
+        private fun withSong(
+            provider: String,
+            result: OnlineResult,
+            done: SongEvent?,
+            block: (LibraryTrack) -> Unit,
+        ) {
+            val key = songKey(provider, result)
+            if (result.kind != OnlineKind.TRACK || !songs.begin(key)) return
+            viewModelScope.launch {
+                try {
+                    songs.track(provider, result)?.let { track ->
+                        block(track)
+                        done?.let(songs::tell)
+                    }
+                } finally {
+                    songs.end(key)
+                }
+            }
         }
 
         /**

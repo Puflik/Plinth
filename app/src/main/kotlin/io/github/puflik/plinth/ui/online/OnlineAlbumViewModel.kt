@@ -191,19 +191,15 @@ class OnlineAlbumViewModel
         private fun label(
             track: OnlineTrack,
             liked: Boolean,
-        ) = TrackLabel(track.title, track.artist, track.album, track.duration, liked, online = true)
-
-        private fun OnlineTrack.toLibraryTrack(id: TrackId) =
-            LibraryTrack(
-                id = id,
-                uri = null,
-                title = title,
-                artist = artist,
-                album = album,
-                trackNumber = number?.takeIf { it > 0 },
-                duration = duration,
-                folder = "",
-            )
+        ) = TrackLabel(
+            track.title,
+            track.artist,
+            track.album,
+            track.duration,
+            liked,
+            online = true,
+            provider = album.provider,
+        )
 
         private sealed interface Loaded {
             data class Tracks(

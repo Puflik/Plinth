@@ -12,13 +12,23 @@ import io.github.puflik.plinth.R
 
 /**
  * Знак сетевого трека (E3, ответ автора): облако у длительности — в
- * строках списков и очереди. TalkBack читает, откуда трек.
+ * строках списков и очереди. TalkBack читает, откуда трек: [source] — как провайдера
+ * зовут на экране («YouTube»); экран, что его не знает, говорит просто «сетевой трек»,
+ * а не называет чужого (Ю5а).
  */
 @Composable
-fun OnlineMark(modifier: Modifier = Modifier) {
+fun OnlineMark(
+    modifier: Modifier = Modifier,
+    source: String? = null,
+) {
     Icon(
         painter = painterResource(R.drawable.ic_cloud),
-        contentDescription = stringResource(R.string.track_online),
+        contentDescription =
+            if (source == null) {
+                stringResource(R.string.track_online)
+            } else {
+                stringResource(R.string.track_online_from, source)
+            },
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.size(16.dp),
     )

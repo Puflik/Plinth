@@ -299,9 +299,11 @@
         <item quantity="other">%d плейлиста</item>
     </plurals>
     <!-- Онлайн-источники (E3) -->
-    <string name="track_online">Из Internet Archive</string>
+    <string name="track_online">Сетевой трек</string>
+    <string name="track_online_from">Из %1$s</string>
     <string name="search_section_library">В библиотеке</string>
     <string name="search_library_nothing">В библиотеке ничего не найдено.</string>
+    <string name="online_song_getting">Получаем песню…</string>
     <string name="online_searching">Ищем…</string>
     <string name="online_no_network">Нет сети.</string>
     <string name="online_firmware_block">Сеть есть, но прошивка, похоже, не пускает в неё Plinth. В Phone Master → «Управление сетями» разрешите Plinth Wi-Fi и мобильные данные; если они уже включены — выключите и включите снова.</string>
