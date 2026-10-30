@@ -10,9 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Online search also covers YouTube: songs and albums from YouTube Music
-  appear in their own section after Internet Archive and play as Opus (about
-  160 kbps) or AAC 128 kbps. The player asks for a fresh link when the old one
-  runs out or the server refuses it.
+  appear in their own section after Internet Archive. Tap a song to play it,
+  or use its ⋮ menu to queue it, start radio from it, like it or add it to a
+  playlist; tap an album to open it. YouTube plays as Opus (about 160 kbps)
+  or AAC 128 kbps, and the player asks for a fresh link when the old one runs
+  out or the server refuses it. With TalkBack, the cloud mark next to an
+  online song names its source in search and on album screens and says
+  "Online track" elsewhere.
 - Radio from a song: choose Radio in the ⋮ menu of any song or in the
   player menu, and the queue goes on with a YouTube Mix of similar songs.
   More songs load as you listen, without a break, and a radio queue
