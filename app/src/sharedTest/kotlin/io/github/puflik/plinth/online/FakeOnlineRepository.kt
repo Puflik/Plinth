@@ -62,6 +62,9 @@ class FakeOnlineRepository(
     /** Запросы поиска по порядку — сколько раз экран спросил сеть. */
     val searches = mutableListOf<String>()
 
+    /** Запросы поддерживаемой секции через [searchIn], отдельно от общего [search]. */
+    val providerSearches = mutableListOf<Pair<String, String>>()
+
     /** Есть — поиск ждёт его, как ответа сети: экран успевает сказать «Ищем…». */
     var gate: CompletableDeferred<Unit>? = null
 
@@ -102,9 +105,13 @@ class FakeOnlineRepository(
     }
 
     override suspend fun search(query: String): List<OnlineSection> {
-        val words = query.lowercase().split(' ').filter(String::isNotBlank)
-        if (!active || words.isEmpty()) return emptyList()
+        if (!active || query.isBlank()) return emptyList()
         searches += query
+        return listOf(section(query))
+    }
+
+    private suspend fun section(query: String): OnlineSection {
+        val words = query.lowercase().split(' ').filter(String::isNotBlank)
         gate?.await()
         val problem = problem()
         val found =
@@ -113,14 +120,18 @@ class FakeOnlineRepository(
                 .map { OnlineResult(it.item, OnlineKind.ALBUM, it.title, it.artist, it.year) }
                 .takeIf { problem == null }
                 .orEmpty()
-        return listOf(OnlineSection(PROVIDER, found, problem))
+        return OnlineSection(PROVIDER, found, problem)
     }
 
     /** Ю4г: секция одного провайдера — та же, что дал бы [search], или `null`, если такого провайдера нет. */
     override suspend fun searchIn(
         provider: String,
         query: String,
-    ): OnlineSection? = search(query).firstOrNull { it.provider == provider }
+    ): OnlineSection? {
+        if (provider != PROVIDER || !active || query.isBlank()) return null
+        providerSearches += provider to query
+        return section(query)
+    }
 
     override suspend fun album(
         provider: String,

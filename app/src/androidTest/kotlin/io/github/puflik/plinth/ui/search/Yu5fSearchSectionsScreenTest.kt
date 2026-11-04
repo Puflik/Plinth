@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import io.github.puflik.plinth.audio.PlaybackController
@@ -79,7 +80,9 @@ class Yu5fSearchSectionsScreenTest {
             }
         }
         compose.onNode(hasSetTextAction()).performTextInput("concert")
-        compose.waitUntil(WAIT_MS) { viewModel.uiState.value.online is OnlineResults.Found }
+        compose.waitUntil(WAIT_MS) {
+            (viewModel.uiState.value.online as? OnlineResults.Found)?.sections?.size == OnlineProviderIds.ALL.size
+        }
         compose.waitForIdle()
     }
 
@@ -100,11 +103,47 @@ class Yu5fSearchSectionsScreenTest {
         list().performScrollToNode(hasTestTag("search-show-all-${OnlineProviderIds.ARCHIVE}"))
         compose.onNodeWithTag("search-show-all-${OnlineProviderIds.ARCHIVE}").performClick()
 
-        list().performScrollToNode(hasText("${OnlineProviderIds.ARCHIVE}-8"))
+        list().performScrollToNode(hasText("${OnlineProviderIds.ARCHIVE}-20"))
         assertThrows(AssertionError::class.java) {
             list().performScrollToNode(hasText("${OnlineProviderIds.YOUTUBE}-6"))
         }
         assertThat(online.calls.toList()).containsExactlyElementsIn(before).inOrder()
+    }
+
+    @Test
+    fun five_results_have_no_show_all_button() {
+        online.rowCount = 5
+        show()
+
+        for (provider in OnlineProviderIds.ALL) {
+            list().performScrollToNode(hasText("$provider-5"))
+            assertThrows(AssertionError::class.java) {
+                list().performScrollToNode(hasTestTag("search-show-all-$provider"))
+            }
+        }
+    }
+
+    @Test
+    fun expanded_section_survives_player_return_and_resets_for_a_new_query() {
+        show()
+        val calls = online.calls.toList()
+        list().performScrollToNode(hasTestTag("search-show-all-${OnlineProviderIds.ARCHIVE}"))
+        compose.onNodeWithTag("search-show-all-${OnlineProviderIds.ARCHIVE}").performClick()
+        list().performScrollToNode(hasText(TestSong.TITLE))
+        compose.onNodeWithText(TestSong.TITLE).performClick()
+        compose.waitUntil(WAIT_MS) { inPlayer }
+        compose.runOnIdle { inPlayer = false }
+        compose.waitForIdle()
+
+        list().performScrollToNode(hasText("${OnlineProviderIds.ARCHIVE}-20"))
+        assertThat(online.calls.toList()).containsExactlyElementsIn(calls).inOrder()
+        compose.onNode(hasSetTextAction()).performTextReplacement("another")
+        compose.waitUntil(WAIT_MS) { online.calls.size == calls.size + OnlineProviderIds.ALL.size }
+        compose.waitForIdle()
+        assertThrows(AssertionError::class.java) {
+            list().performScrollToNode(hasText("${OnlineProviderIds.ARCHIVE}-6"))
+        }
+        list().performScrollToNode(hasTestTag("search-show-all-${OnlineProviderIds.ARCHIVE}"))
     }
 
     @Test
@@ -158,6 +197,8 @@ class Yu5fSearchSectionsScreenTest {
         @Volatile
         var youtubeProblem: OnlineProblem? = null
 
+        var rowCount = 20
+
         override suspend fun search(query: String): List<OnlineSection> =
             OnlineProviderIds.ALL.mapNotNull { provider -> searchIn(provider, query) }
 
@@ -170,7 +211,7 @@ class Yu5fSearchSectionsScreenTest {
             val problem = if (provider == OnlineProviderIds.YOUTUBE) youtubeProblem else null
             val results =
                 if (problem == null) {
-                    (1..8).map { number ->
+                    (1..rowCount).map { number ->
                         if (provider == OnlineProviderIds.YOUTUBE && number == 1) {
                             TestSong.result
                         } else {

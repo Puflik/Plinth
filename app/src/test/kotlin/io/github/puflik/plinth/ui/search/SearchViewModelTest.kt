@@ -13,6 +13,7 @@ import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.online.FakeOnlineRepository
 import io.github.puflik.plinth.online.FakeOnlineSettings
+import io.github.puflik.plinth.online.OnlineProviderIds
 import io.github.puflik.plinth.online.TestConcert
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.ui.library.TrackAction
@@ -158,7 +159,7 @@ class SearchViewModelTest {
             runCurrent()
 
             assertThat(beforePause).isEqualTo(OnlineResults.None)
-            assertThat(waiting).isEqualTo(OnlineResults.Searching)
+            assertYu5fLoading(waiting, OnlineProviderIds.ARCHIVE)
             val found = viewModel.uiState.value.online as OnlineResults.Found
             assertThat(
                 found.sections
@@ -166,7 +167,8 @@ class SearchViewModelTest {
                     .results
                     .map { it.title },
             ).containsExactly(TestConcert.TITLE)
-            assertThat(online.searches).containsExactly("concert")
+            assertThat(online.providerSearches).containsExactly(OnlineProviderIds.ARCHIVE to "concert")
+            assertThat(online.searches).isEmpty()
         }
 
     @Test
@@ -199,6 +201,7 @@ class SearchViewModelTest {
 
             assertThat(viewModel.uiState.value.online).isEqualTo(OnlineResults.None)
             assertThat(online.searches).isEmpty()
+            assertThat(online.providerSearches).isEmpty()
         }
 
     @Test
@@ -214,7 +217,8 @@ class SearchViewModelTest {
             runCurrent()
 
             assertThat(viewModel.uiState.value.online).isEqualTo(OnlineResults.None)
-            assertThat(online.searches).containsExactly("concert")
+            assertThat(online.providerSearches).containsExactly(OnlineProviderIds.ARCHIVE to "concert")
+            assertThat(online.searches).isEmpty()
         }
 
     /** Запоминает, с чем библиотеку спрашивали. */

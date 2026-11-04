@@ -11,6 +11,7 @@ import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
 import io.github.puflik.plinth.online.FakeOnlineRepository
 import io.github.puflik.plinth.online.FakeOnlineSettings
+import io.github.puflik.plinth.online.OnlineProviderIds
 import io.github.puflik.plinth.ui.library.TrackActions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -81,7 +82,8 @@ class SearchViewModelRetryTest {
             val answer = onlineSections().single()
             assertThat(answer.problem).isNull()
             assertThat(answer.results).isNotEmpty()
-            assertThat(online.searches).containsExactly("concert", "concert").inOrder()
+            assertThat(online.providerSearches).containsExactly(archive("concert"), archive("concert")).inOrder()
+            assertThat(online.searches).isEmpty()
         }
 
     @Test
@@ -101,7 +103,7 @@ class SearchViewModelRetryTest {
             gate.complete(Unit)
             runCurrent()
 
-            assertThat(waiting).isEqualTo(OnlineResults.Searching)
+            assertYu5fLoading(waiting, OnlineProviderIds.ARCHIVE)
             assertThat(onlineSections().single().problem).isNull()
         }
 
@@ -122,6 +124,7 @@ class SearchViewModelRetryTest {
             assertThat(withoutText).isEqualTo(OnlineResults.None)
             assertThat(viewModel.uiState.value.online).isEqualTo(OnlineResults.None)
             assertThat(online.searches).isEmpty()
+            assertThat(online.providerSearches).isEmpty()
         }
 
     @Test
@@ -146,7 +149,8 @@ class SearchViewModelRetryTest {
             assertThat(before.online).isInstanceOf(OnlineResults.Found::class.java)
             assertThat(seen).isNotEmpty()
             assertThat(seen.distinct()).containsExactly(before)
-            assertThat(online.searches).containsExactly("concert")
+            assertThat(online.providerSearches).containsExactly(archive("concert"))
+            assertThat(online.searches).isEmpty()
         }
 
     @Test
@@ -171,7 +175,8 @@ class SearchViewModelRetryTest {
 
             assertThat(framesOnReturn).containsExactly(failed)
             assertThat(onlineSections().single().problem).isNull()
-            assertThat(online.searches).containsExactly("concert", "concert").inOrder()
+            assertThat(online.providerSearches).containsExactly(archive("concert"), archive("concert")).inOrder()
+            assertThat(online.searches).isEmpty()
         }
 
     @Test
@@ -187,7 +192,8 @@ class SearchViewModelRetryTest {
 
             search("grateful")
 
-            assertThat(online.searches).containsExactly("concert", "grateful").inOrder()
+            assertThat(online.providerSearches).containsExactly(archive("concert"), archive("grateful")).inOrder()
+            assertThat(online.searches).isEmpty()
             assertThat(onlineSections().single().results).isEmpty()
         }
 
@@ -225,5 +231,7 @@ class SearchViewModelRetryTest {
     private companion object {
         // Пять секунд льготы `WhileSubscribed` и запас: поток остановлен, экран вернётся «с нуля».
         const val GRACE_MS = 6_000L
+
+        fun archive(query: String) = OnlineProviderIds.ARCHIVE to query
     }
 }

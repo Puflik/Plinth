@@ -72,6 +72,11 @@ class TestYoutubeOnline(
             else -> listOf(OnlineSection(TestSong.PROVIDER, emptyList(), OnlineProblem.NO_NETWORK))
         }
 
+    override suspend fun searchIn(
+        provider: String,
+        query: String,
+    ): OnlineSection? = if (provider == TestSong.PROVIDER) search(query).singleOrNull() else null
+
     override suspend fun album(
         provider: String,
         item: String,
