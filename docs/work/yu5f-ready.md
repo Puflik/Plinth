@@ -11,6 +11,7 @@
 - **Планировщик, фактически:** `gpt-6.1-sol`, `xhigh`.
 - **Исполнитель:** `gpt-6.1-sol`, `xhigh`: ограниченная конкурентность и cancellation.
 - **План до реализации:** ожидает Astra; разрешение координатора на CoreOnlineRepository.setEnabled получено.
+- **Статус:** BLOCKED — compile/runtime RED не подтверждён, есть замечания ktlint; исполнителя не запускать.
 
 ## Цель
 
@@ -302,3 +303,28 @@ _Не начат; только после согласования плана._
 ## Ревью
 
 _Не начато; независимый Astra xhigh. Если выяснится влияние на пользовательские данные — Astra max до кода._
+
+## Проверка координатора 2026-11-06
+
+После отчёта планировщика исправлен только внешний init: `findProject(':app')`
+и ранний возврат для included build-logic. Тесты и production не менялись.
+Выполнен один ограниченный запуск с прежним окружением и исключением Rust tasks:
+`compileGithubDebugUnitTestKotlin --rerun ktlintCheck --continue`.
+Лог: `C:/claude/Plinth-yu5f-ready-coordinator-check.log`.
+
+- Included-build ошибка снята. Следующая блокировка возникает раньше test compile,
+  в `compileGithubDebugKotlin`: `Querying the mapped value of flatmap(provider(task
+  'uniffiKotlin', class UniffiKotlin)) before task ':app:uniffiKotlin' has completed
+  is not supported`. Исключение генератора через `-x` не завершает его provider;
+  простой замены outputDir недостаточно. Других запусков координатор не делал.
+- Scoped ktlint выполнен: 13 замечаний только в `Yu5fOnlineReadinessTest.kt:373`
+  (12 argument-list-wrapping, 1 max-line-length). Изменять защищённые тесты исполнителю
+  не разрешено; форматирование и новый опорный hash остаются подготовке/ревью.
+- Команда завершилась BUILD FAILED за 24s: 47 tasks, 8 executed, 21 FROM-CACHE,
+  18 UP-TO-DATE. Свежий compile RED и runtime-проверки не получены.
+- Diff защищённых тестов относительно `9e00868` пуст. Ветка содержит только
+  два новых файла тестов и задачу; source-contract проверки не заменяют native runtime.
+- После планировщика окно 68%, неделя 39%. По правилу автора нового агента
+  не запустили; сброс окна 2026-11-06 14:09:34 +05:00. Следующая ограниченная
+  работа — настройка JVM-запуска на Luna, затем подготовка проверенного RED,
+  форматирование и независимое Astra-review; production пока не начинать.
