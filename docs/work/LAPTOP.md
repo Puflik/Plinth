@@ -8,6 +8,9 @@ Codex на ноутбуке установлен.
 1. Клонируйте последний main `https://github.com/Puflik/Plinth.git`, выполните
    fetch и проверьте status. Настройте доступ GitHub и существующее авторство
    на ноутбуке самостоятельно; секреты и приватные ключи с Windows не копируются.
+   Учётные записи автора различаются: GitHub — `puflik`, GitVerse — `pufli4`;
+   почты тоже разные, конкретные адреса ещё не указаны. Не переносите настройки
+   авторства и авторизацию одного сервиса на другой.
 2. Отдельное локальное дополнение содержит семь проектных ECC-навыков,
    graphify skill, tools/graphify_update.py, .graphifyignore и устаревший граф.
    Проверьте ZIP по внешней SHA256, распакуйте в новый каталог, прочитайте
@@ -51,3 +54,59 @@ tools/graphify_update.py по его docstring после отдельной п�
 Git internals, кеши, SDK, секреты, переписки и данные телефона не переносятся.
 Новый пользовательский чат автоматически не создаётся; продолжение — через
 актуальные документы проекта.
+
+## Проверка Linux 2026-11-07
+
+- Основной каталог `/home/puflik/src/Plinth`; задача — соседний
+  `/home/puflik/src/Plinth-yu5f-ready`, ветка `work/yu5f-ready`, HEAD `6fa3e6b`.
+- JDK 21.0.13: `/home/puflik/.local/opt/jdk21`. Rust 1.98.1 установлен;
+  для этой задачи задавать `RUSTUP_TOOLCHAIN=1.98.1`, default Rust не менять.
+- Gradle 9.7.1 загружен штатным wrapper; `bash ./gradlew --version` завершился
+  успешно. Кэш — `/home/puflik/.gradle`. Лог:
+  `/tmp/plinth-yu5f-ready-linux-gradle-version.log`.
+- Command-line tools 23.0 установлены в
+  `/home/puflik/Android/Sdk/cmdline-tools/latest`. Архив
+  `commandlinetools-linux-16111833_latest.zip` проверен по SHA1 из официального
+  `repository2-3.xml`: `e025545c62a8e64c7559119566a569fb1dec5f60`.
+- Старый `sdkmanager` запускает загрузчик Android CLI; первая установка SDK
+  остановлена `timeout 300`, код 124, на `Downloading Android CLI...`.
+  Прямой официальный бинарник загружен через IPv4 и установлен рядом как
+  `bin/android-cli`; проверена версия `1.1.16717390`. Повторная установка
+  `platforms/android-37.0` и `build-tools/37.0.0` завершилась успешно, код 0;
+  оба каталога созданы. Команда установки использовала `--no-metrics`.
+  Логи: `/tmp/plinth-yu5f-ready-linux-sdk-install.log` и
+  `/tmp/plinth-yu5f-ready-linux-sdk-retry.log`. Пакет 37.0 найден в официальном
+  каталоге; прежняя веб-страница preview не определяет актуальное наличие SDK.
+- Ограниченный запуск прошёл `uniffiKotlin` и `compileGithubDebugKotlin`.
+  `compileGithubDebugUnitTestKotlin` завершился exit 1 за 17m34s: в новом
+  `Yu5fOnlineReadinessTest.kt` отсутствуют заранее объявленные readiness API
+  `OnlineConfiguration`, `OnlineReadiness`, `OnlineReady`, `awaitConfiguration`
+  и возникают связанные ошибки вывода типов. Это compile RED, не runtime тестов;
+  production и защищённые тесты неизменны. Scoped ktlint сегодня не запускался.
+  Лог: `/tmp/plinth-yu5f-ready-linux-compile.log`.
+- Gradle дополнительно установил Build-Tools 36.0.0 и Platform-Tools 37.0.1.
+  Временные ошибки SSL при скачивании crates.io преодолены штатными повторами;
+  host Rust build и генерация завершились. NDK/APK/устройство не использовались.
+
+Окружение и фактически выполненная ограниченная команда:
+
+```bash
+export JAVA_HOME=/home/puflik/.local/opt/jdk21
+export ANDROID_HOME=/home/puflik/Android/Sdk
+export GRADLE_USER_HOME=/home/puflik/.gradle
+export RUSTUP_TOOLCHAIN=1.98.1
+export JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true
+export PATH="$JAVA_HOME/bin:$PATH"
+# Из /home/puflik/src/Plinth-yu5f-ready, без старого Windows init:
+bash ./gradlew --no-daemon -x :app:cargoNdkBuild :app:compileGithubDebugUnitTestKotlin --rerun
+```
+
+Не исключать `uniffiKotlin`: используются настоящие биндинги текущего checkout.
+Не устанавливать NDK и не запускать APK/устройство для этого шага. Compile RED
+подтверждён; теперь исправить разрешённое форматирование подготовительного
+этапа, проверить scoped ktlint, затем провести независимое Astra-review до реализации.
+Из-за суточной нормы расхода новый агент сегодня не запускается.
+
+Официальные источники: [каталог SDK](https://dl.google.com/android/repository/repository2-3.xml),
+[Android CLI](https://developer.android.com/tools/agents/android-cli),
+[бинарник Linux](https://dl.google.com/android/cli/latest/linux_x86_64/android-cli).
