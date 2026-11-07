@@ -1,6 +1,7 @@
 # Работа на ноутбуке Linux Mint
 
-Фактическая подготовка руководства: **2026-11-06**. Codex на ноутбуке установлен.
+Фактическая подготовка руководства: **2026-11-06**, сверка ноутбука **2026-11-07**.
+Codex на ноутбуке установлен.
 Это точка входа для переноса; актуальное состояние — [CODEX.md](CODEX.md),
 правила — [README.md](README.md), роли — [AGENT_ROLES.md](AGENT_ROLES.md).
 
@@ -24,13 +25,18 @@
    Запускайте wrapper через `bash ./gradlew`: Git хранит его без executable bit.
    Выбирайте Linux-пути явно, например ~/src/Plinth и ~/src/Plinth-yu5f-ready;
    прежние C:\claude\... служат историческими примерами.
-5. Следующий продуктовый шаг — план и тесты **yu5f-ready**; yu5f production
-   заблокирована prerequisite. Handoff находится в
+5. План и тесты **yu5f-ready** уже опубликованы в `origin/work/yu5f-ready`
+   (`6fa3e6b`, опорные тесты `9e00868`); подтверждённого RED и Astra-review пока нет.
+   Linux worktree восстановлен в `/home/puflik/src/Plinth-yu5f-ready`.
+   Следующий шаг — подготовка JVM-запуска; yu5f production заблокирована.
+   Исходный handoff находится в
    `origin/work/yu5f:docs/work/yu5f.md`. Ветка опубликована, исходный HEAD
    365fbb3aee3eb405b15ebd9968bc97867e503554; baseline защищённых тестов
    cbe6934fcd82f203622a490031e9a0e054272fee. Сверьте с fetch перед работой.
 
 Граф построен на 7c5192a (2026-10-19), сильно отстаёт; Windows CLI сломан.
+На Linux 2026-11-07 `graphify query` выполнен успешно, установлен graphify 0.9.103;
+он предупреждает о старой схеме ID и skill 0.8.49. Перестроение не выполнялось.
 Перенос снимка не означает настройку Linux runtime. Старый .graphify_python
 не переносится. Updater требует graphify 0.9+ и ресурс extraction-spec.md
 по историческому ~/.claude/skills/graphify/references/ пути; явное восстановление
