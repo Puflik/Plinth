@@ -28,10 +28,13 @@ Codex на ноутбуке установлен.
    Запускайте wrapper через `bash ./gradlew`: Git хранит его без executable bit.
    Выбирайте Linux-пути явно, например ~/src/Plinth и ~/src/Plinth-yu5f-ready;
    прежние C:\claude\... служат историческими примерами.
-5. План и тесты **yu5f-ready** уже опубликованы в `origin/work/yu5f-ready`
-   (`6fa3e6b`, опорные тесты `9e00868`); подтверждённого RED и Astra-review пока нет.
-   Linux worktree восстановлен в `/home/puflik/src/Plinth-yu5f-ready`.
-   Следующий шаг — подготовка JVM-запуска; yu5f production заблокирована.
+5. План и тесты **yu5f-ready** опубликованы в `origin/work/yu5f-ready`
+   до `6fa3e6b`; локальный `b0e2373` сохраняет стиль и ревью 8 ноября.
+   Compile RED подтверждён 7 ноября, scoped ktlint PASS — 8 ноября;
+   Astra-review выявило B1 в ABA-тесте. Следующий шаг — усиление B1
+   планировщиком, повторное ревью и окончательный baseline; `9e00868`
+   остаётся исходной опорой. Production заблокирована, runtime не проверен.
+   Linux worktree — `/home/puflik/src/Plinth-yu5f-ready`.
    Исходный handoff находится в
    `origin/work/yu5f:docs/work/yu5f.md`. Ветка опубликована, исходный HEAD
    365fbb3aee3eb405b15ebd9968bc97867e503554; baseline защищённых тестов
@@ -103,8 +106,8 @@ bash ./gradlew --no-daemon -x :app:cargoNdkBuild :app:compileGithubDebugUnitTest
 
 Не исключать `uniffiKotlin`: используются настоящие биндинги текущего checkout.
 Не устанавливать NDK и не запускать APK/устройство для этого шага. Compile RED
-подтверждён; теперь исправить разрешённое форматирование подготовительного
-этапа, проверить scoped ktlint, затем провести независимое Astra-review до реализации.
+подтверждён; последующие форматирование, scoped ktlint и независимое
+Astra-review выполнены 8 ноября. Оставшийся блокер B1 описан в пункте 5 выше.
 7 ноября нового агента не запускали из-за суточной нормы; в новой сессии
 проверять фактические окна заново.
 
