@@ -1,5 +1,6 @@
 package io.github.puflik.plinth.online
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -18,13 +19,16 @@ class OnlineSwitch(
         scope.launch {
             combine(settings.enabled, settings.disabledProviders) { enabled, disabled ->
                 // Пока главный выключен, выбор провайдеров ядру ни к чему: его смена не должна дёргать подключение.
-                if (enabled) Applied(true, disabled) else Applied(false, emptySet())
-            }.distinctUntilChanged().collect { online.setEnabled(it.enabled, it.disabled) }
+                OnlineConfiguration(enabled, disabled).normalized()
+            }.distinctUntilChanged().collect { configuration ->
+                try {
+                    online.setEnabled(configuration.enabled, configuration.disabledProviders)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Gated сохраняет Failed; следующая конфигурация всё ещё должна примениться.
+                }
+            }
         }
     }
-
-    private data class Applied(
-        val enabled: Boolean,
-        val disabled: Set<String>,
-    )
 }

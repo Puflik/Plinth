@@ -302,7 +302,61 @@ setEnabled и DI capability alias; это явный контракт плана
 
 ## Отчёт исполнителя
 
-_Не начат; только после согласования плана._
+Начат 2026-11-09, Sol xhigh; worktree `/home/puflik/src/Plinth-yu5f-ready`,
+ветка `work/yu5f-ready`, входной HEAD `6ff822f`, защищённый baseline `005ba5e`.
+Подагенты не запускались; изменяются только пять разрешённых production-файлов
+и этот отчёт. Защищённые тесты не меняются.
+
+Реализованы API/capability, общая нормализация с копированием множества,
+монотонные попытки до ожидания физической очереди, адресные waiter deferred,
+отбрасывание stale completion и порядок physical apply. Очередь резервируется
+вместе с revision; отменённая queued попытка сохраняет зависимость следующей
+от предшественницы. Каждый waiter имеет собственный timeout и удаляется при
+отмене, чужие применения не отменяет. Core.setEnabled пробрасывает ошибку;
+Switch продолжает после non-cancellation Exception. DI aliases используют
+один singleton Gated; initial gate/stream не менялись.
+
+Первая запись в соседний worktree остановлена read-only filesystem; ни один
+файл не был изменён. Продолжение использует разрешённую escalation для worktree.
+Первый JVM runtime запуск: PASS, 2m13s, 45 tasks (15 executed,
+30 up-to-date), суммарно 66/66 без failures/errors/skips;
+`Yu5fOnlineReadinessTest`: 12/12, source guards: 2/2.
+Лог `/tmp/plinth-yu5f-ready-jvm-run1-20261109.log`.
+После него добавлена повторная проверка revision при возобновлении waiter,
+чтобы уже разбуженный waiter также не вернул stale ack; предстоит финальный
+повтор suite. Перенесена длинная строка DI. Это развитие реализации до
+итоговой приёмки, падений runtime/compile пока не было.
+Scoped ktlint финальных пяти production и двух новых protected tests: PASS,
+57s, 11 tasks executed. Использован проверенный LAPTOP init, расширен только
+внешний `/tmp` file filter; правила не отключались. Лог
+`/tmp/plinth-yu5f-ready-lint-run1-20261109.log`.
+Итоговый повтор после последней production-правки: PASS, 2m06s,
+55 tasks (20 executed, 35 up-to-date). В одном Gradle запуске выполнены
+`:app:testGithubDebugUnitTest --rerun` с шестью согласованными `--tests`
+фильтрами и `:app:compileGithubDebugAndroidTestKotlin --rerun`.
+JVM: 66 tests, 0 failures, 0 errors, 0 skipped; из них readiness 12 и source
+guards 2. AndroidTest Kotlin реально компилировался, не FROM-CACHE.
+Лог `/tmp/plinth-yu5f-ready-final-20261109.log`.
+
+Окружение взято из LAPTOP: JDK21, Android SDK `/home/puflik/Android/Sdk`,
+GRADLE_USER_HOME `/home/puflik/.gradle`, Rust `1.98.1`, IPv4 JVM option.
+Исключена только `:app:cargoNdkBuild`; `uniffiKotlin` не исключалась,
+штатно UP-TO-DATE. APK/device/native runtime не запускались. Предупреждения
+старых тестов о coroutine opt-in и Compose deprecations не менялись.
+
+`git diff --check` PASS. Diff от полного protected baseline
+`005ba5ea092f5c8858749761b59a3e0e9f3fd731` по целиком `app/src/test`,
+`app/src/sharedTest`, `app/src/androidTest` пуст — покрывает все 13 protected
+paths. Production diff содержит только пять разрешённых файлов; Core diff
+ограничен setEnabled, OnlineModule — singleton wiring. В taskfile изменён
+только этот отчёт. Собственные Gradle sessions завершились exit 0,
+фоновых сборок не оставлено. Неожиданных compile/runtime/lint FAIL не было;
+первичный filesystem отказ произошёл до Gradle/записи production.
+
+Локальный commit создаётся в `work/yu5f-ready`; push/независимое ревью/merge
+оставлены координатору. Main, соседние worktree, граф, зависимости и
+пользовательские данные не менялись. Граф остаётся позади production до
+планового обновления волны. Исторический RED не повторялся.
 
 ## Ревью
 

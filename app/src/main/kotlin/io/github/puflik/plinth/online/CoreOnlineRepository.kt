@@ -43,7 +43,7 @@ class CoreOnlineRepository(
     ) {
         val active = activeSources(providers, disabled)
         val connect = enabled && !active.isEmpty
-        attempt(io, TAG, if (connect) "connect" else "disconnect") {
+        withContext(io) {
             if (connect) core.online.connect(transport, active.providers, active.archive) else core.online.disconnect()
         }
     }
