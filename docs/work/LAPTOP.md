@@ -105,8 +105,56 @@ bash ./gradlew --no-daemon -x :app:cargoNdkBuild :app:compileGithubDebugUnitTest
 Не устанавливать NDK и не запускать APK/устройство для этого шага. Compile RED
 подтверждён; теперь исправить разрешённое форматирование подготовительного
 этапа, проверить scoped ktlint, затем провести независимое Astra-review до реализации.
-Из-за суточной нормы расхода новый агент сегодня не запускается.
+7 ноября нового агента не запускали из-за суточной нормы; в новой сессии
+проверять фактические окна заново.
 
 Официальные источники: [каталог SDK](https://dl.google.com/android/repository/repository2-3.xml),
 [Android CLI](https://developer.android.com/tools/agents/android-cli),
 [бинарник Linux](https://dl.google.com/android/cli/latest/linux_x86_64/android-cli).
+
+## Scoped ktlint после проверки 2026-11-08
+
+Проверенный Astra init сохранён ниже, поскольку `/tmp` не является постоянным
+хранилищем. Он проверяет ровно два подготовительных теста и запрещает задачи
+компиляции/тестов приложения и Rust. Скопируйте блок во временный init; запуск
+из worktree задачи с Linux-окружением выше:
+
+```bash
+bash ./gradlew --no-daemon -I /tmp/plinth-ready-ktlint.init.gradle :app:plinthReadyScopedLint --rerun-tasks
+```
+
+Результат 8 ноября: PASS, 11 tasks executed, 2m10s. Runtime тестов этим не проверен.
+Содержимое `/tmp/plinth-ready-ktlint.init.gradle`:
+
+```groovy
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.findProject(':app')
+    if (app == null) return
+    def isCheck = { task ->
+        def klass = task.getClass()
+        while (klass != null) {
+            if (klass.name == 'org.jlleitschuh.gradle.ktlint.tasks.KtLintCheckTask') return true
+            klass = klass.superclass
+        }
+        false
+    }
+    def selected = app.tasks.findAll { isCheck(it) }.sort { it.name }.first()
+    def expected = [
+        app.file('src/test/kotlin/io/github/puflik/plinth/online/Yu5fOnlineReadinessTest.kt'),
+        app.file('src/test/kotlin/io/github/puflik/plinth/online/Yu5fCoreReadinessContractTest.kt')
+    ] as Set
+    selected.setSource(app.files(expected))
+    selected.doFirst {
+        assert selected.source.files == expected
+        println('SCOPED_KTLINT_TASK=' + selected.path)
+        println('SCOPED_KTLINT_FILES=' + selected.source.files*.name.sort())
+    }
+    app.tasks.register('plinthReadyScopedLint') { dependsOn(selected) }
+}
+gradle.taskGraph.whenReady { graph ->
+    def forbidden = graph.allTasks.findAll {
+        it.project.path == ':app' && (it.name.startsWith('compile') || it.name.startsWith('test') || it.name.contains('cargo') || it.name.contains('uniffi'))
+    }
+    assert forbidden.empty : 'Out-of-scope tasks: ' + forbidden*.path
+}
+```
