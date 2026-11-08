@@ -301,10 +301,46 @@ class Yu5fOnlineReadinessTest {
             assertThat(newestWaiter.isCompleted).isFalse()
             assertThat(inner.attempts).hasSize(2)
 
+            val offStep = Step()
+            val newestStep = Step()
+            inner.steps.addLast(offStep)
+            inner.steps.addLast(newestStep)
             delayed.release.complete(Unit)
             runCurrent()
 
-            assertThat(revision(newestWaiter.await())).isGreaterThan(firstRevision)
+            assertThat(oldApplication.isCompleted).isTrue()
+            assertThat(offStep.started.isCompleted).isTrue()
+            assertThat(newestStep.started.isCompleted).isFalse()
+            assertThat(offApplication.isCompleted).isFalse()
+            assertThat(newestApplication.isCompleted).isFalse()
+            assertThat(newestWaiter.isCompleted).isFalse()
+            assertThat(inner.attempts)
+                .containsExactly(Call(true, setOf(ARCHIVE)), Call(true, emptySet()), Call(false, emptySet())).inOrder()
+
+            offStep.release.complete(Unit)
+            runCurrent()
+
+            assertThat(offApplication.isCompleted).isTrue()
+            assertThat(newestStep.started.isCompleted).isTrue()
+            assertThat(newestApplication.isCompleted).isFalse()
+            assertThat(newestWaiter.isCompleted).isFalse()
+            assertThat(inner.registry.applied.map { it.enabled }).containsExactly(true, true, false).inOrder()
+            assertThat(inner.registry.disabled).isEmpty()
+            assertThat(inner.attempts)
+                .containsExactly(
+                    Call(true, setOf(ARCHIVE)),
+                    Call(true, emptySet()),
+                    Call(false, emptySet()),
+                    Call(true, emptySet()),
+                ).inOrder()
+
+            newestStep.release.complete(Unit)
+            runCurrent()
+
+            assertThat(newestWaiter.isCompleted).isTrue()
+            val newestRevision = revision(newestWaiter.await())
+            assertThat(newestRevision).isGreaterThan(firstRevision)
+            assertThat(newestRevision).isEqualTo(revision(gated.awaitConfiguration(BOTH)))
             assertThat(oldWaiter.await()).isEqualTo(OnlineReady.Superseded)
             assertThat(oldApplication.isCompleted).isTrue()
             assertThat(offApplication.isCompleted).isTrue()
