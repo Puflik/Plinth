@@ -370,8 +370,13 @@ class Yu5fOnlineReadinessTest {
             runCurrent()
 
             assertThat(inner.attempts).containsExactly(Call(true, emptySet()), Call(false, emptySet())).inOrder()
-            assertThat(revision(gated.awaitConfiguration(OnlineConfiguration(false, setOf(ARCHIVE, "future-provider")))))
-                .isEqualTo(offRevision)
+            assertThat(
+                revision(
+                    gated.awaitConfiguration(
+                        OnlineConfiguration(false, setOf(ARCHIVE, "future-provider")),
+                    ),
+                ),
+            ).isEqualTo(offRevision)
         }
 
     private fun revision(ready: OnlineReady): Long {

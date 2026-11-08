@@ -3,15 +3,15 @@
 > Файл задачи для исполнителя по `docs/work/TEMPLATE.md`.
 > Планировщик пишет план и защищённые RED-тесты; production здесь не реализуется.
 
-- **Ветка:** `work/yu5f-ready` · **Ворктри:** `C:\claude\Plinth-yu5f-ready`
-- **Основа:** `main` на `d250290` · **Коммит тестов:** `9e008680e56a5f2a9ca6152c83523066e473ae71` (первый в ветке; RED не подтверждён).
-- **Откуда:** `C:\claude\Plinth-yu5f\docs\work\yu5f.md`, «Передача будущему планировщику yu5f-ready», строки 238–270.
+- **Ветка:** `work/yu5f-ready` · **Ворктри:** `/home/puflik/src/Plinth-yu5f-ready` (Linux Mint)
+- **Основа:** `main` на `d250290` · **Коммит тестов:** `9e008680e56a5f2a9ca6152c83523066e473ae71` (исходный первый коммит; Linux compile RED подтверждён 2026-11-07; окончательный baseline после подготовки назначает координатор).
+- **Откуда:** `docs/work/yu5f.md` в ветке `work/yu5f`, «Передача будущему планировщику yu5f-ready», строки 238–270.
 - **Данные пользователя:** нет; online lifecycle/registry, без журнала, CRDT, миграций, FFI/Rust.
 - **Исследование и ревью:** `gpt-6-astra`, `xhigh`; независимое согласование плана до исполнителя.
 - **Планировщик, фактически:** `gpt-6.1-sol`, `xhigh`.
 - **Исполнитель:** `gpt-6.1-sol`, `xhigh`: ограниченная конкурентность и cancellation.
-- **План до реализации:** ожидает Astra; разрешение координатора на CoreOnlineRepository.setEnabled получено.
-- **Статус:** BLOCKED — compile/runtime RED не подтверждён, есть замечания ktlint; исполнителя не запускать.
+- **План до реализации:** Astra xhigh проверил 2026-11-08; BLOCKED по B1 ниже; разрешение координатора на CoreOnlineRepository.setEnabled получено.
+- **Статус:** BLOCKED — усилить защищённый ABA-тест по B1; production-исполнителя не запускать. Compile RED подтверждён; runtime не запускался; итог scoped ktlint — в ревью ниже. Push до 9 ноября запрещён автором.
 
 ## Цель
 
@@ -185,11 +185,13 @@ JVM injection seam отсутствует, mocking/FFI/dependencies вне scope
 
 Ожидаемая причина compile RED online-suite: отсутствуют только заранее записанные
 OnlineConfiguration, OnlineReady, OnlineReadiness и Gated.awaitConfiguration; reflection нет.
-После устранения инфраструктурной блокировки до production нужно подтвердить compile RED
-именно по этой новой API, исключив любые независимые синтаксические/fixture ошибки.
-**На этом проходе RED не подтверждён: новые tests не компилировались и не исполнялись.**
+По Linux checkpoint компиляция остановилась именно на объявленной новой API и
+связанных ошибках вывода типов; runtime корректность fixtures ещё не проверена.
+**На исходном Windows-проходе RED не был подтверждён. Linux compile RED подтверждён 2026-11-07; runtime tests не выполнялись (см. актуальный checkpoint ниже).**
 
 ## Проверки
+
+### Исторические Windows-команды (не выполнять на Linux)
 
 Scoped JVM/compile/style, Gradle --no-daemon; JAVA_HOME `C:\Program Files\Android\openjdk\jdk-21.0.8`;
 SDK `C:\Users\User\AppData\Local\Android\Sdk`; логи вне Git `C:\claude\Plinth-yu5f-ready-*.log`.
@@ -247,12 +249,12 @@ Init ktlint filter допускает только два новых filename; p
 ещё в его разрешённых изменённых файлах (расширять внешний filter, не отключать правила).
 AndroidTest command — compile защищённых core/cancellation tests, не их runtime execution;
 телефон/эмулятор не запускались. Новые JVM suites, native compile и scoped ktlint на этом
-проходе **не выполнены**. До реализации coordinator обязан разрешить/поручить исправление
-среды и получить валидный RED; текущий локальный commit — определение неподтверждённой базы.
+проходе **не выполнены**. Это исторический Windows-статус: Linux compile RED получен 2026-11-07;
+актуальный блокер допуска исполнителя — B1 в ревью 2026-11-08.
 
 ## Готово, когда
 
-- Детерминированные tests отдельно; валидный RED подтверждён перед production (пока заблокирован средой).
+- Детерминированные tests отдельно; валидный compile RED подтверждён на Linux 2026-11-07; перед production закрыт B1.
 - При runtime тестах 12 readiness и два source guards GREEN, существующая JVM база GREEN;
   защищённые native contracts компилируются, initial gate/stream interrupt/timeout неизменны.
 - Applied revision truthful, pending/failure/timeout/superseded не дают consumer search;
@@ -302,7 +304,7 @@ _Не начат; только после согласования плана._
 
 ## Ревью
 
-_Не начато; независимый Astra xhigh. Если выяснится влияние на пользовательские данные — Astra max до кода._
+Независимый Astra xhigh проверил план 2026-11-08; заключение и B1 ниже. Если выяснится влияние на пользовательские данные — Astra max до кода.
 
 ## Проверка координатора 2026-11-06
 
@@ -328,3 +330,128 @@ _Не начато; независимый Astra xhigh. Если выяснит�
   не запустили; сброс окна 2026-11-06 14:09:34 +05:00. Следующая ограниченная
   работа — настройка JVM-запуска на Luna, затем подготовка проверенного RED,
   форматирование и независимое Astra-review; production пока не начинать.
+
+## Подготовка стиля 2026-11-08
+
+- Фактическая модель/effort: `gpt-6-luna`, `medium`.
+- Единственное изменение теста: разрешённые переносы цепочки `containsExactly(...).inOrder()` в `Yu5fOnlineReadinessTest.kt` около строки 373; аргументы и утверждение сохранены.
+- `ktlintCheck` ограничивался init-фильтром двумя новыми `Yu5f*Readiness*Test.kt`. Без повышенного доступа первая попытка остановилась на read-only Gradle cache; после разрешённого доступа init-скрипт ошибся разрешением класса внутри closure. Одна коррекция с import завершилась ошибкой компиляции init: `BaseKtlintCheckTask` недоступен init classpath. По лимиту попыток остановился; результат ktlint не получен.
+- `git diff --check` чисты; изменены только разрешённые тест и этот раздел отчёта. `git diff -w` относительно `9e00868` остаётся непустым из-за переносов строк; условие коммита не выполнено, поэтому коммит не создан.
+
+## Linux checkpoint 2026-11-07 (актуализирован 2026-11-08)
+
+Источник: основной checkout, `docs/work/CODEX.md`, «Точка продолжения», и
+`docs/work/LAPTOP.md`, «Проверка Linux 2026-11-07». Это git-tracked checkpoint
+координатора; `/tmp/plinth-yu5f-ready-linux-compile.log` к ревью отсутствует.
+Повторно JVM/Rust/NDK/APK/устройство и полный Gradle tests не запускались.
+
+- `uniffiKotlin` и `compileGithubDebugKotlin` — PASS 7 ноября.
+- `compileGithubDebugUnitTestKotlin` — ожидаемый compile RED на отсутствующих
+  `OnlineConfiguration`, `OnlineReadiness`, `OnlineReady`, `awaitConfiguration`
+  и связанных ошибках вывода типов; exit 1 за 17m34s.
+- Runtime 12 readiness tests, два source guards и существующая JVM-база
+  ещё не выполнены; этот compile RED не является runtime-проверкой.
+- JDK 21.0.13: `/home/puflik/.local/opt/jdk21`; SDK:
+  `/home/puflik/Android/Sdk`; Gradle cache: `/home/puflik/.gradle`;
+  `RUSTUP_TOOLCHAIN=1.98.1`, `JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true`.
+  Команда 7 ноября: `bash ./gradlew --no-daemon -x :app:cargoNdkBuild :app:compileGithubDebugUnitTestKotlin --rerun`.
+- Старый Windows init и `-x :app:uniffiKotlin` не переносить: нужны настоящие
+  generated bindings текущего checkout. До реализации повторный compile не нужен.
+  После реализации scoped JVM GREEN запускается с Linux-окружением выше,
+  `-x :app:cargoNdkBuild`, прежними `--tests` фильтрами новых и защищённых suites;
+  `uniffiKotlin` не исключать. Нативные runtime проверки этим не подтверждаются.
+
+## Ревью плана 2026-11-08
+
+Фактически `gpt-6-astra`, `xhigh`; независимый researcher, без подагентов.
+Вход: HEAD `6fa3e6b`, исходные tests `9e00868`, незакоммиченные переносы Luna.
+Окна при собственной проверке 25%/76% (перед запуском координатор видел 18%/75%).
+Прочитаны правила основного checkout и ограниченные контексты; `graphify query`
+в основном root с budget 650 завершился, граф устарел, вывод сверялся с кодом.
+Экстракция/обновление графа не выполнялись; токены семантической экстракции — 0.
+
+**Вердикт: BLOCKED до устранения B1; production не разрешён.** API и выбранное
+разделение lifecycle/readiness согласованы, но имеющийся ABA-тест не защищает
+ключевой запрет раннего Applied. Семантика плана и защищённых tests этим ревью
+не изменяется; требуемую доработку выполняет отдельный планировщик.
+
+**B1 — ложное раннее Applied проходит защищённый ABA-сценарий.**
+`Yu5fOnlineReadinessTest.kt:277–314`, тест
+`new desired revision supersedes bound waiter and old completion cannot win ABA`:
+задержана только старая попытка. После `delayed.release.complete(Unit)` один
+`runCurrent()` завершает старую, OFF и новую BOTH; проверяется уже окончательный
+registry. Утверждение о revision требует лишь `> firstRevision`.
+Реализация, ошибочно публикующая Applied текущей revision при завершении старой
+попытки BOTH, разбудит newestWaiter раньше применения новой BOTH, затем оставшиеся
+применения поправят registry до assertions. Даже возврат старой revision > первой
+этим утверждением не исключён. Это статический контрпример, не выполненный mutant test.
+
+Точная доработка планировщику: перед продолжением старой попытки поставить в
+`inner.steps` отдельные заблокированные Step для OFF и новой BOTH. Освободить
+старую попытку, выполнить `runCurrent()`, проверить старт OFF и незавершённый
+newestWaiter: это наблюдаемая граница сразу после старого matching completion.
+Затем освободить OFF, выполнить `runCurrent()`, проверить старт новой BOTH,
+registry OFF и всё ещё незавершённый newestWaiter; consumer search, если добавлен,
+также не должен начаться. Затем освободить только новую BOTH и проверить
+Applied, корректный registry и соответствие возвращённой revision актуальному ack.
+Сохранить проверки Superseded старого waiter, порядка физических вызовов и ABA;
+после изменения теста обновить baseline и повторно согласовать этот сценарий.
+
+Сверенные инварианты и границы:
+
+- `OnlineRepository.kt` сохраняет основной API; capability отдельная. Snapshot
+  нормализуется копией множества, OFF даёт emptySet, неизвестные ID исключаются
+  перед distinct и сравнением ack; новый direct setEnabled создаёт новую revision.
+- `GatedOnlineRepository.kt:35–46` открывает исходные one-shot ворота в finally;
+  это сохраняется независимо от нового lifecycle. Pending/Failed не дают Applied;
+  mutex нельзя держать во время awaitConfiguration. Регистрация revision и очередь
+  физических apply должны сохранять порядок: один mutex без контроля регистрации
+  при конкурентных потоках сам по себе ещё не доказывает этот инвариант.
+- 12 тестов покрывают пассивное ожидание, предваряющий Switch запрос, timeout
+  4999/5000ms, waiter cancellation без отмены apply, failure mapping/recovery,
+  одинаковые прямые попытки и нормализацию. B1 ограничивает доказательство ABA.
+  Отмена самого apply, копирование mutable Set и реальная многопоточность отдельно
+  не проверены; при реализации нужны осмотр этих ветвей и соблюдение записанного
+  контракта, без превращения CancellationException в Failed.
+- `CoreOnlineRepository.kt:40–49`: разрешённого изменения одного setEnabled
+  достаточно для withContext(io) и передачи исключений; общие attempt/quietly
+  не менять. Два source guards проверяют форму forwarding, не native failure.
+  NETWORK→NO_NETWORK, UNAVAILABLE→PROVIDER_DOWN, остальные Exception→BROKEN;
+  Throwable не ловить. OnlineSwitch должен сохранить collect после non-cancellation
+  Exception; отмена scope должна выйти наружу, автоматический retry отсутствует.
+- `OnlineModule.kt` сейчас создаёт Gated внутри OnlineRepository provider;
+  нужен concrete singleton и два alias к нему. В двух новых tests DI wiring
+  не проверяется; равенство экземпляров должно быть подтверждено ревью реализации,
+  а генерация Hilt — соответствующей компиляцией. Второй Gated создаёт другой barrier.
+- База Gated tests защищает failed initial apply, timeout, cancellation и stream
+  interruption; radio/searchIn suites сохраняют исходный gate. Shared/native
+  контракты остаются защищёнными; compile не заменяет их runtime. Текущая правка
+  не затрагивает production, журнал, CRDT, миграции, relinking или recovery данных;
+  data-reviewer не требуется для этого объёма. При расширении — отдельный Astra max.
+
+Подготовка стиля: ошибочный перенос `inner.attempts` возвращён в исходную форму;
+исправлен только соседний длинный `assertThat(revision(awaitConfiguration(...)))`
+переносами и trailing commas. Значения/вызовы/assertions сохранены. Непустой
+`git diff -w` при переносе строк не доказывает семантическое изменение.
+Cached plugin JAR содержит `BaseKtLintCheckTask` (KtLint, другой регистр);
+временный init использует проверенный `setSource(Object)` через runtime-задачу,
+без typed import. Проверяются ровно два новых файла, перед выполнением сверяется
+полный source set; compile/test/cargo/uniffi tasks приложения запрещены guard.
+Настройка: `/tmp/plinth-ready-review-ktlint.init.gradle`;
+лог: `/tmp/plinth-ready-review-ktlint.log`.
+
+**Scoped ktlint: PASS, exit 0, BUILD SUCCESSFUL in 2m 10s, 11 tasks executed.**
+Команда (с Linux-окружением выше):
+`bash ./gradlew --no-daemon -I /tmp/plinth-ready-review-ktlint.init.gradle :app:plinthReadyScopedLint --rerun-tasks`.
+Выбрана существующая `:app:runKtlintCheckOverAndroidTestDebugSourceSet`, но её
+source явно заменён ровно двумя новыми JVM test-файлами; имя задачи не означает
+проверку androidTest. Лог подтверждает оба filename и выполнение проверки.
+Вспомогательный included build-logic перекомпилировался; app compilation,
+unit-test runtime, Rust/UniFFI, NDK, APK и устройство не запускались.
+Потребовалась одна новая обоснованная настройка, коррекция после запуска не нужна.
+
+`git diff --check` — PASS; просмотренный test diff содержит только переносы
+в одном утверждении и три trailing commas. По сравнению с `9e00868` единственная
+правка в `app/` — этот тест; production, второй новый тест, fixtures и вся старая
+защищённая база неизменны. В локальный коммит входят только taskfile и стиль;
+итоговый hash baseline назначает координатор после коммита. Push не выполнялся.
