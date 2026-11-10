@@ -28,13 +28,11 @@ Codex на ноутбуке установлен.
    Запускайте wrapper через `bash ./gradlew`: Git хранит его без executable bit.
    Выбирайте Linux-пути явно, например ~/src/Plinth и ~/src/Plinth-yu5f-ready;
    прежние C:\claude\... служат историческими примерами.
-5. План и тесты **yu5f-ready** опубликованы в `origin/work/yu5f-ready`
-   до `6ff822f` 9 ноября; коммиты сохраняют подготовку и независимое ревью.
-   Compile RED подтверждён 7 ноября, scoped ktlint PASS — 8 ноября;
-   B1 устранён в `005ba5e` 9 ноября, независимое Astra-review PASS;
-   этот коммит назначен окончательным baseline защищённых тестов. После правки
-   scoped ktlint повторно PASS. Следующий шаг — реализация принятого плана;
-   readiness API пока отсутствует, runtime не проверен.
+5. Реализация **yu5f-ready** опубликована в `origin/work/yu5f-ready`
+   (`1ded175`, 9 ноября); защищённый baseline — `005ba5e`.
+   JVM 66/66, AndroidTest compile и scoped ktlint PASS; независимое ревью
+   реализации PASS. Native runtime/телефон не проверены. На 11 ноября
+   подтверждение CI `42517435908` и интеграция ещё ожидаются.
    Linux worktree — `/home/puflik/src/Plinth-yu5f-ready`.
    Исходный handoff находится в
    `origin/work/yu5f:docs/work/yu5f.md`. Ветка опубликована, исходный HEAD
