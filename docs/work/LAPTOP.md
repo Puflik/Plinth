@@ -29,7 +29,7 @@ Codex на ноутбуке установлен.
    Выбирайте Linux-пути явно, например ~/src/Plinth и ~/src/Plinth-yu5f-ready;
    прежние C:\claude\... служат историческими примерами.
 5. Реализация **yu5f-ready** опубликована в `origin/work/yu5f-ready`
-   (`1ded175`, 9 ноября); защищённый baseline — `005ba5e`.
+   (production `1ded175`, сохранённое ревью `bd04e34`); baseline — `005ba5e`.
    JVM 66/66, AndroidTest compile и scoped ktlint PASS; независимое ревью
    реализации PASS. Native runtime/телефон не проверены. На 11 ноября
    подтверждение CI `42517435908` и интеграция ещё ожидаются.
