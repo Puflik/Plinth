@@ -11,7 +11,7 @@
 - **Планировщик, фактически:** `gpt-6.1-sol`, `xhigh`.
 - **Исполнитель:** `gpt-6.1-sol`, `xhigh`: ограниченная конкурентность и cancellation.
 - **План до реализации:** Astra xhigh согласовал контракт 2026-11-08; B1 закрыт независимым узким review 2026-11-09, PASS; разрешение координатора на CoreOnlineRepository.setEnabled получено.
-- **Статус:** план принят, защищённый baseline зафиксирован; следующий этап — реализация по разрешённым файлам. Production ещё не реализована; исторический compile RED подтверждён, runtime не запускался, scoped ktlint PASS после B1. Запрет push 8 ноября исполнен; публикация 9 ноября разрешена.
+- **Статус:** реализация `1ded175` опубликована 2026-11-09; локальные 66 JVM-тестов, компиляция AndroidTest и scoped ktlint PASS; независимое ревью реализации PASS. На 2026-11-11 итог CI ещё не подтверждён; слияние ожидает GREEN.
 
 ## Цель
 
@@ -360,7 +360,7 @@ paths. Production diff содержит только пять разрешённ
 
 ## Ревью
 
-Независимый Astra xhigh проверил план 2026-11-08; заключение и B1 ниже. Если выяснится влияние на пользовательские данные — Astra max до кода.
+Независимый Astra xhigh проверил план 2026-11-08; B1 закрыт 2026-11-09. Отдельное ревью реализации 2026-11-09 — PASS, полный отчёт ниже. CI и слияние проверяет координатор.
 
 ## Проверка координатора 2026-11-06
 
@@ -673,3 +673,100 @@ Scoped ktlint новой подготовки PASS, diff check PASS. План м
 исполнителю Sol xhigh; реализация, её runtime проверки и последующее независимое
 ревью остаются отдельным этапом. Старые BLOCKED ниже заголовка — история,
 действующий статус указан в шапке. Граф не обновлялся.
+
+## Ревью реализации 2026-11-09
+
+Фактически `gpt-6-astra`, `xhigh`; независимое ограниченное ревью, без подагентов.
+Вход: опубликованный HEAD `1ded1758d4b171d96cd2c2fc065ede4ebd8c9902`,
+production diff от `6ff822f`, protected baseline `005ba5ea092f5c8858749761b59a3e0e9f3fd731`.
+Координатор передал разрешение автора продолжить в остатке бюджета; перед запуском
+77%/97%. Прочитаны правила основного checkout, контракт и отчёт исполнителя;
+`graphify query` выполнен с budget 400, граф отстаёт, доказательства сверяются с кодом.
+Семантическая экстракция/обновление графа не запускались (токены экстракции: 0).
+
+Промежуточный trace: reservation physical apply и revision меняются вместе под
+`lifecycleLock`; отменённый queued вызов завершает свой tail только после
+предшественника. `finish` отбрасывает чужую Attempt, а waiter повторно проверяет
+revision после пробуждения. Проверка остальных границ продолжается.
+Gradle/Rust не повторяются; тестовые результаты берутся из отчёта исполнителя.
+
+**Вердикт реализации: PASS. Блокирующих замечаний в назначенном diff не найдено.**
+Это заключение по реализации и локальным свидетельствам; CI опубликованного HEAD
+не проверялся этим reviewer, PASS не означает CI GREEN и не выполняет слияние.
+
+Проверенные инварианты (все пути относительно корня worktree):
+
+- `app/src/main/kotlin/io/github/puflik/plinth/online/GatedOnlineRepository.kt:97`:
+  revision, current и applyTail резервируются одним monitor до suspension. Поэтому
+  перестановка потоков между begin и await не переставляет physical apply. На
+  `:53` попытка ждёт предшественницу; на `:69` отменённая queued B сохраняет
+  зависимость C от незавершённой A через A.finished → B.finished → C. Вызов inner
+  отменённой B не выполняется; CancellationException пробрасывается (`:56`).
+- Там же `:112`: чужое завершение не меняет current. На `:97` сначала обновляются
+  current и все привязки, затем завершаются старые waiters; Unconfined reentry
+  видит целостную revision. На `:88` уже разбуженный waiter проверяет revision
+  снова: begin между complete и resume даёт Superseded, включая ABA. Snapshot
+  списков исключает обход изменяемого набора во время reentry. Усиленный ABA
+  runtime-сценарий — `app/src/test/kotlin/io/github/puflik/plinth/online/Yu5fOnlineReadinessTest.kt:277`;
+  обе промежуточные границы не допускают раннего Applied.
+- Там же `:75`: timeout начинается на каждом await, охватывает Unobserved и
+  Pending; до совпадения configuration revision остаётся null, чужая попытка
+  не выдаёт преждевременный Superseded. Timeout/отмена удаляют только собственный
+  waiter; deferred не связан с apply Job. Отменённая apply не превращается в
+  Failed: без следующей попытки её Pending ограничен timeout каждого waiter.
+  Readiness не вызывает setEnabled/search.
+- `app/src/main/kotlin/io/github/puflik/plinth/online/OnlineRepository.kt:147`:
+  intersect создаёт отдельное множество известных ID, выключенная конфигурация
+  имеет emptySet. Одинаковая функция используется обоими входами Gated и
+  `app/src/main/kotlin/io/github/puflik/plinth/online/OnlineSwitch.kt:20`; mutation
+  исходного множества после нормализации не меняет сохранённую конфигурацию.
+  Это snapshot через Kotlin read-only Set, не runtime-unmodifiable wrapper;
+  контракт не требует защиты от намеренного cast/mutation внутри inner.
+  enabled=true со всеми отключёнными остаётся отличным от enabled=false.
+- `app/src/main/kotlin/io/github/puflik/plinth/online/GatedOnlineRepository.kt:56`:
+  cancellation отделена от Exception; NETWORK → NO_NETWORK, UNAVAILABLE →
+  PROVIDER_DOWN, остальные ошибки → BROKEN, исходное исключение rethrow. Fatal
+  JVM Error не ловится. `app/src/main/kotlin/io/github/puflik/plinth/online/CoreOnlineRepository.kt:40`
+  меняет только forwarding setEnabled на withContext(io).
+  `app/src/main/kotlin/io/github/puflik/plinth/online/OnlineSwitch.kt:23` сохраняет
+  последовательный collect, distinct нормализованных значений и продолжение
+  после Exception без retry; cancellation завершает collector.
+- `app/src/main/kotlin/io/github/puflik/plinth/online/GatedOnlineRepository.kt:67`
+  сохраняет открытие initial deferred/latch при любом исходе, делегирование и
+  cold stream `:171` не менялись.
+  `app/src/main/kotlin/io/github/puflik/plinth/di/OnlineModule.kt:38` создаёт один
+  scoped Gated, а providers `:47` и `:50` возвращают именно его; отсутствие
+  отдельного scope на alias не создаёт дополнительных экземпляров.
+
+Проверки и пределы: reviewer не запускал Gradle/Rust и не менял source/tests.
+Прочитаны имеющиеся XML: 9 JVM suites, **66 tests, 0 failures/errors/skipped**;
+из отчёта исполнителя — 12 readiness + 2 source guards внутри этого набора.
+Существующий `/tmp/plinth-yu5f-ready-final-20261109.log` подтверждает реальные
+`:app:testGithubDebugUnitTest` и `:app:compileGithubDebugAndroidTestKotlin`,
+BUILD SUCCESSFUL, 2m06s, 20 executed/35 up-to-date.
+`/tmp/plinth-yu5f-ready-lint-run1-20261109.log` подтверждает PASS, 57s, 11 executed;
+scope пяти production и двух tests взят из отчёта исполнителя. Неизменность
+всех test/sharedTest/androidTest относительно baseline ранее проверена координатором.
+Diff просмотрен: только пять разрешённых production-файлов и отчёт исполнителя;
+Core — только setEnabled, OnlineModule — только wiring.
+
+Отмена queued apply, мутация исходного Set после копирования и precise
+complete→resume race проверены статическим trace, отдельного runtime-теста
+этих границ в 12 readiness tests нет; многопоточный stress не выполнялся.
+Source guards не доказывают native CoreFailure runtime; AndroidTest compile
+не доказывает работу на устройстве. Native runtime, телефон, CI и слияние
+остаются за пределами этого ревью. CRDT, миграции, relinking/recovery и данные
+пользователя этим diff не меняются; решений о них reviewer не принимал.
+
+
+## Возобновление координатором 2026-11-11
+
+Реализация `1ded175` опубликована 9 ноября; независимый отчёт Astra PASS
+сохранился незакоммиченным после исчерпания окна. Сейчас он фиксируется вместе
+с актуальным статусом. Повторно подтверждены diff check и полная неизменность
+`app/src/test`, `app/src/sharedTest`, `app/src/androidTest` относительно `005ba5e`.
+9 ноября автоматическая проверка разрешения не смогла выполнить чтение GitHub CI
+из-за исчерпанного лимита; это не отказ по безопасности реализации. На входе
+11 ноября окна 11%/2%, прямой gh api вновь не подключается к api.github.com.
+CI run `42517435908` относится к `1ded175`; финальный результат ещё не подтверждён.
+До результата GREEN слияния нет; локальные проверки и review заново не запускаются.
