@@ -325,15 +325,7 @@ class Yu5fOnlineReadinessTest {
             assertThat(newestStep.started.isCompleted).isTrue()
             assertThat(newestApplication.isCompleted).isFalse()
             assertThat(newestWaiter.isCompleted).isFalse()
-            assertThat(inner.registry.applied.map { it.enabled }).containsExactly(true, true, false).inOrder()
-            assertThat(inner.registry.disabled).isEmpty()
-            assertThat(inner.attempts)
-                .containsExactly(
-                    Call(true, setOf(ARCHIVE)),
-                    Call(true, emptySet()),
-                    Call(false, emptySet()),
-                    Call(true, emptySet()),
-                ).inOrder()
+            assertOffAppliedBeforeNewestCompletion(inner)
 
             newestStep.release.complete(Unit)
             runCurrent()
@@ -415,6 +407,18 @@ class Yu5fOnlineReadinessTest {
                 ),
             ).isEqualTo(offRevision)
         }
+
+    private fun assertOffAppliedBeforeNewestCompletion(inner: ControlledOnline) {
+        assertThat(inner.registry.applied.map { it.enabled }).containsExactly(true, true, false).inOrder()
+        assertThat(inner.registry.disabled).isEmpty()
+        assertThat(inner.attempts)
+            .containsExactly(
+                Call(true, setOf(ARCHIVE)),
+                Call(true, emptySet()),
+                Call(false, emptySet()),
+                Call(true, emptySet()),
+            ).inOrder()
+    }
 
     private fun revision(ready: OnlineReady): Long {
         assertThat(ready).isInstanceOf(OnlineReady.Applied::class.java)

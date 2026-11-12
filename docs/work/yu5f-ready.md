@@ -826,3 +826,63 @@ literals и assertions сохранены; остальные байты тес�
 после независимого ревью. Commit этого этапа создаётся локально;
 push до ревью не разрешён. CI на новой правке ещё не запускался,
 последний опубликованный CI остаётся FAIL; слияние не выполняется.
+
+
+## Корректировка планировщика: detekt ABA 2026-11-12
+
+Фактически `gpt-6.1-sol`, `xhigh`; узкая задача планировщика без подагентов.
+Входной HEAD `a0fc4e9`, ветка `work/yu5f-ready`,
+worktree `/home/puflik/src/Plinth-yu5f-ready`. По решению координатора
+разрешены только ABA-метод, один private helper в
+`app/src/test/kotlin/io/github/puflik/plinth/online/Yu5fOnlineReadinessTest.kt`
+и этот отчёт. Имеющаяся правка `GatedOnlineRepository.kt` принадлежит
+координатору; она не редактируется и не включается в коммит планировщика.
+
+Исходное падение подтверждено существующим полным журналом
+`/tmp/plinth-ready-detekt-20261112.log`: `:app:detekt` FAIL, exit 1,
+LongMethod ABA-теста 66 при максимуме 60; отдельное production-замечание
+TooGenericExceptionCaught закрывает координатор. Новый поведенческий тест
+не требуется: рефакторинг сохраняет существующий защищённый сценарий,
+а регрессией формата служит штатный detekt.
+
+План и выполненная правка: три существующих assertions сразу после проверки
+`newestWaiter.isCompleted == false` после `offStep.release` извлечены в
+несуспендирующий `assertOffAppliedBeforeNewestCompletion(inner)` на том же
+месте. Выражения assertions и их порядок неизменны; helper ничего не
+изменяет и не переключает dispatcher. Остальные assertions, gates и
+`runCurrent()` сохранены. Программное обратное преобразование полностью
+восстановило исходные байты теста.
+
+Назначены ровно один полный `bash ./gradlew --no-daemon ktlintCheck detekt`
+и затем свежий `:app:testGithubDebugUnitTest --rerun` для readiness-класса
+с единственным исключением `-x :app:cargoNdkBuild`; `uniffiKotlin`
+не исключается. Логи в `/tmp`; после FAIL дальнейшие коррекции запрещены.
+Новый protected baseline и независимое ревью оставлены координатору.
+
+Полная общая проверка `bash ./gradlew --no-daemon ktlintCheck detekt`
+завершилась PASS, exit 0. Лог:
+`/tmp/plinth-ready-detekt-extraction-check-20261112.log`, exit-file рядом.
+Проверена текущая совокупность тестовой правки планировщика и annotation
+координатора; production в коммит планировщика не включается.
+Следующий назначенный запуск — свежие readiness JVM-тесты.
+
+Итог назначенных проверок:
+
+- Полный `ktlintCheck detekt`: PASS, exit 0, 1m31s;
+  30 tasks (4 executed, 26 up-to-date). `:app:detekt`,
+  `:app:runKtlintCheckOverMainSourceSet` и
+  `:app:runKtlintCheckOverTestSourceSet` реально выполнены.
+- `bash ./gradlew --no-daemon -x :app:cargoNdkBuild :app:testGithubDebugUnitTest --rerun --tests io.github.puflik.plinth.online.Yu5fOnlineReadinessTest`:
+  PASS, exit 0, 1m48s; 45 tasks (11 executed, 34 up-to-date).
+  XML подтверждает **12 tests, 0 failures/errors/skipped**, включая ABA.
+  `:app:testGithubDebugUnitTest` реально выполнена; `:app:uniffiKotlin`
+  включена в граф и UP-TO-DATE. Лог
+  `/tmp/plinth-ready-detekt-extraction-jvm-20261112.log`, exit-file рядом.
+- `git diff --check` PASS; hash production-файла до/после совпал.
+  Все выражения и порядок assertions сохранены точным извлечением,
+  остальные байты теста проверены обратным преобразованием.
+
+Локальный коммит содержит только тест и этот taskfile, push не выполняется.
+Новых поведенческих сценариев не добавлено; AndroidTest/Rust/native runtime
+не повторялись для извлечения helper. Обе Gradle-сессии завершены;
+новый protected baseline и независимое ревью ещё не назначены.
