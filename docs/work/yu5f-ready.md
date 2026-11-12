@@ -11,7 +11,7 @@
 - **Планировщик, фактически:** `gpt-6.1-sol`, `xhigh`.
 - **Исполнитель:** `gpt-6.1-sol`, `xhigh`: ограниченная конкурентность и cancellation.
 - **План до реализации:** Astra xhigh согласовал контракт 2026-11-08; B1 закрыт независимым узким review 2026-11-09, PASS; разрешение координатора на CoreOnlineRepository.setEnabled получено.
-- **Статус:** реализация `1ded175` опубликована 2026-11-09; локальные 66 JVM-тестов, компиляция AndroidTest и scoped ktlint PASS; независимое ревью реализации PASS. На 2026-11-11 итог CI ещё не подтверждён; слияние ожидает GREEN.
+- **Статус:** реализация `1ded175` опубликована 2026-11-09; 66 JVM-тестов, AndroidTest compile и независимое ревью реализации PASS. На 2026-11-12 CI `42517435908` (`1ded175`) и `43063804434` (`bd04e34`) FAIL в ktlint защищённого теста; Rust последнего run PASS. Прежний scoped ktlint PASS не подтверждает полный стиль. Планировщик исправил только перенос строки; полный штатный ktlint PASS (34s), независимое ревью и новый baseline ожидаются; слияние ожидает GREEN.
 
 ## Цель
 
@@ -770,3 +770,59 @@ Source guards не доказывают native CoreFailure runtime; AndroidTest 
 11 ноября окна 11%/2%, прямой gh api вновь не подключается к api.github.com.
 CI run `42517435908` относится к `1ded175`; финальный результат ещё не подтверждён.
 До результата GREEN слияния нет; локальные проверки и review заново не запускаются.
+
+
+## Корректировка планировщика: полный ktlint 2026-11-12
+
+Фактически `gpt-6.1-sol`, `xhigh`; узкая задача планировщика, без подагентов.
+Входной HEAD `bd04e34ee48ea2bf23b250dda79b877d51659eca`, ветка `work/yu5f-ready`,
+worktree `/home/puflik/src/Plinth-yu5f-ready`; перед изменением tracked clean.
+Разрешены только несемантический перенос `.inOrder()` в защищённом
+`app/src/test/kotlin/io/github/puflik/plinth/online/Yu5fOnlineReadinessTest.kt:318`
+и этот отчёт со статусом CI. Production и остальные тесты не меняются.
+
+Координатор подтвердил CI `43063804434` на `bd04e34`: FAIL в Android ktlint,
+Rust PASS; production run `42517435908` на `1ded175` также FAIL.
+Лог `/tmp/plinth-ready-ci-job-20261112.log` содержит единственную диагностику
+`Yu5fOnlineReadinessTest.kt:318:110 Expected newline before '.'`.
+Полный локальный baseline-запуск координатора завершился до этой правки:
+exit 1, 1m11s, 30 tasks (19 executed, 1 from cache, 10 up-to-date), та же
+единственная диагностика. Лог `/tmp/plinth-ready-full-ktlint-20261112.log`.
+Прежний scoped init больше не используется; его PASS не доказывает чистый стиль.
+
+План: ровно один перенос `.inOrder()` на следующую строку, один полный
+`bash ./gradlew --no-daemon ktlintCheck` с окружением актуального
+`/home/puflik/src/Plinth/docs/work/LAPTOP.md`, без init/filter/exclusions;
+затем diff check, whitespace diff и literal token equivalence с baseline
+`005ba5ea092f5c8858749761b59a3e0e9f3fd731`. Новые регрессионные тесты
+для чистого форматирования не нужны: существующий полный ktlint воспроизвёл
+ошибку; сценарии и assertions должны совпасть. JVM повтор не требуется.
+При повторном FAIL дальнейших исправлений и запусков не будет.
+
+Выполнен только перенос перед `.inOrder()`. Единственный полный повтор:
+**PASS**, exit 0, 34s, 29 tasks (2 executed, 27 up-to-date).
+`:app:runKtlintCheckOverTestSourceSet` и `:app:ktlintTestSourceSetCheck`
+реально выполнены, без FROM-CACHE/UP-TO-DATE. Команда:
+`bash ./gradlew --no-daemon ktlintCheck`, без scoped init, фильтров и исключений.
+Лог `/tmp/plinth-ready-format-full-ktlint-20261112.log`, exit code
+`/tmp/plinth-ready-format-full-ktlint-20261112.exit`.
+Окружение LAPTOP: JDK21, Android SDK `/home/puflik/Android/Sdk`,
+GRADLE_USER_HOME `/home/puflik/.gradle`, Rust `1.98.1`, IPv4 JVM option.
+JVM/AndroidTest/Rust не повторялись для whitespace; Gradle сессия завершена,
+фоновых сборок нет. По сообщению координатора, старый scoped init удалён
+из основной LAPTOP-памятки; новые дополнительные проверки не добавлялись.
+
+`git diff --check` PASS. `git diff -w` теста показывает только разделение
+одной строки на две (сам перенос строки этим флагом не скрывается).
+Literal/token equivalence относительно полного baseline `005ba5e` PASS:
+байты файла точно равны baseline после единственной разрешённой вставки
+newline/indent перед `.inOrder()` вне строковых литералов. Все токены,
+literals и assertions сохранены; остальные байты теста совпадают.
+Все другие `app/src/test`, `app/src/sharedTest`, `app/src/androidTest`
+неизменны относительно baseline; production неизменен относительно входного HEAD.
+В diff только целевой защищённый тест и этот taskfile.
+
+Новый protected baseline пока не назначается: это решение координатора
+после независимого ревью. Commit этого этапа создаётся локально;
+push до ревью не разрешён. CI на новой правке ещё не запускался,
+последний опубликованный CI остаётся FAIL; слияние не выполняется.

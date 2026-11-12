@@ -315,7 +315,8 @@ class Yu5fOnlineReadinessTest {
             assertThat(newestApplication.isCompleted).isFalse()
             assertThat(newestWaiter.isCompleted).isFalse()
             assertThat(inner.attempts)
-                .containsExactly(Call(true, setOf(ARCHIVE)), Call(true, emptySet()), Call(false, emptySet())).inOrder()
+                .containsExactly(Call(true, setOf(ARCHIVE)), Call(true, emptySet()), Call(false, emptySet()))
+                .inOrder()
 
             offStep.release.complete(Unit)
             runCurrent()
