@@ -44,6 +44,7 @@ class GatedOnlineRepository(
     private var applyTail = CompletableDeferred(Unit)
     private val waiters = mutableSetOf<Waiter>()
 
+    @Suppress("TooGenericExceptionCaught") // Любая ошибка применения даёт Failed; отмена пробрасывается отдельно.
     override suspend fun setEnabled(
         enabled: Boolean,
         disabled: Set<String>,
