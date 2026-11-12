@@ -29,10 +29,17 @@ Codex на ноутбуке установлен.
    Выбирайте Linux-пути явно, например ~/src/Plinth и ~/src/Plinth-yu5f-ready;
    прежние C:\claude\... служат историческими примерами.
 5. Реализация **yu5f-ready** опубликована в `origin/work/yu5f-ready`
-   (production `1ded175`, сохранённое ревью `bd04e34`); baseline — `005ba5e`.
-   JVM 66/66, AndroidTest compile и scoped ktlint PASS; независимое ревью
-   реализации PASS. Native runtime/телефон не проверены. На 11 ноября
-   подтверждение CI `42517435908` и интеграция ещё ожидаются.
+   (production `1ded175`, сохранённое ревью `bd04e34`, исправления CI `85d8de7`);
+   исторический semantic baseline — `005ba5e`, новый окончательный ещё не принят.
+   JVM 66/66, AndroidTest compile и независимое ревью реализации PASS.
+   Scoped ktlint оказался недоказательным; CI `42517435908` и `43063804434`
+   упали на переносе строки в ABA-тесте. Исправление `a0fc4e9` прошло полный
+   ktlint и независимое ревью 12 ноября. Затем detekt выявил намеренный catch
+   Exception и длину ABA-теста. Исправления `c3f057d`/`85d8de7` прошли полные
+   ktlint/detekt и свежие readiness JVM 12/12; независимое ревью этих двух
+   изменений ожидается после восстановления допустимого окна агентов.
+   CI `43258909999` для `85d8de7` запущен, последняя сверка — in_progress.
+   Native runtime/телефон не проверены; интеграции ещё не было.
    Linux worktree — `/home/puflik/src/Plinth-yu5f-ready`.
    Исходный handoff находится в
    `origin/work/yu5f:docs/work/yu5f.md`. Ветка опубликована, исходный HEAD
@@ -115,49 +122,24 @@ Astra-review выполнены 8 ноября; выявленный B1 закр
 [Android CLI](https://developer.android.com/tools/agents/android-cli),
 [бинарник Linux](https://dl.google.com/android/cli/latest/linux_x86_64/android-cli).
 
-## Scoped ktlint после проверки 2026-11-08
+## Проверка стиля: исправление памятки 2026-11-12
 
-Проверенный Astra init сохранён ниже, поскольку `/tmp` не является постоянным
-хранилищем. Он проверяет ровно два подготовительных теста и запрещает задачи
-компиляции/тестов приложения и Rust. Скопируйте блок во временный init; запуск
-из worktree задачи с Linux-окружением выше:
+Прежний scoped init больше не использовать. Его успешные запуски 8–9 ноября
+не подтверждают проверку всех заявленных файлов: CI на `1ded175` и `bd04e34`
+упал в `ktlintTestSourceSetCheck`. Журнал run `43063804434` указывает
+`Yu5fOnlineReadinessTest.kt:318:110`, `Expected newline before '.'`.
+12 ноября полный локальный `ktlintCheck` воспроизвёл ту же единственную ошибку
+(1m11s, 19 executed/1 from cache/10 up-to-date). Семантические JVM-проверки
+и независимый review этим не отменяются, но прежний scoped PASS не является
+доказательством чистого стиля. Точная причина пропуска в старом init не исследована.
+
+Для этой задачи использовать штатную команду, совпадающую с CI, с окружением
+из предыдущего раздела; NDK, устройство и компиляция приложения ей не нужны:
 
 ```bash
-bash ./gradlew --no-daemon -I /tmp/plinth-ready-ktlint.init.gradle :app:plinthReadyScopedLint --rerun-tasks
+bash ./gradlew --no-daemon ktlintCheck
 ```
 
-Результат 8 ноября: PASS, 11 tasks executed, 2m10s. Runtime тестов этим не проверен.
-Содержимое `/tmp/plinth-ready-ktlint.init.gradle`:
-
-```groovy
-gradle.projectsEvaluated {
-    def app = gradle.rootProject.findProject(':app')
-    if (app == null) return
-    def isCheck = { task ->
-        def klass = task.getClass()
-        while (klass != null) {
-            if (klass.name == 'org.jlleitschuh.gradle.ktlint.tasks.KtLintCheckTask') return true
-            klass = klass.superclass
-        }
-        false
-    }
-    def selected = app.tasks.findAll { isCheck(it) }.sort { it.name }.first()
-    def expected = [
-        app.file('src/test/kotlin/io/github/puflik/plinth/online/Yu5fOnlineReadinessTest.kt'),
-        app.file('src/test/kotlin/io/github/puflik/plinth/online/Yu5fCoreReadinessContractTest.kt')
-    ] as Set
-    selected.setSource(app.files(expected))
-    selected.doFirst {
-        assert selected.source.files == expected
-        println('SCOPED_KTLINT_TASK=' + selected.path)
-        println('SCOPED_KTLINT_FILES=' + selected.source.files*.name.sort())
-    }
-    app.tasks.register('plinthReadyScopedLint') { dependsOn(selected) }
-}
-gradle.taskGraph.whenReady { graph ->
-    def forbidden = graph.allTasks.findAll {
-        it.project.path == ':app' && (it.name.startsWith('compile') || it.name.startsWith('test') || it.name.contains('cargo') || it.name.contains('uniffi'))
-    }
-    assert forbidden.empty : 'Out-of-scope tasks: ' + forbidden*.path
-}
-```
+Вывод сохранять в файл, проверять exit code и конкретные выполненные задачи.
+Форматирование защищённого теста выполняет планировщик отдельным коммитом;
+координатор принимает его только после проверки неизменности утверждений.
