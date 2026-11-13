@@ -16,6 +16,7 @@ import io.github.puflik.plinth.online.DeviceDecoders
 import io.github.puflik.plinth.online.GatedOnlineRepository
 import io.github.puflik.plinth.online.HttpUrlTransport
 import io.github.puflik.plinth.online.MeteredNetwork
+import io.github.puflik.plinth.online.OnlineReadiness
 import io.github.puflik.plinth.online.OnlineRepository
 import io.github.puflik.plinth.online.OnlineSettings
 import io.github.puflik.plinth.online.OnlineStreams
@@ -36,10 +37,17 @@ object OnlineModule {
      */
     @Provides
     @Singleton
-    fun provideOnlineRepository(
+    fun provideGatedOnlineRepository(
         core: PlinthCore,
         @IoDispatcher io: CoroutineDispatcher,
-    ): OnlineRepository = GatedOnlineRepository(CoreOnlineRepository(core, HttpUrlTransport(), io, onlineProviders()))
+    ): GatedOnlineRepository =
+        GatedOnlineRepository(CoreOnlineRepository(core, HttpUrlTransport(), io, onlineProviders()))
+
+    @Provides
+    fun provideOnlineRepository(online: GatedOnlineRepository): OnlineRepository = online
+
+    @Provides
+    fun provideOnlineReadiness(online: GatedOnlineRepository): OnlineReadiness = online
 
     @Provides
     fun provideOnlineSettings(store: DataStore<Preferences>): OnlineSettings = DataStoreOnlineSettings(store)

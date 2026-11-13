@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version and a link to the source code, and a Licenses screen with the
   third-party components and their licences (also in the NOTICE file).
 
+### Changed
+
+- Online source configuration exposes an explicit completion signal for the
+  upcoming independent provider search, including failed, timed-out and
+  superseded changes. Search UI integration follows separately.
+
 ### Fixed
 
 - Removing a song from the queue with shuffle on no longer counts the

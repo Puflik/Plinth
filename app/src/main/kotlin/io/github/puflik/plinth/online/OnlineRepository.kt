@@ -116,3 +116,36 @@ sealed interface OnlineAlbum {
         val problem: OnlineProblem,
     ) : OnlineAlbum
 }
+
+/** Нужная конфигурация источников; ожидание не применяет её самостоятельно. */
+data class OnlineConfiguration(
+    val enabled: Boolean,
+    val disabledProviders: Set<String>,
+)
+
+/** Итог ожидания конкретной попытки применения конфигурации. */
+sealed interface OnlineReady {
+    data class Applied(
+        val revision: Long,
+    ) : OnlineReady
+
+    data class Failed(
+        val problem: OnlineProblem,
+    ) : OnlineReady
+
+    data object TimedOut : OnlineReady
+
+    data object Superseded : OnlineReady
+}
+
+/** Подтверждает применение конфигурации тем же репозиторием, которым управляет OnlineSwitch. */
+interface OnlineReadiness {
+    suspend fun awaitConfiguration(configuration: OnlineConfiguration): OnlineReady
+}
+
+/** Одинаковая нормализация для переключателя, прямого применения и ожидания; множество копируется. */
+internal fun OnlineConfiguration.normalized(): OnlineConfiguration =
+    OnlineConfiguration(
+        enabled,
+        if (enabled) disabledProviders.intersect(OnlineProviderIds.ALL.toSet()) else emptySet(),
+    )
