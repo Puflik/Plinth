@@ -1,9 +1,9 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **BLOCKED BY yu5f-ready.** План и защищённые тесты подготовлены; production не начинать до prerequisite.
+> **yu5f-ready принят; нужна подготовка интеграции.** Решение от 2026-11-13 ниже передаётся Sol: миграция constructors и новые защищённые guards, затем независимое ревью обновлённого baseline до production.
 
-- **Ветка:** `work/yu5f` · **Ворктри:** `C:\claude\Plinth-yu5f`
-- **Основа:** `main` на `af5ecb389b16478abe13769730ff6342e99b0198`
+- **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
+- **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
 - **Коммит тестов:** `cbe6934fcd82f203622a490031e9a0e054272fee` — все семь защищённых test/fixture файлов после ревью; исторический первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` больше не является опорным для исполнителя.
 - **Данные пользователя:** нет: только поиск и положение UI; журнал/каталог/CRDT не меняются.
 - **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04.
@@ -85,7 +85,7 @@ fun onRetryOnline(provider: String)
 
 ## Файлы
 
-Все пути ниже от корня ворктри `C:\claude\Plinth-yu5f`.
+Все пути ниже от корня ворктри `/home/puflik/src/Plinth-yu5f`.
 
 **Менять исполнителю после снятия блокеров:**
 
@@ -291,3 +291,108 @@ suspend fun awaitConfiguration(configuration: OnlineConfiguration): OnlineReady
 Push в этом проходе запрещён последующим сообщением координатора: он собирает локальные изменения для конкретного финального разрешения публикации. Push не предпринимался; отказ авто-review в этом агенте отсутствует. Основной repo/ветка main не менялись.
 
 Локальный baseline-коммит `cbe6934fcd82f203622a490031e9a0e054272fee`, обе даты 2026-11-04 (+05:00). Первый git add упёрся в sandbox Permission denied для worktree index.lock; разрешённый escalated локальный add/commit завершился успешно. Защищённые файлы после baseline не менялись; следующий commit только закрепляет hash в этой задаче. Фоновых сборок/ожиданий не оставлено: Gradle запускался --no-daemon, сессия проверки завершилась.
+
+
+## Интеграция принятого OnlineReadiness — решение 2026-11-13
+
+Исследователь фактически: **`gpt-6-astra`, `xhigh`**. Переданный координатором prerequisite `yu5f-ready` принят (CI `43258909999` SUCCESS), main `419ae48` внесён обычным merge в `work/yu5f`, HEAD `257546c`; опубликованная история сохранена. Worktree теперь `/home/puflik/src/Plinth-yu5f`. Проверено: семь исходных protected paths не отличаются от `cbe6934`. Это решение уточняет прежний открытый вопрос; независимые секции, пять строк, inline Show all и scroll остаются принятыми. Следующий этап — **Sol `xhigh`, план и guards**, не реализация.
+
+### Обязательный constructor и источник readiness
+
+Точная новая сигнатура, на которую планировщик вправе получить compile RED:
+
+```kotlin
+@HiltViewModel
+class SearchViewModel
+    @Inject
+    constructor(
+        library: LibraryRepository,
+        private val online: OnlineRepository,
+        onlineSettings: OnlineSettings,
+        private val actions: TrackActions,
+        private val readiness: OnlineReadiness,
+    ) : ViewModel()
+```
+
+Добавляется обязательный последний параметр без default и без secondary constructor. Запрещены production `Applied`-заглушка, cast `online as? OnlineReadiness` с fallback и обход барьера для fake. Готовый `OnlineModule` уже выдаёт `OnlineRepository` и `OnlineReadiness` из **одного singleton GatedOnlineRepository**; DI/OnlineSwitch/Gated/Core/API не менять. VM только вызывает `awaitConfiguration`; `setEnabled` принадлежит OnlineSwitch.
+
+VM строит `OnlineConfiguration(enabled, disabledProviders).normalized()` тем же существующим helper из `online`; сравнивает нормализованные значения. Неизвестный ID не создаёт нового ожидания/поиска. `enabled=false`, пустой query или отсутствие активных известных ID дают None и немедленную отмену, без ожидания acknowledgement. Смена settings не проходит через query debounce.
+
+### Граница readiness и начатого поиска
+
+На текущий query у каждого provider различать **ожидает readiness → searchIn начат → завершён**; завершение включает problem и допустимый `null` **только от searchIn**. Это внутреннее состояние, публичный UI остаётся Found(sections, loading). Ожидание барьера и поиск оба входят в loading.
+
+1. Новый/добавленный provider, ручной retry и возобновлённый после grace незавершённый provider сначала ждут acknowledgement **всей текущей нормализованной configuration**, а не только своего enabled-флага. До Applied ни одного searchIn. Подписка владеет job ожидания так же, как job поиска.
+2. При изменении configuration сначала согласовать membership: removed отменить/забыть и инвалидировать attempt, master-off/пустой query отменяют всю группу. Это выполняется до suspend-барьера, не ждёт его исхода. Added создаёт новую попытку.
+3. **Retained, который ещё ждёт readiness**, отменяет только старое ожидание и начинает новое для актуального набора; loading не исчезает. Инвалидируется token его wait/attempt. Старый Applied/Failed/TimedOut/Superseded после отмены игнорируется. Поэтому ожидание `{IA,YT}` не оставляет IA зависшим, когда актуальный набор уже `{IA}`.
+4. **Retained с уже начатым searchIn либо завершённым ответом** сохраняет job/ответ/attempt; изменение соседа не отменяет его и не запускает повторный searchIn. Это касается завершённых problem и null тоже. Новая configuration сама по себе не повторяет ошибки retained provider; остаётся ручной retry.
+5. Query generation меняется при новом settled query/полном сбросе, provider attempt — при его отмене/retry/пересоздании; отдельный token нормализованной configuration используется **только до старта searchIn**. Applied разрешает старт лишь после сериализованной проверки query generation, provider attempt, актуальных configuration/token и membership. Между проверкой и пометкой/вызовом searchIn не добавлять suspension. При публикации уже начатого retained поиска проверять query/provider attempt/membership, **не требовать прежней configuration/revision**: её смена из-за соседа не делает ответ устаревшим. `Applied.revision` — подтверждение применения, не глобальный cache key и не повод инвалидировать всех соседей.
+6. Все переходы и snapshot остаются сериализованы в Main. `WhileSubscribed(5_000)` сохраняется: до grace нет повторов; после grace отменяются только незавершённые jobs, их память не становится terminal null. При возвращении контекст сверяется до использования cache; завершённое сохраняется, незавершённое снова начинает с readiness. Старый finally не снимает loading новой попытки. Постоянной внутренней подписки/settings job вне lifecycle не добавлять.
+
+### Исходы барьера и Superseded/ABA
+
+| Исход текущего wait | Действие VM |
+|---|---|
+| `Applied(revision)` | После проверок выше ровно один searchIn данного provider. |
+| `Failed(problem)` | Завершённая `OnlineSection(provider, emptyList(), problem)`, loading снят; searchIn не вызывается. |
+| `TimedOut` | Та же завершённая секция с **`OnlineProblem.PROVIDER_DOWN`**, существующие текст/кнопка retry; без новых enum/строк. |
+| `Superseded` | Это смена попытки применения, а не provider error или null: согласовать актуальные settings и заново ждать, если provider ещё находится в readiness-фазе. |
+
+Для Superseded не ждать обязательной следующей emission settings: при **ABA** последнее значение может снова быть A либо промежуточное B склеено Flow, а старый waiter A уже привязан к прежней revision. Тогда новый await нужен и для равного значения A. Каждый актуальный результат Superseded порождает ровно одно новое ожидание, прежний результат не обрабатывается повторно; одновременная смена settings и Superseded не создают два актуальных wait. Не перезапускать соседний searchIn и не сбрасывать loading/cache всей группы.
+
+Это реакция на событие барьера, **не polling**: никаких delay/retry таймеров, ожидания settings через многократный first(), либо циклов по сохранённому Superseded. Готовый Gated (`awaitConfiguration/begin`, строки 76–109) выдаёт Superseded лишь при реальной смене revision после привязки waiter; при стабильном состоянии новый вызов либо suspends до подходящего применения/timeout, либо возвращает Applied/Failed. Повтор возможен лишь после нового Superseded от новой попытки или изменения configuration. Контракт не требует поддерживать некорректный fake, бесконечно возвращающий Superseded без смены попыток. Повторяющийся настоящий churn остаётся отменяемым ожиданием; окончание каждого ожидания ограничивает имеющийся waitLimit. Дополнительный VM timeout/произвольная задержка и новый публичный readiness Flow не нужны.
+
+Failed/TimedOut кешируются как проблема до ручного retry/новой попытки по обычным правилам; повторная подписка их не переигрывает. Ручной retry снова ждёт readiness, не переприменяет настройки; если Gated по-прежнему Failed, снова показывает ту же проблему без поиска. `CancellationException` пробрасывается; остальные Exception сохраняют принятое BROKEN-поведение попытки, Error не ловить. Ни timeout, ни failure, ни supersession, ни отмена не превращаются в успешную пустую/null-секцию.
+
+### Точные разрешённые пути планировщика и миграция
+
+Для следующего этапа **только планировщику**, до исполнителя, разрешены перечисленные ниже изменения; это явное узкое исключение прежней защиты пяти изменяемых тестов. В восьми существующих файлах менять только import нового fixture и единственный вызов: `SearchViewModel(library, online, settings, actions, readiness = FakeOnlineReadiness())` с сохранением существующих четырёх аргументов. Не менять assertions, test names, counters, timing, delegates или поведение прежних fixtures.
+
+| Полный путь от корня worktree | Разрешённое изменение |
+|---|---|
+| `docs/work/yu5f.md` | Актуальные статусы, план/guards, новый baseline, фактические проверки и отчёт. |
+| `app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelCancelTest.kt` | Только constructor/import. |
+| `app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelRetryTest.kt` | Только constructor/import. |
+| `app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelTest.kt` | Только constructor/import. |
+| `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsTest.kt` | Только constructor/import. |
+| `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt` | Только constructor/import. |
+| `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/SearchFieldTest.kt` | Только constructor/import. |
+| `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsScreenTest.kt` | Только constructor/import. |
+| `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt` | Только constructor/import. |
+| `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineReadiness.kt` | Новый test-only `class FakeOnlineReadiness : OnlineReadiness`, немедленный `Applied(1L)`; только для прежних тестов. |
+| `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fReadinessSearchTest.kt` | Новый защищённый файл guards и его private controlled barrier/repository fixtures. |
+
+Итого **5 unit + 3 androidTest constructors**, не 4+4 (исправление итоговой опечатки инвентаризации). Старые `FakeOnlineRepository.kt` и `TestYoutubeOnline.kt` остаются побитово относительно `cbe6934`; им не добавлять readiness/delegation. Новый immediate fixture не попадает в production/DI и не используется в readiness guards.
+
+ControlledReadiness в новом testfile записывает **отдельный объект на каждый вызов**: configuration, deferred outcome и наблюдение отмены. Тест вручную завершает конкретный вызов, не все вызовы равной configuration: это существенно для ABA. Новый await по умолчанию suspends; никакого default Applied/Superseded. Recording repository отдельно фиксирует searchIn/provider/query/отмену и позволяет задержать ответ; `search` и `setEnabled` считаются запрещёнными вызовами VM. Достаточно имеющихся coroutine-test/CompletableDeferred, без зависимостей и изменения production ради теста.
+
+После миграции планировщик фиксирует новый защищённый commit: восемь callers, новый shared fixture и guards, плюс прежние два неизменённых repository fixtures входят в список защиты (12 путей всего). Он показывает diff от `cbe6934`: только constructor/import в пяти прежних защищённых callers, два fixtures неизменны; три дополнительных callers — только тот же plumbing. Новый baseline не стирает историческую опору. Исполнитель не получает права менять ни один из этих 12 файлов. Его production-список выше остаётся прежним; интеграция readiness целиком в разрешённом SearchViewModel.
+
+### Acceptance guards до передачи исполнителю
+
+Новый файл проверяет реальные состояния/calls на virtual scheduler; без reflection обхода нового обязательного constructor, live network и sleep. Эти guards дополняют прежние progressive/lifecycle/UI tests:
+
+1. **Pending → Applied:** после debounce обе активные секции в loading, библиотека доступна; до каждого управляемого Applied соответствующего wait `searchIn` отсутствует. После Applied ровно один вызов на ID; ответ одного появляется при pending соседе. На всех сценариях aggregate `search` и VM `setEnabled` равны нулю.
+2. **Failed/TimedOut:** каждый исход снимает только свой loading, сохраняет точный problem/PROVIDER_DOWN и соседа; searchIn данного ID отсутствует, результат не null и не empty-success. Retry создаёт новое readiness ожидание; поиск только после нового Applied. Переподписка не повторяет завершённую проблему.
+3. **Retained readiness при смене набора:** оба ждут C0; отключить YT — его wait отменён/ID исчез, ожидание retained IA для C0 тоже отменено и ровно одно новое для C1. Запоздалый Applied C0 ничего не запускает; Applied C1 запускает ровно один IA searchIn. Симметричный случай добавления YT: pending IA переведён на C1, added YT ждёт C1, старый ack не выпускает ни одного.
+4. **Superseded/ABA:** waiter A1 → Superseded при актуальном A (без новой settings emission) → ровно один новый pending waiter A2; repeated runCurrent не добавляет calls, loading сохраняется, searchIn отсутствует. Applied только A2 запускает один поиск. Отдельно сменить configuration A→B→A с разными wait objects и доставить поздний A1/старый Superseded: старые outcomes не стартуют запрос и не отменяют A2. Совпадение значений не заменяет attempt identity.
+5. **Удаление/master-off во время pending и searchIn:** отмена наблюдается после обработки settings, до release любого ack/ответа и без продвижения timeout; ID исчезает либо None. Позднее завершение игнорируется. Повторное включение того же provider создаёт новую попытку, ожидающую нового acknowledgement; прежний ack не разрешает поиск.
+6. **Сохранение соседа:** отдельно finished и in-flight IA при добавлении/удалении YT; IA не отменяется/не повторяется и его запоздавший результат принимается после смены configuration. Меняется только ожидание/поиск YT; не возвращать IA в loading, если он завершён. Аналогично section retry не трогает соседа. Unknown disabled ID не создаёт wait/search/cancel.
+7. **Lifecycle readiness:** уход менее grace сохраняет wait; более grace отменяет pending wait/search и не делает terminal null. Возврат повторяет только незавершённых с актуальным configuration; finished/error/null snapshot остаётся. Старые завершения/finally после restart не убирают новый loading. Пустое поле отменяет ожидание немедленно, новый settled query отсекает старые outcomes.
+
+Планировщик записывает RED строго по новой сигнатуре и guards, затем нужные compile/style checks по Linux-памятке; production для получения RED не менять. Независимое Astra-ревью до исполнителя проверяет отсутствие ослаблений и границу pending/started, после реализации — те же guards и прежнюю приёмку UI. Не выдавать compile RED за runtime-воспроизведение readiness-гонок.
+
+Стоп и вопрос координатору, если guards требуют изменить готовый readiness/DI/API, production на этапе планирования, файл вне списка, assertions старых тестов либо принятые lifecycle/UI-инварианты; обход constructor или ослабление guards не допускаются. Повторное падение проверки после одной коррекции — прежний стоп с отчётом.
+
+### Проверки исследования и пределы
+
+Исследование read-only по коду: bounded source/graphify query, constructor inventory, protected diff. Graphify отстаёт от readiness; решения сверены с текущими `OnlineRepository.kt:121–150`, `GatedOnlineRepository.kt:76–109`, `OnlineSwitch.kt:20–31`, `OnlineModule.kt:39–50`, `SearchViewModel.kt:85–95`, `SearchScreen.kt:291–296`. PROVIDER_DOWN соответствует существующему «не отвечает», BROKEN — «ответил непонятно». Сохранность каталога/CRDT/перепривязка/восстановление не затрагиваются, data reviewer не требуется.
+
+В этом проходе production/tests не менялись, build/emulator/commit/push не запускались; отчёт по ходу `/tmp/plinth-yu5f-readiness-design-20261113.md`. По сообщению координатора полные ktlintCheck+detekt текущего `257546c` прошли (1m13s, 30 tasks: 8 executed/22 cache; лог `/tmp/plinth-yu5f-style-baseline-20261113.log`), эти проверки здесь не повторялись. Это baseline до новых guards, а не проверка будущей интеграции. Запись общей decisions/обновление графа остаются координатору в конце волны.
+
+Координатор принял исследовательское решение 2026-11-13. Следующий запуск —
+Sol xhigh для перечисленных migrations/guards, затем независимое ревью;
+production пока не начинать. Linux-команды брать из актуального LAPTOP,
+прежние PowerShell-примеры выше исторические. На момент передачи окна
+77%/36%, новый агент не запускается при пороге 65%; фактический сброс
+пятичасового окна — 13 ноября 13:17 +05:00, перед запуском сверить заново.
