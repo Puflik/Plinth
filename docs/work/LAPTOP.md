@@ -28,23 +28,19 @@ Codex на ноутбуке установлен.
    Запускайте wrapper через `bash ./gradlew`: Git хранит его без executable bit.
    Выбирайте Linux-пути явно, например ~/src/Plinth и ~/src/Plinth-yu5f-ready;
    прежние C:\claude\... служат историческими примерами.
-5. Реализация **yu5f-ready** опубликована в `origin/work/yu5f-ready`
-   (production `1ded175`, сохранённое ревью `bd04e34`, исправления CI `85d8de7`);
-   исторический semantic baseline — `005ba5e`, новый окончательный ещё не принят.
-   JVM 66/66, AndroidTest compile и независимое ревью реализации PASS.
-   Scoped ktlint оказался недоказательным; CI `42517435908` и `43063804434`
-   упали на переносе строки в ABA-тесте. Исправление `a0fc4e9` прошло полный
-   ktlint и независимое ревью 12 ноября. Затем detekt выявил намеренный catch
-   Exception и длину ABA-теста. Исправления `c3f057d`/`85d8de7` прошли полные
-   ktlint/detekt и свежие readiness JVM 12/12; независимое ревью этих двух
-   изменений ожидается после восстановления допустимого окна агентов.
-   CI `43258909999` для `85d8de7` запущен, последняя сверка — in_progress.
-   Native runtime/телефон не проверены; интеграции ещё не было.
-   Linux worktree — `/home/puflik/src/Plinth-yu5f-ready`.
-   Исходный handoff находится в
-   `origin/work/yu5f:docs/work/yu5f.md`. Ветка опубликована, исходный HEAD
-   365fbb3aee3eb405b15ebd9968bc97867e503554; baseline защищённых тестов
-   cbe6934fcd82f203622a490031e9a0e054272fee. Сверьте с fetch перед работой.
+5. **yu5f-ready принята 2026-11-13**: независимые ревью PASS, CI
+   `43258909999` на `85d8de7` SUCCESS. Линейный перенос в main: production
+   `c8b01e0`, итоговый protected baseline `f3711cf`, annotation `1293542`.
+   Код/тесты совпадают с проверенной рабочей веткой. JVM 66/66 и AndroidTest
+   compile ранее PASS; после механических правок полный ktlint/detekt и
+   свежие readiness JVM 12/12 PASS. Старый scoped init не использовать.
+   Рабочая ветка/worktree `work/yu5f-ready`,
+   `/home/puflik/src/Plinth-yu5f-ready` ожидают уборки после сверки main CI.
+6. Следующая задача — `yu5f`; её исходный handoff находится в
+   `origin/work/yu5f:docs/work/yu5f.md`, HEAD `365fbb3`, baseline `cbe6934`.
+   Перед реализацией уточнить внедрение OnlineReadiness и защищённые тесты
+   по фактическому API; это отдельная подготовка планировщика и ревью.
+   UI проверять на выбранном эмуляторе, телефон не подставлять автоматически.
 
 Граф построен на 7c5192a (2026-10-19), сильно отстаёт; Windows CLI сломан.
 На Linux 2026-11-07 `graphify query` выполнен успешно, установлен graphify 0.9.103;
