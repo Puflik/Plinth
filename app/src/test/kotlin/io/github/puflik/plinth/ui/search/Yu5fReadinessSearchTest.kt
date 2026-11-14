@@ -43,39 +43,7 @@ import org.junit.Test
 
 /** Real VM guards: each wait and each provider call has its own manually released outcome. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class Yu5fReadinessSearchTest {
-    private val dispatcher = StandardTestDispatcher()
-    private val settings = FakeOnlineSettings()
-    private val readiness = ControlledReadiness()
-    private val online = RecordingOnline()
-    private val library = FakeLibraryRepository()
-    private val viewModel by lazy {
-        val scope = CoroutineScope(Dispatchers.Unconfined)
-        val actions =
-            TrackActions(
-                PlaybackController(FakeAudioEngine(), scope),
-                FakeUserDataRepository(),
-                FakePlaylistRepository(),
-                scope,
-            )
-        SearchViewModel(library, online, settings, actions, readiness = readiness)
-    }
-
-    @Before
-    fun setUp() {
-        Dispatchers.setMain(dispatcher)
-    }
-
-    @After
-    fun tearDown() {
-        try {
-            assertThat(online.bulkCalls).isEqualTo(0)
-            assertThat(online.settingsCalls).isEqualTo(0)
-        } finally {
-            Dispatchers.resetMain()
-        }
-    }
-
+class Yu5fReadinessSearchTest : Yu5fReadinessHarness() {
     @Test
     fun `library and loading appear before acknowledgement and each Applied starts only one provider`() =
         runTest(dispatcher) {
@@ -91,11 +59,8 @@ class Yu5fReadinessSearchTest {
             assertThat(online.calls).isEmpty()
 
             readiness.calls
-
                 .first()
-
                 .outcome
-
                 .complete(OnlineReady.Applied(1L))
             runCurrent()
             val first = online.calls.single()
@@ -108,11 +73,8 @@ class Yu5fReadinessSearchTest {
             assertThat(online.calls).hasSize(1)
 
             readiness.calls
-
                 .last()
-
                 .outcome
-
                 .complete(OnlineReady.Applied(1L))
             runCurrent()
             assertThat(online.calls.map { it.provider }).containsExactly(ARCHIVE, YOUTUBE)
@@ -538,7 +500,10 @@ class Yu5fReadinessSearchTest {
             assertThat(online.calls.map { it.provider }).containsExactly(ARCHIVE, YOUTUBE)
             assertThat(online.calls.map { it.cancelled }).containsExactly(false, false)
         }
+}
 
+@OptIn(ExperimentalCoroutinesApi::class)
+class Yu5fReadinessLifecycleTest : Yu5fReadinessHarness() {
     @Test
     fun `return within grace keeps the same pending waits`() =
         runTest(dispatcher) {
@@ -678,21 +643,56 @@ class Yu5fReadinessSearchTest {
             assertThat(online.calls).isEmpty()
             assertThat(viewModel.uiState.value.online).isEqualTo(OnlineResults.None)
         }
+}
 
-    private fun TestScope.screen(): Job =
+@OptIn(ExperimentalCoroutinesApi::class)
+abstract class Yu5fReadinessHarness {
+    protected val dispatcher = StandardTestDispatcher()
+    protected val settings = FakeOnlineSettings()
+    protected val readiness = ControlledReadiness()
+    protected val online = RecordingOnline()
+    protected val library = FakeLibraryRepository()
+    protected val viewModel by lazy {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val actions =
+            TrackActions(
+                PlaybackController(FakeAudioEngine(), scope),
+                FakeUserDataRepository(),
+                FakePlaylistRepository(),
+                scope,
+            )
+        SearchViewModel(library, online, settings, actions, readiness = readiness)
+    }
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        try {
+            assertThat(online.bulkCalls).isEqualTo(0)
+            assertThat(online.settingsCalls).isEqualTo(0)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    protected fun TestScope.screen(): Job =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
 
-    private fun TestScope.search(text: String = QUERY) {
+    protected fun TestScope.search(text: String = QUERY) {
         viewModel.onQuery(text)
         advanceTimeBy(SearchViewModel.DEBOUNCE_MS + 1)
         runCurrent()
     }
 
-    private fun loading(vararg providers: String) = assertYu5fLoading(viewModel.uiState.value.online, *providers)
+    protected fun loading(vararg providers: String) = assertYu5fLoading(viewModel.uiState.value.online, *providers)
 
-    private fun sections(): List<OnlineSection> = (viewModel.uiState.value.online as OnlineResults.Found).sections
+    protected fun sections(): List<OnlineSection> = (viewModel.uiState.value.online as OnlineResults.Found).sections
 
-    private fun retry(provider: String) {
+    protected fun retry(provider: String) {
         val method =
             SearchViewModel::class.java.methods.singleOrNull {
                 it.name == "onRetryOnline" && it.parameterTypes.contentEquals(arrayOf(String::class.java))
@@ -701,7 +701,7 @@ class Yu5fReadinessSearchTest {
         checkNotNull(method).invoke(viewModel, provider)
     }
 
-    private class WaitCall(
+    protected class WaitCall(
         val configuration: OnlineConfiguration,
     ) {
         val outcome = CompletableDeferred<OnlineReady>()
@@ -718,7 +718,7 @@ class Yu5fReadinessSearchTest {
             }
     }
 
-    private class ControlledReadiness : OnlineReadiness {
+    protected class ControlledReadiness : OnlineReadiness {
         val calls = mutableListOf<WaitCall>()
 
         override suspend fun awaitConfiguration(configuration: OnlineConfiguration): OnlineReady {
@@ -728,7 +728,7 @@ class Yu5fReadinessSearchTest {
         }
     }
 
-    private class SearchCall(
+    protected class SearchCall(
         val provider: String,
         val query: String,
     ) {
@@ -746,7 +746,7 @@ class Yu5fReadinessSearchTest {
             }
     }
 
-    private class RecordingOnline : OnlineRepository by FakeOnlineRepository() {
+    protected class RecordingOnline : OnlineRepository by FakeOnlineRepository() {
         val calls = mutableListOf<SearchCall>()
         var bulkCalls = 0
             private set
@@ -775,28 +775,26 @@ class Yu5fReadinessSearchTest {
             return call.await()
         }
     }
+}
 
-    private companion object {
-        const val ARCHIVE = OnlineProviderIds.ARCHIVE
-        const val YOUTUBE = OnlineProviderIds.YOUTUBE
-        const val QUERY = "concert"
-        const val GRACE_MS = 5_000L
-        val ALL = OnlineConfiguration(true, emptySet())
-        val ARCHIVE_ONLY = OnlineConfiguration(true, setOf(YOUTUBE))
+private const val ARCHIVE = OnlineProviderIds.ARCHIVE
+private const val YOUTUBE = OnlineProviderIds.YOUTUBE
+private const val QUERY = "concert"
+private const val GRACE_MS = 5_000L
+private val ALL = OnlineConfiguration(true, emptySet())
+private val ARCHIVE_ONLY = OnlineConfiguration(true, setOf(YOUTUBE))
 
-        fun other(provider: String): String = if (provider == ARCHIVE) YOUTUBE else ARCHIVE
+private fun other(provider: String): String = if (provider == ARCHIVE) YOUTUBE else ARCHIVE
 
-        fun section(
-            provider: String,
-            problem: OnlineProblem? = null,
-        ): OnlineSection {
-            val results =
-                if (problem == null) {
-                    listOf(OnlineResult("$provider-$QUERY", OnlineKind.ALBUM, "$provider-$QUERY", null, null))
-                } else {
-                    emptyList()
-                }
-            return OnlineSection(provider, results, problem)
+private fun section(
+    provider: String,
+    problem: OnlineProblem? = null,
+): OnlineSection {
+    val results =
+        if (problem == null) {
+            listOf(OnlineResult("$provider-$QUERY", OnlineKind.ALBUM, "$provider-$QUERY", null, null))
+        } else {
+            emptyList()
         }
-    }
+    return OnlineSection(provider, results, problem)
 }
