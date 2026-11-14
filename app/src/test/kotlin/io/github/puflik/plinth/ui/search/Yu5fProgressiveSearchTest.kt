@@ -10,6 +10,7 @@ import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
+import io.github.puflik.plinth.online.FakeOnlineReadiness
 import io.github.puflik.plinth.online.FakeOnlineRepository
 import io.github.puflik.plinth.online.FakeOnlineSettings
 import io.github.puflik.plinth.online.OnlineProviderIds
@@ -49,7 +50,7 @@ class Yu5fProgressiveSearchTest {
                 FakePlaylistRepository(),
                 scope,
             )
-        SearchViewModel(FakeLibraryRepository(), online, settings, actions)
+        SearchViewModel(FakeLibraryRepository(), online, settings, actions, readiness = FakeOnlineReadiness())
     }
 
     @Before

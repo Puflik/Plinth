@@ -19,6 +19,7 @@ import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.online.FakeOnlineReadiness
 import io.github.puflik.plinth.online.FakeOnlineRepository
 import io.github.puflik.plinth.online.FakeOnlineSettings
 import io.github.puflik.plinth.ui.library.TrackActions
@@ -58,7 +59,13 @@ class SearchFieldTest {
         val scope = CoroutineScope(Dispatchers.Unconfined)
         val playback = PlaybackController(FakeAudioEngine(), scope)
         val actions = TrackActions(playback, FakeUserDataRepository(), FakePlaylistRepository(), scope)
-        SearchViewModel(library, FakeOnlineRepository(), FakeOnlineSettings(), actions)
+        SearchViewModel(
+            library,
+            FakeOnlineRepository(),
+            FakeOnlineSettings(),
+            actions,
+            readiness = FakeOnlineReadiness(),
+        )
     }
 
     @Before

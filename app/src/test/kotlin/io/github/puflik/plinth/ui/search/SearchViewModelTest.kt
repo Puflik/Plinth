@@ -11,6 +11,7 @@ import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.online.FakeOnlineReadiness
 import io.github.puflik.plinth.online.FakeOnlineRepository
 import io.github.puflik.plinth.online.FakeOnlineSettings
 import io.github.puflik.plinth.online.OnlineProviderIds
@@ -48,7 +49,9 @@ class SearchViewModelTest {
         TrackActions(playback, userData, FakePlaylistRepository(), CoroutineScope(Dispatchers.Unconfined))
     private val online = FakeOnlineRepository()
     private val onlineSettings = FakeOnlineSettings()
-    private val viewModel by lazy { SearchViewModel(library, online, onlineSettings, actions) }
+    private val viewModel by lazy {
+        SearchViewModel(library, online, onlineSettings, actions, readiness = FakeOnlineReadiness())
+    }
 
     private val yesterday = track(1, "Yesterday", "The Beatles")
     private val bohemian = track(2, "Bohemian Rhapsody", "Queen")

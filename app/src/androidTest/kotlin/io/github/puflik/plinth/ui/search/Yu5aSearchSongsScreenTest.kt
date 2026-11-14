@@ -18,6 +18,7 @@ import io.github.puflik.plinth.audio.engine.FakeAudioEngine
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
+import io.github.puflik.plinth.online.FakeOnlineReadiness
 import io.github.puflik.plinth.online.FakeOnlineSettings
 import io.github.puflik.plinth.online.TestSong
 import io.github.puflik.plinth.online.TestYoutubeOnline
@@ -53,7 +54,13 @@ class Yu5aSearchSongsScreenTest {
         val scope = CoroutineScope(Dispatchers.Unconfined)
         val playback = PlaybackController(engine, scope)
         val actions = TrackActions(playback, userData, FakePlaylistRepository(), scope)
-        SearchViewModel(FakeLibraryRepository(), online, FakeOnlineSettings(), actions)
+        SearchViewModel(
+            FakeLibraryRepository(),
+            online,
+            FakeOnlineSettings(),
+            actions,
+            readiness = FakeOnlineReadiness(),
+        )
     }
 
     private fun show() {

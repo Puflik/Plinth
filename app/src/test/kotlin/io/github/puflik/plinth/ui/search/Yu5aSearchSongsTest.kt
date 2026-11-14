@@ -11,6 +11,7 @@ import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
 import io.github.puflik.plinth.library.PlaylistRepository
+import io.github.puflik.plinth.online.FakeOnlineReadiness
 import io.github.puflik.plinth.online.FakeOnlineSettings
 import io.github.puflik.plinth.online.TestSong
 import io.github.puflik.plinth.online.TestYoutubeOnline
@@ -50,7 +51,15 @@ class Yu5aSearchSongsTest {
     private val radio = RecordingRadio()
     private val actions =
         TrackActions(playback, userData, playlists, CoroutineScope(Dispatchers.Unconfined), radio)
-    private val viewModel by lazy { SearchViewModel(FakeLibraryRepository(), online, FakeOnlineSettings(), actions) }
+    private val viewModel by lazy {
+        SearchViewModel(
+            FakeLibraryRepository(),
+            online,
+            FakeOnlineSettings(),
+            actions,
+            readiness = FakeOnlineReadiness(),
+        )
+    }
     private val events = mutableListOf<SongEvent>()
     private val key = songKey(TestSong.PROVIDER, TestSong.result)
 

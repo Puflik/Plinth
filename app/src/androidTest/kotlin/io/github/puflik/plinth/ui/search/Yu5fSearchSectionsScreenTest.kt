@@ -30,6 +30,7 @@ import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.library.FakeLibraryRepository
 import io.github.puflik.plinth.library.FakePlaylistRepository
 import io.github.puflik.plinth.library.FakeUserDataRepository
+import io.github.puflik.plinth.online.FakeOnlineReadiness
 import io.github.puflik.plinth.online.FakeOnlineSettings
 import io.github.puflik.plinth.online.OnlineProviderIds
 import io.github.puflik.plinth.online.OnlineRepository
@@ -60,7 +61,13 @@ class Yu5fSearchSectionsScreenTest {
                 FakePlaylistRepository(),
                 scope,
             )
-        SearchViewModel(FakeLibraryRepository(), online, FakeOnlineSettings(), actions)
+        SearchViewModel(
+            FakeLibraryRepository(),
+            online,
+            FakeOnlineSettings(),
+            actions,
+            readiness = FakeOnlineReadiness(),
+        )
     }
 
     private fun show() {

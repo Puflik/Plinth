@@ -1,12 +1,12 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **yu5f-ready принят; нужна подготовка интеграции.** Решение от 2026-11-13 ниже передаётся Sol: миграция constructors и новые защищённые guards, затем независимое ревью обновлённого baseline до production.
+> **STOP после второй неожиданной проверки: detekt LargeClass.** Readiness guards и миграции записаны; production не начинать. Нужен отдельный разрешённый проход разделения guard-класса в том же файле, новый baseline и независимое Astra xhigh review.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
-- **Коммит тестов:** `cbe6934fcd82f203622a490031e9a0e054272fee` — все семь защищённых test/fixture файлов после ревью; исторический первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` больше не является опорным для исполнителя.
+- **Коммит тестов:** новый baseline readiness guards будет закреплён после проверок 2026-11-14 (12 защищённых путей ниже); историческая опора семи файлов `cbe6934fcd82f203622a490031e9a0e054272fee`, первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` сохраняются для сравнения.
 - **Данные пользователя:** нет: только поиск и положение UI; журнал/каталог/CRDT не меняются.
-- **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04.
+- **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04 и 2026-11-14; последний проход — readiness guards, без production.
 - **Ограничения запуска:** ровно один агент, без вложенных агентов, реализации и массовых сборок. Перед запуском 75% пятичасового / 12% недельного окна; автор разрешил разовое исключение. Лимиты сообщил координатор.
 
 ## Цель
@@ -95,7 +95,7 @@ fun onRetryOnline(provider: String)
 - Новые дополнительные тесты, если нужны: `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchTest.kt`, `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchScreenTest.kt`.
 - `docs/work/yu5f.md` — только «Отчёт исполнителя».
 
-**Защищённые тесты и fixtures (не менять/удалять/глушить исполнителю):**
+**Защищённые тесты и fixtures (12 путей нового baseline; не менять/удалять/глушить исполнителю):**
 
 - `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt`.
 - `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt`.
@@ -104,6 +104,11 @@ fun onRetryOnline(provider: String)
 - `app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelTest.kt`.
 - `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineRepository.kt`.
 - `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/TestYoutubeOnline.kt`.
+- `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsTest.kt`.
+- `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/SearchFieldTest.kt`.
+- `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsScreenTest.kt`.
+- `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineReadiness.kt`.
+- `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fReadinessSearchTest.kt`.
 
 **Не трогать:** всё прочее, в частности старые тесты и sharedTest fixtures, `OnlineRepository`, `OnlineProviderIds`, Gated/Core repositories, core, MainActivity, PlinthNavHost, OnlineSongs, TrackActions, очередь, зависимости, AGENTS/.codex, CHANGELOG/tasks/decisions, plan. Защищённые тесты прошлых задач также сохраняют защиту. Никаких копий сборок/target основного repo.
 
@@ -199,7 +204,7 @@ git diff --check
 - Проверка упала второй раз после одной коррекции; отчёт, коммит и обычный push, без дальнейших попыток.
 - Недоступна прямая сеть или push отклонён — не использовать proxy/force и не обходить отклонение.
 
-## Статус передачи 2026-11-04
+## Исторический статус передачи 2026-11-04
 
 **BLOCKED BY yu5f-ready; исполнителя yu5f не запускать.** Исторические три блокера закрыты: inline принят, миграция сохранённых assertions выполнена, scoped ktlint зелёный после отдельной разрешённой коррекции. Новый baseline компилируется и имеет ожидаемые assertion failures на неизменённом production. Координатор принял отдельный prerequisite yu5f-ready; после его плана/тестов/реализации и ревью потребуется уточнить подключение readiness в SearchViewModel и новый опорный hash, если изменятся защищённые тесты. Текущий этап завершён, production не запускался.
 
@@ -396,3 +401,42 @@ production пока не начинать. Linux-команды брать из 
 прежние PowerShell-примеры выше исторические. На момент передачи окна
 77%/36%, новый агент не запускается при пороге 65%; фактический сброс
 пятичасового окна — 13 ноября 13:17 +05:00, перед запуском сверить заново.
+
+
+## Подготовка readiness guards — 2026-11-14
+
+Фактический планировщик: **`gpt-6.1-sol`, `xhigh`**; один агент, без вложенных. Вход: `work/yu5f` на `a344eee`, чистый worktree `/home/puflik/src/Plinth-yu5f`; координатор сообщил окна 3%/40%. Применяется принятое Astra-решение 2026-11-13 без нового архитектурного исследования. Данные пользователя не затрагиваются; требование Astra max для data-планов здесь неприменимо. До executor обязателен независимый Astra xhigh review нового baseline.
+
+План: восемь точных constructor/import migrations; новый sharedTest Applied fixture; отдельные реальные VM guards с управляемыми по identity ожиданиями/ответами. Затем штатные полные ktlintCheck/detekt, unit и AndroidTest Kotlin compile с ожидаемым RED только обязательного пятого аргумента. Runtime readiness-гонок при compile RED не заявлять. Production/DI/readiness API/зависимости и общие документы не меняются.
+
+Graphify query выполнен в основном repo (в sibling граф отсутствует); граф отстаёт, готовый OnlineReadiness API и существующие test fixtures сверены с текущими исходниками. Исторический style baseline 13 ноября не повторяется отдельно. Новые controlled fixtures различают каждый вызов даже при равной configuration и допускают адресную позднюю доставку после наблюдаемой отмены.
+
+### Записанные guards и точная миграция
+
+Новый `Yu5fReadinessSearchTest.kt`: 22 реальных VM сценария на virtual scheduler. Проверяются библиотека/два loading до ack; адресный Applied и независимые ответы; Failed и TimedOut→PROVIDER_DOWN с retry/cache; pending retarget при добавлении/удалении; Superseded без новой settings emission, отсутствие polling и ABA с разными objects; немедленная отмена pending/running при master-off/removal, reenable с новым ack; сохранение finished/in-flight/null/error соседей; retry без отмены соседа; неизвестные ID; return до/после grace, актуальная configuration после ухода, старый finally, blank/new query и отсутствие активных IDs. Общий aggregate search и setEnabled проверяются равными нулю после каждого сценария. Constructor вызывается напрямую с обязательным readiness; reflection сохранён лишь для ранее принятого onRetryOnline(String)/Found.loading, без обхода constructor.
+
+Восемь callers мигрированы только import/fifth argument и переносами constructor; исходные четыре аргумента, assertions, names, counters, timing и fixtures не менялись. Обратная подстановка и сравнение токенов с входным HEAD подтвердили все восемь; `FakeOnlineRepository.kt` и `TestYoutubeOnline.kt` побайтово равны `cbe6934`. Новый shared fixture только test-only Applied(1L); controlled barrier в guards его не использует. Исторический diff пяти protected callers от `cbe6934` сохраняется; добавлены три constructor callers и два новых файла, защита теперь 12 путей. Разрешённый scope текущего прохода — ровно 11 путей из принятого решения.
+
+### Команды текущей проверки (Linux)
+
+Во всех Gradle вызовах: `JAVA_HOME=/home/puflik/.local/opt/jdk21`, `ANDROID_HOME=/home/puflik/Android/Sdk`, `ANDROID_SDK_ROOT=/home/puflik/Android/Sdk`, `GRADLE_USER_HOME=/home/puflik/.gradle`, `RUSTUP_TOOLCHAIN=1.98.1`, `JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true`. Штатный `bash ./gradlew --no-daemon ktlintCheck detekt`; затем `bash ./gradlew --no-daemon --continue :app:compileGithubDebugUnitTestKotlin :app:compileGithubDebugAndroidTestKotlin -x :app:cargoNdkBuild`. `uniffiKotlin` не исключается, scoped init не используется. Исполнитель после реализации повторяет эти compile/style gates и прежние runtime/UI gates из задачи; compile RED не является исполнением JVM/UI guards.
+
+### Проверки по ходу
+
+Первый полный `ktlintCheck detekt` завершился exit 1 за 1m37s: 30 tasks, 5 executed/25 up-to-date. Единственная причина — ktlint method-chain-wrapping в 21 новом выражении readiness guard; detekt не достигнут. Лог `/tmp/plinth-yu5f-readiness-style-20261114.log`. Использована одна разрешённая коррекция: только переносы этих chains, без изменения guards/assertions. Повторный штатный прогон включает `--continue`, чтобы отдельно собрать style/detekt и ожидаемый constructor compile RED; второе неожиданное падение означает стоп без новой коррекции.
+
+Ранний промежуточный вывод о PASS ktlint отозван: `--continue` позже дописал результаты. Повторный полный `ktlintCheck` FAIL (шесть Needless blank line(s)); `detekt` FAIL: единственная находка `Yu5fReadinessSearchTest.kt:46:7`, `LargeClass`. Это второе неожиданное падение после одной коррекции, поэтому дальнейшие code/test правки **остановлены**. Текущий `--continue` завершён ниже; новых build/fix попыток после остановки не запускалось. Лог `/tmp/plinth-yu5f-readiness-gates-20261114.log`; detekt report `app/build/reports/detekt/detekt.xml`.
+
+Минимальный следующий разрешаемый координатором объём: разделить новые guards на два тестовых класса в том же разрешённом `Yu5fReadinessSearchTest.kt`, вынести общий harness/controlled fixtures там же, сохранить все 22 сценария, assertions и timing; не добавлять Suppress/allow и не менять protected старых тестов. Это предложенный отдельный корректирующий этап, здесь не выполнен. Независимое review до исполнителя ещё не состоялось; подготовка не выдаётся за готовый GREEN baseline.
+
+### Итоговый отчёт планировщика — остановка по лимиту коррекций
+
+Фактически **`gpt-6.1-sol`, `xhigh`**, 2026-11-14. Записаны 22 VM guards, test-only immediate readiness fixture и восемь migrations; ровно 11 разрешённых путей. Production/DI/готовый readiness/зависимости/общие документы не менялись. Исходные аргументы/assertions/timing старых callers сохранены, оба repository fixtures побайтово равны историческому `cbe6934`; повторная сверка перед коммитом выполнена. Новый тестовый commit — **кандидат**, не принятый baseline; следующего executor не запускать.
+
+Текущий полный запуск завершился exit 1 за **5m54s**, **68 tasks: 14 executed, 27 FROM-CACHE, 27 UP-TO-DATE**. `uniffiKotlin` выполнен, host Rust build свежий (1m09s); main Kotlin/Java и часть Android resources FROM-CACHE. Оба test Kotlin compile tasks выполнялись свежими и дали ровно **9 ожидаемых ошибок** `No parameter with name 'readiness' found.`: 6 JVM constructors (пять migrations + новый guard), 3 AndroidTest constructors. Других compiler errors нет. Это **compile RED исключительно по принятой пятой обязательной зависимости**, JVM tests/UI tests не исполнялись, runtime readiness-гонок не подтверждался. APK/эмулятор/телефон/NDK/live network не использовались.
+
+Неожиданные gates: `detekt` — одна `LargeClass`; `ktlintTestSourceSetCheck` — шесть `Needless blank line(s)` на строках 94/96/98/111/113/115 нового guard-файла. Эти пустые строки внесены единственной коррекцией chains; все последующие test/code правки остановлены. Полного style PASS нового candidate нет. Падения относятся к новому testfile, инфраструктурного FAIL нет. Логи: `/tmp/plinth-yu5f-readiness-style-20261114.log`, `/tmp/plinth-yu5f-readiness-gates-20261114.log`.
+
+**LargeClass точно:** default `allowedLines: 600`, без проектного override; текущая метрика **620 LOC**. Проверено по установленным detekt 2.0.0-alpha.6 `default-detekt-config.yml` и реализации `LargeClass/LinesOfCode`: 706 строк с токенами outer declaration (включая @OptIn) минус 86 LOC пяти nested declarations (15+8+16+26+21). Физический диапазон outer declaration 45–802 не равен метрике: blank/comment и nested classes исключаются. Поэтому простое перемещение nested fixtures наружу не уменьшает уже вычисляемую метрику.
+
+**Минимальное предложение отдельного разрешённого split:** в том же `Yu5fReadinessSearchTest.kt` разделить существующие guards по границе перед `return within grace keeps the same pending waits` (ныне @Test строка 542): первые 16 readiness/membership/sibling guards и последние 6 lifecycle/query guards. Существующие setup/state, пять helpers и controlled fixtures вынести в общий harness в этом же файле, без новых fixtures semantics; тела всех 22 тестов, assertions, scheduler/timing и cancellation outcomes сохранить. Одновременно убрать только шесть названных пустых строк. Suppress/allow/ignore не добавлять; остальные 10 planner paths и оба repository fixtures не менять. Это предложение, здесь не реализованное; требуется отдельное разрешение координатора, новый candidate hash и независимое Astra xhigh review до production.
