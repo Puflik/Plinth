@@ -34,12 +34,15 @@ Codex на ноутбуке установлен.
    Код/тесты совпадают с проверенной рабочей веткой. JVM 66/66 и AndroidTest
    compile ранее PASS; после механических правок полный ktlint/detekt и
    свежие readiness JVM 12/12 PASS. Старый scoped init не использовать.
-   Рабочая ветка/worktree `work/yu5f-ready`,
-   `/home/puflik/src/Plinth-yu5f-ready` ожидают уборки после сверки main CI.
+   CI main `43358730931` на `419ae48` также SUCCESS. Завершённые
+   `work/yu5f-ready` и `/home/puflik/src/Plinth-yu5f-ready` убраны 14 ноября.
 6. Следующая задача — `yu5f`; её исходный handoff находится в
-   `origin/work/yu5f:docs/work/yu5f.md`, HEAD `365fbb3`, baseline `cbe6934`.
-   Перед реализацией уточнить внедрение OnlineReadiness и защищённые тесты
-   по фактическому API; это отдельная подготовка планировщика и ревью.
+   `origin/work/yu5f:docs/work/yu5f.md`, теперь HEAD `a344eee`, baseline `cbe6934`.
+   Linux worktree `/home/puflik/src/Plinth-yu5f`; main `419ae48` внесён обычным
+   merge `257546c`, старые protected tests сохранены. Полные ktlint/detekt PASS.
+   Решение Astra о readiness принято и записано в taskfile: далее Sol xhigh
+   мигрирует восемь constructors и добавляет guards, затем независимое ревью.
+   Production ещё не начинался; никакого default Applied в нём не добавлять.
    UI проверять на выбранном эмуляторе, телефон не подставлять автоматически.
 
 Граф построен на 7c5192a (2026-10-19), сильно отстаёт; Windows CLI сломан.

@@ -7353,3 +7353,39 @@ Claude из списка убран.
 - Следующий этап yu5f требует до кода согласовать внедрение отдельного
   OnlineReadiness в SearchViewModel и миграцию конструкторов/тестов с новым
   baseline; исходная ветка `work/yu5f` сохраняется. Граф пока отстаёт.
+- Интеграция `419ae48` опубликована в main обычным fast-forward push;
+  основной CI `43358730931` проверяет тот же app/core/test tree, что прошёл
+  SUCCESS в `43258909999`. Новая `work/yu5f` получила main merge-коммитом
+  `257546c`; существующие семь protected paths от `cbe6934` не изменились.
+- Luna medium выполнила инвентаризацию: восемь прямых constructors,
+  пять unit и три androidTest; readiness нет ни в одном fake. Astra xhigh
+  исследовал только подключение capability, решение принято и опубликовано
+  в taskfile `a344eee`: обязательный пятый аргумент, без default/bypass;
+  pending retained ждёт новый набор, started/finished sibling сохраняется;
+  Superseded заново ждёт текущую config, включая ABA, без polling;
+  TimedOut → PROVIDER_DOWN. Настройки согласуются до ожидания, VM setEnabled
+  запрещён. 11 разрешённых planner paths и guards записаны до кода.
+- Полные ktlint/detekt исходного yu5f worktree PASS (1m13s, 30 tasks:
+  8 executed/22 cache); сборка завершена. Новые guards и constructor migrations
+  ещё не написаны. После исследования окна 77%/36%, новый Sol не запускается
+  при пороге 65%; primary resetsAt — 13 ноября 13:17 +05:00, перед запуском
+  нужна новая проверка. Дальше планировщик, независимое ревью baseline,
+  затем реализация; UI/runtime на эмуляторе этим не подтверждаются.
+
+## 2026-11-14
+
+- Автор просит продолжать и сообщает, что 10 ноября пропущено. Проверены
+  существующий `831cd4c`, его принадлежность main и GitHub API: обе Git-даты
+  10 ноября 12:00 +05:00, author/committer связаны с Puflik. GraphQL календарь
+  Puflik показывает за 2026-11-10 contributionCount=1 и один commit contribution
+  в Puflik/Plinth. День уже закрыт; дополнительных дат/коммитов задним числом
+  не добавляли. Это проверка фактического календаря, не предположение по Git.
+- На входе окна 3%/40%; Sol xhigh получил утверждённое решение yu5f для
+  миграции восьми constructors и новых guards в разрешённых 11 файлах.
+  Production запрещён до независимого ревью нового baseline.
+- CI main `43358730931` на `419ae48` SUCCESS. Вчерашний watcher завершился
+  из-за сети, а следующая попытка чтения не исполнилась: auto-review не смог
+  завершить проверку при исчерпанном лимите, не признал действие опасным.
+  Сегодня чтение и fetch успешны; исходный readiness code/test tree совпал
+  с принятым `85d8de7`, protected diff от `f3711cf` пуст. Убраны завершённые
+  worktree/ветка yu5f-ready и локальная integration-ветка; история main сохранена.
