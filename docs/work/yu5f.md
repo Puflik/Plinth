@@ -181,8 +181,21 @@ $env:ANDROID_SERIAL = '<проверенный-serial-эмулятора>'
 
 Защиту проверять относительно опорного коммита:
 
-```powershell
-git diff <коммит-тестов> HEAD -- app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelCancelTest.kt app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelRetryTest.kt app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelTest.kt app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineRepository.kt app/src/sharedTest/kotlin/io/github/puflik/plinth/online/TestYoutubeOnline.kt
+```bash
+test_commit='<принятый-коммит-тестов>'
+git diff --exit-code "$test_commit" HEAD -- \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt \
+  app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelCancelTest.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelRetryTest.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/SearchViewModelTest.kt \
+  app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineRepository.kt \
+  app/src/sharedTest/kotlin/io/github/puflik/plinth/online/TestYoutubeOnline.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsTest.kt \
+  app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/SearchFieldTest.kt \
+  app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsScreenTest.kt \
+  app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineReadiness.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fReadinessSearchTest.kt
 git diff --check
 ```
 
@@ -469,3 +482,33 @@ Split записан: `Yu5fReadinessSearchTest` (16), `Yu5fReadinessLifecycleTes
 В этом отдельном этапе использована одна ограниченная коррекция отступов top-level declarations после первого полного gate; повторный процесс не содержит неожиданных FAIL. Сохранён обязательный будущий runtime command: `bash ./gradlew --no-daemon :app:testGithubDebugUnitTest --rerun --tests 'io.github.puflik.plinth.ui.search.Yu5fReadiness*Test' -x :app:cargoNdkBuild` с Linux environment выше. Он включает оба новых класса; executor также запускает прежние progressive/UI gates. Source file и список 12 protected paths прежние. Новый hash ниже остаётся **candidate**, без статуса принятого baseline; следующий этап — независимое Astra review всего candidate, production здесь не начинался.
 
 Новый candidate тестов: `6e8c32a2e4da0cd3a4341055138406d85f79420b`; это итог отдельного разрешённого корректирующего этапа, не принятый baseline. Следующий commit только закрепляет hash. Текущая Gradle session завершена; фоновых сборок этого этапа нет. После записи выполняется обычный direct push `work/yu5f`, без main/rebase/merge/force.
+
+## Независимое ревью candidate — 2026-11-14
+
+Astra xhigh проверил candidate `6e8c32a` / HEAD `32be91b`: **CHANGES REQUESTED**.
+Полный сохранённый отчёт — [yu5f-review-20261114.md](yu5f-review-20261114.md).
+Независимо подтверждены восемь constructor migrations, неизменность старых
+assertions/fixtures, split 16+6, сохранение 22 тел, отдельное состояние тестов
+и фильтр обеих групп. Полные ktlint/detekt PASS; compile RED только по девяти
+заранее объявленным отсутствующим readiness arguments; runtime не проверялся.
+
+**B1, следующий узкий этап Sol xhigh:** добавить один controlled VM guard
+в существующий Yu5fReadinessSearchTest.kt, не меняя прежние 22 тела. Оба
+провайдера активны; одному текущему wait выдать TimedOut. Проверить точную
+пустую PROVIDER_DOWN-секцию, loading только соседа, отсутствие отмены его
+исходного wait, неизменное число ожиданий и отсутствие searchIn. Затем
+завершить Applied и успешный поиск того же соседа: обе секции сохранены,
+loading пуст. Старый timeout/cache/retry guard оставить. Production запрещён.
+
+**B2:** исходная команда protection diff перечисляла только семь файлов.
+Координатор заменил её выше на Bash-команду с exit-code и всеми 12 путями
+из авторитетного списка; placeholder test_commit перед запуском заменить
+принятым hash. Множества путей совпали, фактический diff candidate→HEAD
+по всем 12 пуст. Это документальная корректировка, повторная независимая
+проверка команды остаётся вместе с новым guard. Нового accepted baseline нет.
+
+В B1-проходе разрешены только новый guard в прежнем файле и taskfile;
+после полных style checks и объявленного constructor RED — новый candidate,
+отдельное ограниченное ревью B1 и исправленной B2-команды, затем executor.
+Пятичасовое окно после ревью 86% (недельное 53%): новый агент сейчас не
+запускался при действующем пороге 65%. Граф отстаёт; сборок после ревью нет.
