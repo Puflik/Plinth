@@ -54,28 +54,33 @@ force push не требуется. До документальных право
 
 **Следующий этап — `yu5f`: независимые секции поиска и сохранение прокрутки.**
 План и семь исходных protected fixtures/tests — в `origin/work/yu5f`,
-HEAD `a344eee`, исходный baseline `cbe6934fcd82f203622a490031e9a0e054272fee`.
+HEAD `4f4d8d3`, исходный baseline `cbe6934fcd82f203622a490031e9a0e054272fee`.
 Координатор создал `/home/puflik/src/Plinth-yu5f` и обычным merge `257546c`
 принёс main `419ae48`; затем опубликовано исследовательское решение Astra
 в `a344eee`, раздел taskfile «Интеграция принятого OnlineReadiness».
 Исходные семь protected paths побайтово сохранены, production не менялся.
 Полные ktlint/detekt нового worktree PASS (1m13s, 8 executed/22 cache).
 
-**Текущий этап — Sol xhigh: миграция восьми constructors и новые guards.**
-Добавляется обязательный пятый аргумент OnlineReadiness без production
-default/secondary bypass. Retained pending переожидает актуальную config,
-retained searching/finished сохраняет job/ответ. Superseded заново ждёт
-актуальную config, включая ABA; TimedOut отображается как PROVIDER_DOWN.
-VM не вызывает setEnabled. Точные 11 разрешённых planner paths и guard-матрица
-уже записаны в taskfile; будущий protected set — 12 test/fixture paths.
-Исследователь не писал тесты: они ещё требуются, затем независимое ревью
-нового baseline до production. Старые assertions не ослаблять.
+**Следующий шаг — узкая доработка B1, затем повторное независимое ревью.**
+Sol xhigh подготовил 22 VM guards и восемь constructor migrations;
+после корректирующего split 16+6 candidate — `6e8c32a`, отчёт — `32be91b`.
+Полные ktlint/detekt PASS. Свежие unit/AndroidTest Kotlin compile дали только
+девять ожидаемых ошибок отсутствующего пятого readiness-параметра;
+runtime пока не исполнялся, production не менялся.
 
-1. Sol xhigh назначен 14 ноября: выполнить решение yu5f, сохранив scope;
-   taskfile подготовить для Linux по LAPTOP, compile RED допустим только
-   по уже записанному новому обязательному параметру constructor.
-2. После подготовки — независимое ревью миграций и новых guards;
-   production не начинать до принятого нового baseline.
+Astra xhigh проверил весь candidate: миграции, fixtures, split и сохранность
+assertions подтверждены, но вердикт **CHANGES REQUESTED**:
+
+1. B1: добавить один guard TimedOut с активным соседом. Сохранить его исходное
+   ожидание/loading, затем успешный результат вместе с timeout-секцией.
+   Старые 22 тела не менять. Точная последовательность — в taskfile.
+2. B2: protection-команда пропускала пять файлов. Координатор исправил её
+   на все 12 путей с exit-code; Bash syntax и пустой actual diff проверены.
+   Повторный reviewer проверяет добавленный guard и эту команду.
+   Report/уточнённый handoff опубликованы в `4f4d8d3`;
+   полный отчёт — `docs/work/yu5f-review-20261114.md` рабочей ветки.
+   Baseline ещё не принят, executor не запускать. Следующему планировщику
+   разрешены только guard-файл и taskfile; готовые migrations не повторять.
 3. Следовать порядку **yu5f → yu5b → yu5c → yu5d → yu5e → Ю6**.
    UI требует настоящего выполнения на явно выбранном эмуляторе; сборка
    instrumented tests не подтверждает прокрутку/возврат с mini-player.
@@ -97,7 +102,9 @@ VM не вызывает setEnabled. Точные 11 разрешённых plan
   проходе не проверялись/не передавались. Выпуск/теги не создавались.
 
 Linux-команды — в `LAPTOP.md`; не исключать uniffiKotlin. На входе 14 ноября
-окна 3%/40%; перед новым агентом проверить заново, соблюдать суточную норму.
+окна 3%/40%, после ревью 86%/53%; новый агент не запускался из-за порога
+65%. Сброс primary — 14 ноября 15:23 +05:00; перед запуском сверить заново
+и соблюдать суточную норму. Перед продолжением рекомендован /compact.
 Вчера чтение CI остановилось из-за сетевого сбоя, затем auto-review не смог
 выполниться из-за исчерпанного окна; это не было решением об опасности действия.
 Сегодня CI проверен успешно. За 10 ноября есть `831cd4c`: обе Git-даты —

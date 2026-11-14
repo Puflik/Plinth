@@ -37,11 +37,14 @@ Codex на ноутбуке установлен.
    CI main `43358730931` на `419ae48` также SUCCESS. Завершённые
    `work/yu5f-ready` и `/home/puflik/src/Plinth-yu5f-ready` убраны 14 ноября.
 6. Следующая задача — `yu5f`; её исходный handoff находится в
-   `origin/work/yu5f:docs/work/yu5f.md`, теперь HEAD `a344eee`, baseline `cbe6934`.
+   `origin/work/yu5f:docs/work/yu5f.md`, теперь HEAD `4f4d8d3`, исходный baseline `cbe6934`.
    Linux worktree `/home/puflik/src/Plinth-yu5f`; main `419ae48` внесён обычным
    merge `257546c`, старые protected tests сохранены. Полные ktlint/detekt PASS.
-   Решение Astra о readiness принято и записано в taskfile: далее Sol xhigh
-   мигрирует восемь constructors и добавляет guards, затем независимое ревью.
+   Candidate `6e8c32a` содержит восемь migrations и 22 guards; полные style
+   checks PASS, compile RED только по объявленному readiness-параметру.
+   Независимое ревью требует B1: timeout с активным соседом; B2-команда
+   уже дополнена до 12 путей и также ждёт повторной проверки. До executor
+   нужен принятый новый baseline; повторять готовую подготовку целиком нельзя.
    Production ещё не начинался; никакого default Applied в нём не добавлять.
    UI проверять на выбранном эмуляторе, телефон не подставлять автоматически.
 
