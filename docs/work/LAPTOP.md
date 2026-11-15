@@ -37,13 +37,15 @@ Codex на ноутбуке установлен.
    CI main `43358730931` на `419ae48` также SUCCESS. Завершённые
    `work/yu5f-ready` и `/home/puflik/src/Plinth-yu5f-ready` убраны 14 ноября.
 6. Следующая задача — `yu5f`; Linux worktree `/home/puflik/src/Plinth-yu5f`,
-   ветка `work/yu5f`, handoff `4257a74`. 15 ноября Astra xhigh принял
+   ветка `work/yu5f`, handoff `cae7eac`, реализация VM `dc2307e`. 15 ноября Astra xhigh принял
    protected baseline `92c78bd`: 12 путей, 23 readiness guards и восемь
    migrations, B1/B2 закрыты. Полные style PASS; до production compile RED9
    только по обязательному readiness-параметру. Sol high получил ограниченный
-   этап `SearchViewModel.kt`; UI/ресурсы/тесты не трогает. Затем Terra должен
-   реально воспроизвести прокрутку на выбранном эмуляторе. Перед следующими
-   агентами сверять лимиты; перед VM-этапом было 56%/65%.
+   этап `SearchViewModel.kt` и завершил его: свежие 78 JVM tests, полные
+   ktlint/detekt и AndroidTest compile PASS, защищённые тесты сохранены.
+   Теперь нужны Astra review VM и Terra UI со сценарием на эмуляторе.
+   После этапа окна 86%/69%; primary reset 15 ноября 15:09 +05. Перед
+   следующими агентами сверять лимиты. В main эта VM пока не перенесена.
 7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
    `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
    Размер 35 083 627 байт; SHA-256

@@ -7465,3 +7465,24 @@ Claude из списка убран.
   установка и устройство не проверялись. APK имеет 0.2.3-debug, включает
   принятый main с YouTube, но не незавершённый yu5f. Artifact14147424465
   доступен в GitHub до 22 ноября 10:22 +05; релиз/тег не создавались.
+
+- VM-этап Sol high завершён в `dc2307edebc072dbc554f934e332d910c9b07734`:
+  независимые searchIn attempts, readiness/Superseded/ABA, membership/retry,
+  completed cache и lifecycle отмены. Изменены только SearchViewModel и отчёт.
+  После одной коррекции complexity/форматирования свежие JVM search-тесты
+  78/78 (7 suites) PASS, полный ktlint/detekt и AndroidTest compile PASS.
+  Координатор проверил XML failures/errors/skipped=0 и пустой diff всех
+  test/sharedTest/androidTest от принятого baseline. UI/scroll, полный CI и
+  независимое review production ещё обязательны; задача целиком не принята,
+  VM в main и выданный APK не попала.
+- Push агента отклонён automatic approval review: не подтверждены destination
+  и разрешение на публикацию private source. Origin/tracking/состав diff
+  независимо проверены координатором; это тот же Puflik/Plinth/work/yu5f,
+  куда ранее в этом чате разрешён и выполнен push `4257a74`. Повторная
+  автоматическая проверка разрешила точный URL/ref; координатор успешно
+  опубликовал `4257a74..ffda2ef`, итоговый handoff `cae7eac`. Блокировки нет.
+- После этапа окна 86%/69%, нового агента не запускали; primary reset —
+  15 ноября 15:09 +05, weekly — 17 ноября 09:39 +05. Продолжение: сначала
+  фактические лимиты, Astra review VM, Terra UI с воспроизведением прокрутки.
+  Фоновых локальных сборок нет. Завершённые ветка/worktree test-apk убраны;
+  локальный APK сохранён. Граф остаётся позади до обновления в конце волны.
