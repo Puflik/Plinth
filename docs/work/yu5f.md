@@ -1,6 +1,6 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **Baseline принят 2026-11-15: Astra xhigh PASS, B1/B2 закрыты.** Опора всех 12 protected paths — `92c78bdb5220542ed1425e285ee1d44883b7eac9`. VM `dc2307e` реализован: свежие 78 JVM tests, полный стиль и AndroidTest compile PASS. Production ещё не принят: нужны независимое ревью, UI и приёмка на эмуляторе.
+> **VM review 2026-11-15: CHANGES REQUESTED.** Новый VM-B1: retry после grace до согласования текущего контекста. CI-C1: устаревшее наблюдение в Yu4g guard. Опора прежних 12 protected paths `92c78bd` сохраняется; старые планировочные B1/B2 закрыты. Следующий этап — только планировщик по handoff ниже; VM `dc2307e` не принята и в main не переносится.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
@@ -646,3 +646,57 @@ VM `dc2307e` опубликован, guard baseline `92c78bd` неизменён
 прокрутки первым действием. Для UI сохраняется исходный список разрешённых
 файлов и критерии. В main/выданный APK эта VM-реализация не перенесена;
 сливать всю yu5f до независимого ревью, UI-проверок и зелёного CI нельзя.
+
+
+## Независимое ревью VM и следующий планировщик — 2026-11-15, вечер
+
+Фактически Astra xhigh, без повторных Gradle-прогонов: **CHANGES REQUESTED**.
+Полный отчёт с точными шагами и исходниками — `yu5f-vm-review-20261115.md`.
+VM-B1: после grace новый scope появляется до первого свежего combine/debounce;
+retry в это окно запускает попытку со старым query/configuration. Retained cache
+и настройка membership должны согласоваться до разрешения retry; валидное
+раннее намерение retry нельзя просто потерять. Ни один из 78 зелёных search
+тестов не покрывает это окно. Требуется сначала реальный RED guard.
+
+CI `43682043161` на `cae7eac` FAILURE: единственное падение из 1111 tests
+(1 skip) — Yu4gGatedSearchInTest, expected searches=[concert], actual=[].
+При этом все assertions готовности/provider/result прошли. Fake давно (cbe6934)
+записывает searchIn в providerSearches; ошибка миграции предшествует VM.
+Это **CI-C1**, не flaky и не основание менять Gated или вернуть общий счётчик.
+Fdroid XML в артефакте нет, both-flavor PASS не заявляется. Main `70aadc9`
+прошёл CI `43682043180`; выданный APK не содержит рассматриваемую новую VM.
+
+**Разрешённый следующий scope планировщика Sol xhigh — только три файла:**
+
+- `docs/work/yu5f.md` — план, результаты, новый candidate/hash и список защиты.
+- Новый `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchTest.kt`:
+  использовать существующий Yu5fReadinessHarness без его изменения. Три узких
+  случая из отчёта: отключённый YT, master-off, валидный IA retry после grace
+  в окно до 300 ms. Проверять точные readiness/search calls/configuration,
+  сохранность IA cache, отсутствие запрещённого loading/отложенного replay,
+  однократность допустимого retry после Applied. Сначала доказать RED на dc2307e.
+- `app/src/test/kotlin/io/github/puflik/plinth/online/Yu4gGatedSearchInTest.kt`:
+  только заменить старый `inner.searches == [concert]` на точный
+  `inner.providerSearches == [(PROVIDER, concert)]` и добавить пустой bulk
+  `inner.searches`. Все остальные assertions и три других теста сохранить.
+  Это отдельное разрешение миграции старого защищённого теста, не исполнителю.
+
+Все прежние 12 protected paths неизменны; production запрещён в этом этапе.
+Оба новых protected paths добавить к списку/команде защиты (всего 14) вместе
+с candidate-коммитом. Новый baseline принимает независимый Astra xhigh после
+проверки RED, неизменности старых тестов и точного смысла Yu4g migration.
+Полные ktlintCheck/detekt и обе test-компиляции ожидаются PASS; свежие search
+JVM + Yu4g должны падать только на новых объявленных B1 assertions. Логи
+сохранять. Прежний Linux env и исключение только cargoNdkBuild сохраняются.
+Одна коррекция после неожиданного падения; повтор — stop/report/commit/push.
+
+После приёмки тестов отдельный Sol меняет только SearchViewModel/отчёт;
+согласование свежего контекста до retry, без новых API/timers/permanent jobs.
+Затем Astra review точной правки и полный CI обеих flavors, после — Terra
+UI с реальным воспроизведением прокрутки перед редактированием экрана.
+
+На вечернем входе окна 1%/72%; в ходе review 36%/77%. Утром было 57% недели,
+расход дня уже 20 пунктов при ориентире 43/2 ≈21.5. Следующего агента сегодня
+не запускали: он превысит норму. Перед продолжением сверить фактические окна,
+сохранить резерв до reset 17 ноября 09:39 +05. Рекомендуется /compact;
+новый чат не нужен, граф обновлять только в конце волны.
