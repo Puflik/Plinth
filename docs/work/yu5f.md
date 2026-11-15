@@ -225,7 +225,49 @@ git diff --check
 
 ## Отчёт исполнителя
 
-_Не заполнялся: реализация не запускалась. Исполнитель пишет фактическую модель/effort, изменения, проверки fresh/cache, коммиты, ограничения и живую приёмку._
+### Ограниченный этап VM — 2026-11-15, завершён
+
+Фактическая модель/effort: `gpt-6.1-sol`, `high` (назначение координатора).
+Прочитаны принятый контракт независимых секций и обязательного readiness,
+правила worktree/защищённых тестов и Linux-проверок. Исходный VM: 252 строки,
+на входе — общий `online.search`, четыре аргумента конструктора.
+Работа только в SearchViewModel.kt и этом отчёте; UI/scroll остаются Terra.
+Граф в этом worktree отсутствует; точные API проверяются по исходникам.
+Первый свежий `:app:testGithubDebugUnitTest --rerun --tests
+'io.github.puflik.plinth.ui.search.*' -x :app:cargoNdkBuild` — PASS,
+`BUILD SUCCESSFUL in 2m 40s`, 45 задач: 13 executed, 2 cache, 30 up-to-date;
+сам test task исполнен свежо. Лог `/tmp/yu5f-vm-jvm-20261115.log`.
+Реализованы отдельные attempts, нормализованный readiness, Superseded/ABA,
+терминальные problem/null, сохранение запущенных соседей и completed cache,
+retry с проверкой membership и отменяемый после grace scope подписки.
+После проверки уточнён общий retry для всех активных секций и форматирование;
+итоговый свежий suite PASS: 7 suites, 78 tests, 0 failures,
+18 секунд; 45 задач: 10 executed, 35 up-to-date.
+Лог `/tmp/yu5f-vm-jvm-final-20261115.log`.
+Первый полный проход: Android test-компиляция PASS; detekt отклонил
+complexity reconcile 17/14, ktlint — переносы условия и параметров retry.
+Лог `/tmp/yu5f-vm-checks-20261115.log`. Применена единственная коррекция:
+вычисление activeProviders/фазы waiting вынесено в свойства контекста/попытки,
+параметры retry и accessor waiting отформатированы.
+Повтор после единственной коррекции — PASS:
+
+- Свежий search JVM suite: 7 suites, 78 tests, 0 failures/errors;
+  `BUILD SUCCESSFUL in 1m 8s`, 45 задач: 11 executed, 34 up-to-date.
+  Лог `/tmp/yu5f-vm-jvm-repair-20261115.log`.
+- Полные `ktlintCheck detekt :app:compileGithubDebugAndroidTestKotlin`
+  с единственным исключением `:app:cargoNdkBuild` — PASS, 33 секунды;
+  66 задач: 6 executed, 60 up-to-date. Android test compile исполнена,
+  `uniffiKotlin` не исключалась. Лог `/tmp/yu5f-vm-checks-repair-20261115.log`.
+- `git diff --check` — PASS; точный список изменений: только VM и этот отчёт.
+  Подавления, ignore и ослабления тестов не добавлялись.
+- Коммит этапа: `fix(search): load provider sections independently after readiness`
+  в `work/yu5f`; hash — текущий HEAD после сохранения отчёта, передан координатору.
+  Обычный push этой ветки разрешён; main/merge/rebase/force/release не выполняются.
+
+Живая UI/scroll-приёмка, полный CI и независимое Astra-ревью production
+здесь не выполнялись и остаются следующими этапами. NDK, эмулятор и телефон
+не использовались. Вся задача yu5f завершённой не объявляется.
+Все 12 защищённых путей имеют пустой diff от принятого baseline.
 
 ## Ревью
 

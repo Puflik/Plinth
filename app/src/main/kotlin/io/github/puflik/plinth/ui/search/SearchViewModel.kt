@@ -4,34 +4,45 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.puflik.plinth.ffi.OnlineKind
+import io.github.puflik.plinth.ffi.OnlineProblem
 import io.github.puflik.plinth.ffi.OnlineResult
 import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.ffi.PlaylistId
 import io.github.puflik.plinth.library.LibraryRepository
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.online.OnlineConfiguration
+import io.github.puflik.plinth.online.OnlineProviderIds
+import io.github.puflik.plinth.online.OnlineReadiness
+import io.github.puflik.plinth.online.OnlineReady
 import io.github.puflik.plinth.online.OnlineRepository
 import io.github.puflik.plinth.online.OnlineSettings
+import io.github.puflik.plinth.online.normalized
 import io.github.puflik.plinth.queue.QueueContext
 import io.github.puflik.plinth.ui.library.TrackAction
 import io.github.puflik.plinth.ui.library.TrackActions
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -62,6 +73,7 @@ sealed interface OnlineResults {
     /** Секция на провайдера — с результатами или с бедой. */
     data class Found(
         val sections: List<OnlineSection>,
+        val loading: Set<String> = emptySet(),
     ) : OnlineResults
 }
 
@@ -88,18 +100,12 @@ class SearchViewModel
         private val online: OnlineRepository,
         onlineSettings: OnlineSettings,
         private val actions: TrackActions,
+        private val readiness: OnlineReadiness,
     ) : ViewModel() {
         private val query = MutableStateFlow("")
 
-        // Сколько раз нажали «Повторить»: новое число — тот же текст спрашивается заново.
-        private val retries = MutableStateFlow(0)
-
-        // Что показано сейчас: поток, начатый заново, стартует с этого, а не с пустого.
         private var shownFound = NOTHING
-        private var shownOnline: OnlineResults = OnlineResults.None
-
-        // Последний ответ сети — одна запись; viewModelScope и все потоки ниже живут на одном потоке.
-        private var answer: Answer? = null
+        private val network = SearchNetwork(online, readiness)
 
         private val settled: Flow<String> =
             query
@@ -115,13 +121,15 @@ class SearchViewModel
                 // Экран готов сразу, ещё до первого поиска; вернувшийся — с тем, что видел.
                 .onStart { emit(shownFound) }
 
-        private val inNetwork: Flow<OnlineResults> =
-            combine(settled, onlineSettings.enabled, retries) { text, enabled, attempt ->
-                text.takeIf { enabled && it.isNotEmpty() }?.let { Asked(it, attempt) }
+        private val configurations =
+            combine(onlineSettings.enabled, onlineSettings.disabledProviders) { enabled, disabled ->
+                OnlineConfiguration(enabled, disabled).normalized()
             }.distinctUntilChanged()
-                .flatMapLatest(::answerTo)
-                .onEach { shownOnline = it }
-                .onStart { emit(shownOnline) }
+
+        private val inNetwork: Flow<OnlineResults> =
+            channelFlow {
+                network.collect(this, viewModelScope, combine(settled, configurations, ::SearchContext))
+            }
 
         // Песни секций (Ю5а): `resolve` один раз на песню, ход и сердце строки.
         private val songs = OnlineSongs(online, actions)
@@ -144,7 +152,12 @@ class SearchViewModel
          * ответ). Текста нет или источники выключены — ничего: спрашивать нечего.
          */
         fun onRetryOnline() {
-            retries.update { it + 1 }
+            viewModelScope.launch { network.retry(null, query.value.isBlank()) }
+        }
+
+        /** Повторяет только указанную активную секцию, сохраняя соседей. */
+        fun onRetryOnline(provider: String) {
+            viewModelScope.launch { network.retry(provider, query.value.isBlank()) }
         }
 
         /** Найденный трек: контекст — результаты поиска. */
@@ -202,43 +215,9 @@ class SearchViewModel
             }
         }
 
-        /**
-         * Ответ сети на [asked]: из памяти, если на этот же вопрос уже отвечали, иначе `Searching` и
-         * запрос. Нет вопроса (пустой текст или источники выключены) — секций нет, и память пуста:
-         * потом тот же текст спросят заново.
-         */
-        private fun answerTo(asked: Asked?): Flow<OnlineResults> {
-            if (asked == null) {
-                answer = null
-                return flowOf(OnlineResults.None)
-            }
-            val known = answer?.takeIf { it.asked == asked }
-            return flow {
-                if (known != null) {
-                    emit(known.found)
-                } else {
-                    emit(OnlineResults.Searching)
-                    val found = OnlineResults.Found(online.search(asked.text))
-                    answer = Answer(asked, found)
-                    emit(found)
-                }
-            }
-        }
-
         private data class Found(
             val results: List<LibraryTrack>,
             val searched: Boolean,
-        )
-
-        // О чём спросили сеть: устоявшийся текст и номер «Повторить».
-        private data class Asked(
-            val text: String,
-            val attempt: Int,
-        )
-
-        private class Answer(
-            val asked: Asked,
-            val found: OnlineResults.Found,
         )
 
         companion object {
@@ -250,3 +229,176 @@ class SearchViewModel
             private val NOTHING = Found(emptyList(), searched = false)
         }
     }
+
+private data class SearchContext(
+    val text: String,
+    val configuration: OnlineConfiguration,
+) {
+    val activeProviders: List<String>
+        get() =
+            OnlineProviderIds.ALL.filter {
+                text.isNotEmpty() && configuration.enabled && it !in configuration.disabledProviders
+            }
+}
+
+/** Cache lives in the VM; each collection owns and explicitly cancels its attempt scope. */
+private class SearchNetwork(
+    private val online: OnlineRepository,
+    private val readiness: OnlineReadiness,
+) {
+    private class Attempt {
+        var job: Job? = null
+        var started = false
+        var completed = false
+        var section: OnlineSection? = null
+        val waiting: Boolean
+            get() = !completed && !started
+    }
+
+    private var context: SearchContext? = null
+    private val attempts = mutableMapOf<String, Attempt>()
+    private var generation = 0L
+    private var scope: CoroutineScope? = null
+    private var output: ProducerScope<OnlineResults>? = null
+    private var snapshot: OnlineResults = OnlineResults.None
+
+    suspend fun collect(
+        output: ProducerScope<OnlineResults>,
+        owner: CoroutineScope,
+        contexts: Flow<SearchContext>,
+    ) {
+        // A cancelled transport may finish late; it must not delay the next subscription.
+        scope = CoroutineScope(owner.coroutineContext + SupervisorJob(owner.coroutineContext[Job]))
+        this.output = output
+        output.trySend(snapshot)
+        try {
+            contexts.collect(::reconcile)
+        } finally {
+            attempts.replaceAll { _, attempt -> if (attempt.completed) attempt else Attempt() }
+            scope?.cancel()
+            scope = null
+            this.output = null
+        }
+    }
+
+    private fun reconcile(next: SearchContext) {
+        val previous = context
+        context = next
+        if (previous?.text != next.text || !next.configuration.enabled || next.text.isEmpty()) {
+            generation++
+            attempts.values.forEach { it.job?.cancel() }
+            attempts.clear()
+        }
+        val active = next.activeProviders
+        (attempts.keys - active.toSet()).forEach { attempts.remove(it)?.job?.cancel() }
+        active.forEach { provider ->
+            val attempt = attempts[provider]
+            val retarget = attempt?.waiting == true && previous?.configuration != next.configuration
+            if (attempt == null || retarget) {
+                attempt?.job?.cancel()
+                attempts[provider] = Attempt()
+            }
+        }
+        publish()
+        active.forEach { provider ->
+            val attempt = attempts.getValue(provider)
+            if (!attempt.completed && attempt.job == null) start(provider, attempt)
+        }
+    }
+
+    fun retry(
+        provider: String?,
+        blank: Boolean,
+    ) {
+        if (blank || scope == null) return
+        val selected = if (provider == null) attempts.keys.toList() else listOf(provider)
+        selected.forEach { id ->
+            val old = attempts[id]
+            if (old != null && (provider == null || old.completed)) {
+                old.job?.cancel()
+                val fresh = Attempt()
+                attempts[id] = fresh
+                publish()
+                start(id, fresh)
+            }
+        }
+    }
+
+    private fun start(
+        provider: String,
+        attempt: Attempt,
+    ) {
+        val expectedGeneration = generation
+        attempt.job =
+            scope?.launch {
+                try {
+                    val ready = await(provider, attempt, expectedGeneration) ?: return@launch
+                    val section =
+                        when (ready) {
+                            is OnlineReady.Applied -> {
+                                attempt.started = true
+                                online.searchIn(provider, checkNotNull(context).text).let {
+                                    if (it == null || it.provider == provider) it else broken(provider)
+                                }
+                            }
+                            is OnlineReady.Failed -> OnlineSection(provider, emptyList(), ready.problem)
+                            OnlineReady.TimedOut -> OnlineSection(provider, emptyList(), OnlineProblem.PROVIDER_DOWN)
+                            OnlineReady.Superseded -> return@launch
+                        }
+                    finish(provider, attempt, expectedGeneration, section)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    finish(provider, attempt, expectedGeneration, broken(provider))
+                }
+            }
+    }
+
+    private suspend fun await(
+        provider: String,
+        attempt: Attempt,
+        expectedGeneration: Long,
+    ): OnlineReady? {
+        var outcome: OnlineReady? = null
+        while (current(provider, attempt, expectedGeneration) && outcome == null) {
+            val configuration = checkNotNull(context).configuration
+            val ready = readiness.awaitConfiguration(configuration)
+            if (current(provider, attempt, expectedGeneration) && ready != OnlineReady.Superseded) outcome = ready
+            // Each Superseded is consumed once; ABA also needs a fresh waiter.
+        }
+        return outcome
+    }
+
+    private fun current(
+        provider: String,
+        attempt: Attempt,
+        expectedGeneration: Long,
+    ): Boolean = scope != null && generation == expectedGeneration && attempts[provider] === attempt
+
+    private fun finish(
+        provider: String,
+        attempt: Attempt,
+        expectedGeneration: Long,
+        section: OnlineSection?,
+    ) {
+        if (!current(provider, attempt, expectedGeneration)) return
+        attempt.section = section
+        attempt.completed = true
+        publish()
+    }
+
+    private fun publish() {
+        snapshot =
+            if (attempts.isEmpty()) {
+                OnlineResults.None
+            } else {
+                OnlineResults.Found(
+                    OnlineProviderIds.ALL.mapNotNull { attempts[it]?.section },
+                    attempts.filterValues { !it.completed }.keys.toSet(),
+                )
+            }
+        output?.trySend(snapshot)
+    }
+
+    private fun broken(provider: String) = OnlineSection(provider, emptyList(), OnlineProblem.BROKEN)
+}
