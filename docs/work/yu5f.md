@@ -1,6 +1,6 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **Корректирующий split завершён; candidate ожидает независимого Astra review.** Полные ktlintCheck/detekt PASS, оба compile дают только принятый constructor RED. Production не начинать; candidate ещё не принят.
+> **B1 candidate revision завершён; ожидается независимое Astra review B1/B2.** Полные ktlintCheck/detekt PASS; оба compile дают только объявленный constructor RED9. Production не начинать; accepted baseline отсутствует.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
@@ -512,3 +512,29 @@ loading пуст. Старый timeout/cache/retry guard оставить. Produ
 отдельное ограниченное ревью B1 и исправленной B2-команды, затем executor.
 Пятичасовое окно после ревью 86% (недельное 53%): новый агент сейчас не
 запускался при действующем пороге 65%. Граф отстаёт; сборок после ревью нет.
+
+
+## Коррекция B1 планировщиком — 2026-11-15
+
+Фактически **`gpt-6.1-sol`, `xhigh`**; отдельный узкий этап по B1 из независимого ревью от 2026-11-14. Координатор передал чистый HEAD `4f4d8d39cbb76375fad4cd63d1e1fa9e5230e970` (`work/yu5f`); лимиты непосредственно перед запуском — 3% пятичасового / 57% недельного, около двух дней до сброса. Вложенных агентов нет. Разрешены только один новый guard в прежнем `Yu5fReadinessSearchTest.kt` и этот taskfile; B2-команда со всеми 12 путями сохраняется без изменения. Данные пользователя не меняются, отдельное data-review не требуется; candidate остаётся непринятым до Astra xhigh.
+
+### План и записанный сценарий
+
+1. Сохранить все прежние 22 тела, harness и fixtures дословно; добавить один controlled VM guard в существующий search-класс, без production/API/DI изменений.
+2. Оба провайдера ждут текущую ALL; завершить первый конкретный wait как TimedOut. Проверить точную пустую PROVIDER_DOWN-секцию, loading только другого ID, исходный sibling wait не отменён, список двух wait objects неизменен, searchIn отсутствует.
+3. Завершить Applied именно сохранённого sibling wait и его единственный успешный searchIn; timeout-секция остаётся во время поиска и рядом с успешной секцией после него, loading пуст. Старый cache/retry guard и все assertions сохраняются.
+4. Выполнить полный `ktlintCheck detekt` и оба Kotlin compile targets единым `--continue`; исключить только `:app:cargoNdkBuild`, сохранить `uniffiKotlin`. Ожидается только объявленный constructor RED: шесть JVM и три AndroidTest `No parameter with name 'readiness' found.`; runtime этим не подтверждается.
+5. Сверить exact preservation прежних тел/остатка файла и остальных 11 protected paths, записать фактические gates, commit/push нового candidate; независимое B1/B2-ревью обязательно до executor.
+
+### Проверки по ходу
+
+Graphify query выполнен на отстающем графе основного checkout: нужных readiness-узлов нет, возвращены старые B1-концепты; ограниченные task/review/source ranges использованы как актуальная опора. Граф не изменён. Новый guard записан; начинается единственный полный gate, одной корректировкой можно воспользоваться только при неожиданном сбое. Логи — `/tmp/plinth-yu5f-b1-gates-20261115.log`; сохранённый source до добавления — `/tmp/plinth-yu5f-b1-before-20261115.kt`.
+
+
+### Итог B1 и проверка защиты
+
+Полный процесс завершён, exit 1 **только** по двум объявленным compile targets: ровно **6 JVM + 3 AndroidTest** `No parameter with name 'readiness' found.`, иных compiler errors/failed tasks нет. **1m39s**, **68 actionable tasks: 5 executed / 63 UP-TO-DATE**, FROM-CACHE нет. Полные штатные `ktlintCheck` и `detekt` **PASS**: `runKtlintCheckOverTestSourceSet` и `detekt` выполнены свежими; `ktlintTestSourceSetCheck`/aggregate `ktlintCheck` UP-TO-DATE. `uniffiKotlin` присутствует, UP-TO-DATE, не исключён. Команда: `bash ./gradlew --no-daemon --continue ktlintCheck detekt :app:compileGithubDebugUnitTestKotlin :app:compileGithubDebugAndroidTestKotlin -x :app:cargoNdkBuild --console=plain`, с прежним Linux environment и PATH, предварённым JDK bin. Единственное исключение — cargoNdkBuild. Неожиданных сбоев нет, корректировок не использовано. Полный лог `/tmp/plinth-yu5f-b1-gates-20261115.log`.
+
+Добавлен ровно один 42-строчный test block: **23 сценария, split 17+6**. Удаление только этого блока восстанавливает весь source побуквенно к HEAD `4f4d8d3`, включая прежние **22 имён/тел**, timeout/cache/retry, harness, gate/cancellation fixtures и все assertions/timing. Прочие **11 protected paths** неизменны относительно того же HEAD; `git diff --check` PASS, изменены только два разрешённых файла. Авторитетный список из 12 путей и B2 protection-command совпадают как множества и по количеству, сама B2-команда не менялась. Доказательство `/tmp/plinth-yu5f-b1-preservation-20261115.json`; baseline snapshot `/tmp/plinth-yu5f-b1-before-20261115.kt`.
+
+Runtime JVM/UI guards, эмулятор, устройство и APK не запускались; compile RED подтверждает только отсутствующий обязательный constructor API, не выполнение нового TimedOut-сценария. Production, DI, зависимости, прочие tests/fixtures и main не менялись. Независимое ревью не выполнялось планировщиком. Новый test commit остаётся **candidate**, его hash будет закреплён следующим taskfile-only commit; до принятия Astra xhigh executor не запускать. Текущий Gradle process завершён, фоновых сборок нет. Предстоит обычный direct push `work/yu5f`; без merge/rebase/force/release.

@@ -152,6 +152,48 @@ class Yu5fReadinessSearchTest : Yu5fReadinessHarness() {
         }
 
     @Test
+    fun `TimedOut preserves the original pending sibling and its later successful section`() =
+        runTest(dispatcher) {
+            screen()
+            search()
+            loading(ARCHIVE, YOUTUBE)
+            assertThat(readiness.calls.map { it.configuration }).containsExactly(ALL, ALL)
+            val timedOut = readiness.calls.first()
+            val sibling = readiness.calls.last()
+            timedOut.outcome.complete(OnlineReady.TimedOut)
+            runCurrent()
+
+            val failed = sections().single().provider
+            assertThat(OnlineProviderIds.ALL).contains(failed)
+            val successful = other(failed)
+            val timeoutSection = section(failed, OnlineProblem.PROVIDER_DOWN)
+            assertThat(sections()).containsExactly(timeoutSection)
+            loading(successful)
+            assertThat(sibling.cancelled).isFalse()
+            assertThat(readiness.calls).containsExactly(timedOut, sibling).inOrder()
+            assertThat(online.calls).isEmpty()
+
+            sibling.outcome.complete(OnlineReady.Applied(1L))
+            runCurrent()
+            assertThat(readiness.calls).containsExactly(timedOut, sibling).inOrder()
+            assertThat(sibling.cancelled).isFalse()
+            assertThat(online.calls.map { it.provider }).containsExactly(successful)
+            assertThat(online.calls.single().query).isEqualTo(QUERY)
+            assertThat(sections()).containsExactly(timeoutSection)
+            loading(successful)
+            online.calls
+                .single()
+                .outcome
+                .complete(section(successful))
+            runCurrent()
+            assertThat(sections()).containsExactly(timeoutSection, section(successful))
+            loading()
+            assertThat(readiness.calls).containsExactly(timedOut, sibling).inOrder()
+            assertThat(sibling.cancelled).isFalse()
+            assertThat(online.calls).hasSize(1)
+        }
+
+    @Test
     fun `removing a provider cancels both old waits and retargets pending archive immediately`() =
         runTest(dispatcher) {
             screen()
