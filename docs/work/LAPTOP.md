@@ -45,11 +45,18 @@ Codex на ноутбуке установлен.
    ktlint/detekt и AndroidTest compile PASS, защищённые тесты сохранены.
    Вечернее Astra review требует VM-B1: retry до актуального context после
    grace. CI-C1 требует миграции старого assertion Yu4g (fixture уже разделяет
-   providerSearches/bulk searches). Следующий Sol готовит новые RED guards и
-   эту точную миграцию, затем независимое ревью baseline; scope в taskfile.
+   providerSearches/bulk searches). Sol подготовил candidate `b52b256`:
+   85 JVM tests, только три новых VM-B1 assertion RED, прежние 78+4 PASS.
+   Полные style и обе Kotlin test compilations PASS после одной коррекции
+   переносов; production/старые 12 protected неизменны, защита расширена до14.
+   Следующий этап — независимое Astra review этого test candidate; затем VM.
    После первичного этапа окна 86%/69%; вечером primary сбросился, но неделя
    достигла 77%, расход дня ≈20 пунктов. Новый агент превысит суточную норму.
-   Перед продолжением сверять оба окна/норму. В main эта VM не перенесена.
+   Позднее автор разрешил расходовать остаток: на входе 60%/81%, перед Sol
+   63%/82% использовано. Завершён только планировщик VM-B1/CI-C1, без
+   production; после этапа 80%/84%, следующий агент выше primary-порога.
+   Перед продолжением проверить окна и пороги 65%/85%.
+   В main эта VM не перенесена.
 7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
    `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
    Размер 35 083 627 байт; SHA-256
