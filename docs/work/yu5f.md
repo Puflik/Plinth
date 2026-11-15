@@ -261,8 +261,14 @@ complexity reconcile 17/14, ktlint — переносы условия и пар
 - `git diff --check` — PASS; точный список изменений: только VM и этот отчёт.
   Подавления, ignore и ослабления тестов не добавлялись.
 - Коммит этапа: `fix(search): load provider sections independently after readiness`
-  в `work/yu5f`; hash — текущий HEAD после сохранения отчёта, передан координатору.
-  Обычный push этой ветки разрешён; main/merge/rebase/force/release не выполняются.
+  в `work/yu5f`: `dc2307edebc072dbc554f934e332d910c9b07734`.
+  Push отклонён automatic approval review: публикация private source в
+  неподтверждённый remote; reviewer не увидел точного разрешения destination/branch.
+  Read-only проверка подтвердила неизменённый origin
+  `https://github.com/Puflik/Plinth.git`, upstream `refs/heads/work/yu5f`
+  и исходный remote HEAD `4257a74`. Координатор уведомлён; обхода отказа нет.
+  До подтверждения exact remote/branch публикация остаётся заблокирована.
+  main/merge/rebase/force/release не выполнялись.
 
 Живая UI/scroll-приёмка, полный CI и независимое Astra-ревью production
 здесь не выполнялись и остаются следующими этапами. NDK, эмулятор и телефон
