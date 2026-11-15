@@ -6,7 +6,7 @@
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
 - **Принятый коммит тестов:** `92c78bdb5220542ed1425e285ee1d44883b7eac9` — 12 защищённых путей после B1-коррекции, 23 readiness-сценария (17+6); полные style PASS, constructor RED9; независимое Astra B1/B2 review 15 ноября PASS. Предыдущий split-кандидат `6e8c32a2e4da0cd3a4341055138406d85f79420b` сохранён; предыдущий кандидат `dd33755a463b0e344e24dd79436cc1d3638ff45e` — для точной сверки прежних 22 тел. Историческая опора семи файлов `cbe6934fcd82f203622a490031e9a0e054272fee`, первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` сохраняются для сравнения.
 - **Данные пользователя:** нет: только поиск и положение UI; журнал/каталог/CRDT не меняются.
-- **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04/14/15; последний проход — один B1 TimedOut guard, без production.
+- **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04/14/15; последний проход — три VM-B1 runtime RED guards и точная CI-C1 migration, без production.
 - **Исторический запуск планировщика 2026-11-04:** ровно один агент, без вложенных агентов, реализации и массовых сборок. Перед запуском 75% пятичасового / 12% недельного окна; автор разрешил разовое исключение. Лимиты сообщил координатор.
 
 ## Цель
@@ -92,10 +92,10 @@ fun onRetryOnline(provider: String)
 - `app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt` — orchestration/cache/retry/state.
 - `app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt` — independent section UI, preview/раскрытие, saved list state/keys.
 - `app/src/main/res/values/strings.xml` и `app/src/main/res/values-ru/strings.xml` — только подпись Show all; общие файлы явно назначены этой задаче.
-- Новые дополнительные тесты, если нужны: `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchTest.kt`, `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchScreenTest.kt`.
+- Новые дополнительные UI-тесты, если нужны: `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchScreenTest.kt`; JVM `Yu5fAdditionalSearchTest.kt` теперь защищён в VM-B1 candidate.
 - `docs/work/yu5f.md` — только «Отчёт исполнителя».
 
-**Защищённые тесты и fixtures (12 путей нового baseline; не менять/удалять/глушить исполнителю):**
+**Защищённые тесты и fixtures (14 путей VM-B1 candidate; не менять/удалять/глушить исполнителю):**
 
 - `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt`.
 - `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt`.
@@ -109,6 +109,8 @@ fun onRetryOnline(provider: String)
 - `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsScreenTest.kt`.
 - `app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineReadiness.kt`.
 - `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fReadinessSearchTest.kt`.
+- `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchTest.kt`.
+- `app/src/test/kotlin/io/github/puflik/plinth/online/Yu4gGatedSearchInTest.kt`.
 
 **Не трогать:** всё прочее, в частности старые тесты и sharedTest fixtures, `OnlineRepository`, `OnlineProviderIds`, Gated/Core repositories, core, MainActivity, PlinthNavHost, OnlineSongs, TrackActions, очередь, зависимости, AGENTS/.codex, CHANGELOG/tasks/decisions, plan. Защищённые тесты прошлых задач также сохраняют защиту. Никаких копий сборок/target основного repo.
 
@@ -182,7 +184,7 @@ $env:ANDROID_SERIAL = '<проверенный-serial-эмулятора>'
 Защиту проверять относительно опорного коммита:
 
 ```bash
-test_commit='92c78bdb5220542ed1425e285ee1d44883b7eac9'
+test_commit='<VM-B1-candidate-commit>'  # заменить точным hash после RED/gates; пока candidate не принят
 git diff --exit-code "$test_commit" HEAD -- \
   app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt \
   app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt \
@@ -195,11 +197,13 @@ git diff --exit-code "$test_commit" HEAD -- \
   app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/SearchFieldTest.kt \
   app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5aSearchSongsScreenTest.kt \
   app/src/sharedTest/kotlin/io/github/puflik/plinth/online/FakeOnlineReadiness.kt \
-  app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fReadinessSearchTest.kt
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fReadinessSearchTest.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchTest.kt \
+  app/src/test/kotlin/io/github/puflik/plinth/online/Yu4gGatedSearchInTest.kt
 git diff --check
 ```
 
-Первый diff пуст. Если защищённые тесты изменены планировщиком до реализации по принятому решению, новый hash явно заменить в шапке и независимо проверить миграцию, не сравнивать со старым случайным hash.
+Команда содержит ровно 14 authoritative protected paths, включая новый B1 и явно мигрированный Yu4g. До независимой приёмки candidate не является baseline. После подстановки проверяемого candidate первый diff обязан быть пуст. Если защищённые тесты изменены планировщиком до реализации по принятому решению, новый hash явно заменить в шапке и независимо проверить миграцию, не сравнивать со старым случайным hash.
 
 ## Готово, когда
 
@@ -700,3 +704,67 @@ UI с реальным воспроизведением прокрутки пе�
 не запускали: он превысит норму. Перед продолжением сверить фактические окна,
 сохранить резерв до reset 17 ноября 09:39 +05. Рекомендуется /compact;
 новый чат не нужен, граф обновлять только в конце волны.
+
+## VM-B1 regression planning — 2026-11-15
+
+### Цель и контекст
+
+Фактически планировщик **`gpt-6.1-sol`, `xhigh`**; узкий проход по решению Astra xhigh из `docs/work/yu5f-vm-review-20261115.md` (B1/C1 и Exact follow-up), без production-кода. Исходный HEAD `d281678`, production VM `dc2307edebc072dbc554f934e332d910c9b07734`. Перед запуском координатор проверил окна 63%/82%; пользователь явно разрешил продолжать с расходом остатка. Вложенных агентов нет. Graph query выполнен по root graph (11365 nodes), граф отстаёт; rebuild/extraction не запускались, токены семантического извлечения не расходовались.
+
+### Решение и инварианты
+
+1. Новый `Yu5fAdditionalSearchTest` наследует неизменённый `Yu5fReadinessHarness`: завершённые IA success/YT NO_NETWORK для `concert`, уход 5001 ms, изменения settings без подписчика, возврат и retry при неизменном виртуальном времени до 300 ms debounce.
+2. Removed YT и master-off не создают readiness/search, не включают запрещённый loading и не проигрывают retry после 301 ms; при удалении соседа IA cache сохраняется. Retained IA получает ровно одну новую readiness с ARCHIVE_ONLY, ровно один search только после Applied; двойной tap сливается, YT отсутствует, итог IA обновляется.
+3. CI-C1 меняет только устаревший assertion bulk-счётчика на точный provider/query и пустой bulk; остальные assertions и три других теста Yu4g сохраняются. Двенадцать прежних protected paths остаются побайтово неизменны.
+4. Следующий отдельный VM-исполнитель: Sol high, только `SearchViewModel.kt` и отчёт. На каждой новой collection до разрешения retry должен быть согласован текущий normalized settings/query/membership независимо от restarted nonblank debounce. Минимальная коррекция: считать collection несогласованной до первого свежего контекста; сохранить по провайдеру намерение раннего retry, после согласования однократно проверить текущую eligibility и запустить через существующий attempt/readiness путь. Removed/master-off intent отбросить; retained intent потребить один раз, не перезапускать completed sibling. Свежие settings должны фильтровать cache/loading сразу; не ждать 300 ms ради настроек. Изменение raw query во время остановки не разрешает старый retry: intent проверяется против свежего query/generation. Сохранить first-frame cache для прежнего контекста, identity/cancellation/ABA и library debounce. Новых public API, timers, permanent collectors и data-layer изменений нет.
+
+### Файлы и остановка
+
+Текущему планировщику менять только `docs/work/yu5f.md`, новый `app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fAdditionalSearchTest.kt` и ровно разрешённую миграцию `app/src/test/kotlin/io/github/puflik/plinth/online/Yu4gGatedSearchInTest.kt`. Все прочие файлы, production, harness и старые 12 protected paths запрещены. Данные пользователя не затрагиваются, Astra max data review здесь неприменимо; независимая приёмка нового test candidate — Astra xhigh до следующего VM-исполнителя. Одна коррекция неожиданного gate failure; повтор — stop/report/commit/push. Ожидаемы только три новых B1 assertion RED; compile RED недопустим, API уже существует.
+
+### Проверки и готовность
+
+Запланировано: свежий search JVM + Yu4g с `--rerun` (только три новых B1 RED), полные `ktlintCheck detekt`, обе Kotlin test-компиляции PASS. Linux env и исключение только `:app:cargoNdkBuild` сохраняются; uniffiKotlin не исключается. Логи `/tmp/plinth-yu5f-vmb1-jvm-20261115.log` и `/tmp/plinth-yu5f-vmb1-checks-20261115.log`. Прежние 12 protected сверить с `92c78bd`; обе новые protected paths доводят authoritative список/команду до 14. После свежих gates и exact preservation — candidate commit/push только work/yu5f; baseline принимает независимый Astra xhigh.
+
+### Отчёт планировщика по ходу
+
+- Прочитаны AGENTS, README/AGENT_ROLES/TEMPLATE, bounded task handoff и полный 66-строчный VM review; применены graphify, kotlin-coroutines-flows и tdd-workflow.
+- Исходное дерево чистое, ветка work/yu5f; изучены только нужные bounded диапазоны harness/VM/Yu4g. Production/старые tests не изменялись; подготовка guards начата.
+
+- Добавлены три узких VM-B1 guards с общим setup в новом файле; harness не менялся. Yu4g migration — ровно один replacement и один новый empty-bulk assertion. Authoritative protection list/команда расширены до 14; candidate hash будет закреплён после gates отдельным taskfile-only commit.
+
+### Точные команды текущего прохода
+
+```bash
+export JAVA_HOME=/home/puflik/.local/opt/jdk21
+export ANDROID_HOME=/home/puflik/Android/Sdk
+export ANDROID_SDK_ROOT=/home/puflik/Android/Sdk
+export GRADLE_USER_HOME=/home/puflik/.gradle
+export RUSTUP_TOOLCHAIN=1.98.1
+export JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true
+export PATH="$JAVA_HOME/bin:$PATH"
+bash ./gradlew --no-daemon :app:testGithubDebugUnitTest --rerun \
+  --tests 'io.github.puflik.plinth.ui.search.*' \
+  --tests 'io.github.puflik.plinth.online.Yu4gGatedSearchInTest' \
+  -x :app:cargoNdkBuild > /tmp/plinth-yu5f-vmb1-jvm-20261115.log 2>&1
+bash ./gradlew --no-daemon --continue ktlintCheck detekt \
+  :app:compileGithubDebugUnitTestKotlin :app:compileGithubDebugAndroidTestKotlin \
+  -x :app:cargoNdkBuild > /tmp/plinth-yu5f-vmb1-checks-20261115.log 2>&1
+```
+
+Готово для передачи на независимое review, когда свежий JVM выполнит 85 tests с ровно тремя новыми B1 assertion failures, Yu4g 4/4 PASS, прежние search 78/78 PASS, все style/compile gates PASS, old-12 diff пуст, migration exact и команда содержит ровно 14 защищённых путей. Это RED test candidate, не VM acceptance; UI runtime и both-flavor CI остаются дальнейшими обязательными этапами.
+
+- Свежий JVM RED выполнен (33 s; 45 tasks: 5 executed, 40 up-to-date; `:app:testGithubDebugUnitTest` реально исполнен, `:app:compileGithubDebugUnitTestKotlin` исполнен): **9 suites, 85 tests, 3 assertion failures, 0 errors/skips**. Падают только три новых B1: removed/master-off создают третью readiness вместо ожидаемых двух; retained IA ждёт ALL вместо ARCHIVE_ONLY. Виртуальное время в критическом окне не изменялось. Прежние search **78/78 PASS**, Yu4g **4/4 PASS**. Это runtime RED, не compile RED; VM source идентичен `dc2307e`. Лог `/tmp/plinth-yu5f-vmb1-jvm-20261115.log`, XML summary `/tmp/plinth-yu5f-vmb1-jvm-summary-20261115.json`; полные XML обеих затронутых suites скопированы в `/tmp/plinth-yu5f-vmb1-Yu5fAdditionalSearchTest-20261115.xml` и `/tmp/plinth-yu5f-vmb1-Yu4gGatedSearchInTest-20261115.xml`.
+- Exact preservation PASS: все прежние 12 путей побайтово равны `92c78bd`, Yu4g отличается ровно разрешённым replacement+empty-bulk assertion, protection-command и authoritative list содержат одинаковые 14 путей; `/tmp/plinth-yu5f-vmb1-preservation-20261115.json`. Первоначальный вспомогательный regex проверки путей захватил newline последней строки; исправлен сам read-only verifier, исходные tests/plan из-за него не менялись. Неожиданных Gradle failure пока нет; полные style/compile gates выполняются.
+
+- Первый полный style/compile gate: detekt PASS (app task выполнен), обе test Kotlin compilations UP-TO-DATE/PASS, ktlint FAIL только на chained-call wrapping в новом файле (строки 117, 139–140). `BUILD FAILED in 55s`, 68 tasks: 3 executed, 65 up-to-date; исходный лог сохранён `/tmp/plinth-yu5f-vmb1-checks-initial-20261115.log`. Применена единственная разрешённая коррекция: переносы ровно трёх цепочек `.last/single → outcome → complete`, без изменения вызовов/assertions/timing. После неё повторяются полный style/compile gate и свежий JVM RED; повтор неожиданного failure означает стоп.
+
+- Итоговый полный style/compile gate после единственной коррекции **PASS**, `BUILD SUCCESSFUL in 1m 7s`, 68 tasks: 5 executed, 63 up-to-date. `:app:ktlintTestSourceSetCheck`, `:app:ktlintCheck` и `:app:compileGithubDebugUnitTestKotlin` реально выполнены; app detekt также реально выполнен и PASS, AndroidTest Kotlin compilation UP-TO-DATE/PASS. Это полный вызов ktlintCheck/detekt, не утверждение о повторном исполнении каждого source set. Финальный лог `/tmp/plinth-yu5f-vmb1-checks-20261115.log`; uniffiKotlin сохранён, исключён только cargoNdkBuild. Свежий JVM повтор после formatting запущен.
+
+### Итог VM-B1 planning
+
+Фактически **`gpt-6.1-sol`, `xhigh`**. Финальный свежий JVM после форматирования: **85 tests, ровно 3 новых B1 assertion RED; прежние search 78/78 PASS и Yu4g 4/4 PASS, errors/skips 0**, `29s`, `45 actionable tasks: 2 executed, 43 up-to-date`. Test task исполнен свежо; предыдущий baseline лог сохранён с `-initial`. Final XML/summary в указанных `/tmp` путях перезаписаны результатом окончательного файла. Это ожидаемый runtime RED на неизменённой VM `dc2307e`, compilation успешна.
+
+Полные ktlintCheck/detekt и обе test Kotlin compilations **PASS** после единственной коррекции переносов; других коррекций нет. Production, harness и все прежние 12 protected paths неизменны; Yu4g migration точная, остальные assertions и три теста сохранены. Проверка scope/14-path list-command/exact preservation повторена перед commit; `git diff --check` PASS. Изменены ровно три разрешённых файла. Новые API, suppress/ignore, данные, UI, зависимости, graph rebuild, main/rebase/merge/force/release и вложенные агенты отсутствуют.
+
+Результат — **test candidate**, не принятый baseline и не принятие VM. Следующее действие координатора — независимая Astra xhigh приёмка RED3/exact migration/protection14; только затем отдельный VM correction по этому плану. Полный both-flavor CI и UI runtime здесь не выполнялись. Hash test candidate будет закреплён следующим taskfile-only commit; обычный exact-branch push work/yu5f разрешён, выполняется после проверки remote/tracking/diff.

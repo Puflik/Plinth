@@ -39,7 +39,8 @@ class Yu4gGatedSearchInTest {
             val section = checkNotNull(search.await())
             assertThat(section.provider).isEqualTo(PROVIDER)
             assertThat(section.results).hasSize(1)
-            assertThat(inner.searches).containsExactly("concert")
+            assertThat(inner.providerSearches).containsExactly(PROVIDER to "concert")
+            assertThat(inner.searches).isEmpty()
         }
 
     @Test
