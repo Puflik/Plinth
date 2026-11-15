@@ -1,10 +1,10 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **B1 candidate revision завершён; ожидается независимое Astra review B1/B2.** Полные ktlintCheck/detekt PASS; оба compile дают только объявленный constructor RED9. Production не начинать; accepted baseline отсутствует.
+> **Baseline принят 2026-11-15: Astra xhigh PASS, B1/B2 закрыты.** Опора всех 12 protected paths — `92c78bdb5220542ed1425e285ee1d44883b7eac9`. Разрешён ограниченный этап VM ниже; UI и приёмка на эмуляторе остаются отдельным обязательным этапом.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
-- **Коммит тестов, кандидат (не принят):** `92c78bdb5220542ed1425e285ee1d44883b7eac9` — 12 защищённых путей после B1-коррекции, 23 readiness-сценария (17+6); полные style PASS, constructor RED9; требуется независимое Astra B1/B2 review. Предыдущий split-кандидат `6e8c32a2e4da0cd3a4341055138406d85f79420b` сохранён; предыдущий кандидат `dd33755a463b0e344e24dd79436cc1d3638ff45e` — для точной сверки прежних 22 тел. Историческая опора семи файлов `cbe6934fcd82f203622a490031e9a0e054272fee`, первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` сохраняются для сравнения.
+- **Принятый коммит тестов:** `92c78bdb5220542ed1425e285ee1d44883b7eac9` — 12 защищённых путей после B1-коррекции, 23 readiness-сценария (17+6); полные style PASS, constructor RED9; независимое Astra B1/B2 review 15 ноября PASS. Предыдущий split-кандидат `6e8c32a2e4da0cd3a4341055138406d85f79420b` сохранён; предыдущий кандидат `dd33755a463b0e344e24dd79436cc1d3638ff45e` — для точной сверки прежних 22 тел. Историческая опора семи файлов `cbe6934fcd82f203622a490031e9a0e054272fee`, первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` сохраняются для сравнения.
 - **Данные пользователя:** нет: только поиск и положение UI; журнал/каталог/CRDT не меняются.
 - **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04/14/15; последний проход — один B1 TimedOut guard, без production.
 - **Ограничения запуска:** ровно один агент, без вложенных агентов, реализации и массовых сборок. Перед запуском 75% пятичасового / 12% недельного окна; автор разрешил разовое исключение. Лимиты сообщил координатор.
@@ -182,7 +182,7 @@ $env:ANDROID_SERIAL = '<проверенный-serial-эмулятора>'
 Защиту проверять относительно опорного коммита:
 
 ```bash
-test_commit='<принятый-коммит-тестов>'
+test_commit='92c78bdb5220542ed1425e285ee1d44883b7eac9'
 git diff --exit-code "$test_commit" HEAD -- \
   app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt \
   app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt \
@@ -540,3 +540,43 @@ Graphify query выполнен на отстающем графе основн�
 Runtime JVM/UI guards, эмулятор, устройство и APK не запускались; compile RED подтверждает только отсутствующий обязательный constructor API, не выполнение нового TimedOut-сценария. Production, DI, зависимости, прочие tests/fixtures и main не менялись. Независимое ревью не выполнялось планировщиком. Новый test commit остаётся **candidate**, его hash будет закреплён следующим taskfile-only commit; до принятия Astra xhigh executor не запускать. Текущий Gradle process завершён, фоновых сборок нет. Предстоит обычный direct push `work/yu5f`; без merge/rebase/force/release.
 
 Новый **candidate test commit**: `92c78bdb5220542ed1425e285ee1d44883b7eac9`; hash закреплён этим taskfile-only commit. Обычная публикация `work/yu5f` выполняется после фиксации; независимая приёмка B1/B2 ещё впереди. Предыдущая опора `6e8c32a` и отчёт CHANGES REQUESTED не удалены.
+
+
+## Приёмка baseline и ограниченный этап VM — 2026-11-15
+
+Astra xhigh независимо закрыл B1/B2: добавленный TimedOut guard сохраняет
+исходное ожидание соседа/loading и поздний успешный результат; старые 22 тела,
+harness и остальные 11 protected paths сохранены. B2-команда покрывает все
+12 путей, Bash syntax PASS. Новый baseline `92c78bdb5220542ed1425e285ee1d44883b7eac9`
+принят. Полный отчёт сохранён координатором в main `docs/work/review-20261115.md`;
+исходник `/tmp/plinth-bounded-review-20261115.md`. Runtime ещё не выполнялся:
+до реализации обе test-компиляции дают только известные 9 constructor errors.
+
+Координатор разделил исполнение: сначала VM (Sol high), затем UI и реальное
+воспроизведение прокрутки (Terra high), затем независимое ревью Astra xhigh.
+Это разрешение на ограниченный этап, не отмена критериев общей задачи.
+Первым действием UI-этапа остаётся воспроизведение на выбранном эмуляторе;
+без него scroll/UI не принимаются. Этап VM не объявляет задачу законченной.
+
+**Текущему исполнителю менять только**
+`app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt`
+и этот файл в разделе «Отчёт исполнителя». Реализовать принятое решение
+независимых provider attempts/cache/lifecycle и обязательный OnlineReadiness
+по разделам выше. SearchScreen, ресурсы, все тесты, DI/Gated/Core, зависимости
+и общие документы не менять. Дополнительный тестовый файл здесь не требуется:
+имеются progressive, readiness и прежние search/song guards.
+
+Linux: JDK `/home/puflik/.local/opt/jdk21`, SDK `/home/puflik/Android/Sdk`,
+GRADLE_USER_HOME `/home/puflik/.gradle`, RUSTUP_TOOLCHAIN=1.98.1,
+JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true, JDK bin первым в PATH.
+Wrapper запускать через `bash ./gradlew`; исключать только `:app:cargoNdkBuild`,
+не `uniffiKotlin`. Сначала свежие `:app:testGithubDebugUnitTest --rerun`
+с фильтром `io.github.puflik.plinth.ui.search.*`; затем полные
+`ktlintCheck detekt :app:compileGithubDebugAndroidTestKotlin`. Сохранять
+логи, отличать свежие задачи/кэш. UI runtime и полный CI остаются до приёмки
+всей задачи. Не ставить NDK/эмулятор и не подключать телефон для VM-этапа.
+
+После неожиданного падения допускается одна коррекция; повторное падение —
+стоп, отчёт, commit/push только work/yu5f. Защищённый diff всех 12 путей от
+принятого baseline обязан быть пуст. Никаких suppress/ignore/ослаблений,
+main/merge/rebase/force/release. По ходу сохранять находки и ограничения.
