@@ -36,17 +36,23 @@ Codex на ноутбуке установлен.
    свежие readiness JVM 12/12 PASS. Старый scoped init не использовать.
    CI main `43358730931` на `419ae48` также SUCCESS. Завершённые
    `work/yu5f-ready` и `/home/puflik/src/Plinth-yu5f-ready` убраны 14 ноября.
-6. Следующая задача — `yu5f`; её исходный handoff находится в
-   `origin/work/yu5f:docs/work/yu5f.md`, теперь HEAD `4f4d8d3`, исходный baseline `cbe6934`.
-   Linux worktree `/home/puflik/src/Plinth-yu5f`; main `419ae48` внесён обычным
-   merge `257546c`, старые protected tests сохранены. Полные ktlint/detekt PASS.
-   Candidate `6e8c32a` содержит восемь migrations и 22 guards; полные style
-   checks PASS, compile RED только по объявленному readiness-параметру.
-   Независимое ревью требует B1: timeout с активным соседом; B2-команда
-   уже дополнена до 12 путей и также ждёт повторной проверки. До executor
-   нужен принятый новый baseline; повторять готовую подготовку целиком нельзя.
-   Production ещё не начинался; никакого default Applied в нём не добавлять.
-   UI проверять на выбранном эмуляторе, телефон не подставлять автоматически.
+6. Следующая задача — `yu5f`; Linux worktree `/home/puflik/src/Plinth-yu5f`,
+   ветка `work/yu5f`, handoff `4257a74`. 15 ноября Astra xhigh принял
+   protected baseline `92c78bd`: 12 путей, 23 readiness guards и восемь
+   migrations, B1/B2 закрыты. Полные style PASS; до production compile RED9
+   только по обязательному readiness-параметру. Sol high получил ограниченный
+   этап `SearchViewModel.kt`; UI/ресурсы/тесты не трогает. Затем Terra должен
+   реально воспроизвести прокрутку на выбранном эмуляторе. Перед следующими
+   агентами сверять лимиты; перед VM-этапом было 56%/65%.
+7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
+   `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
+   Размер 35 083 627 байт; SHA-256
+   `7a0934ff7b98c2376a6727098530bbaa89f20f68dd5b7460ee5bc26bbd5afdac`.
+   `apksigner verify` PASS (v2), `zipalign -c -P 16 4` PASS; package
+   `io.github.puflik.plinth.debug`, minSdk 26, версия `0.2.3-debug`, четыре ABI.
+   Native ядра и YouTube/NewPipe classes в APK подтверждены. Файл игнорируется
+   Git; для скачивания из CI см. `docs/testing/test-apk.md`. Телефон, установка
+   и живое воспроизведение не проверялись. Выпуск/тег не создавались.
 
 Граф построен на 7c5192a (2026-10-19), сильно отстаёт; Windows CLI сломан.
 На Linux 2026-11-07 `graphify query` выполнен успешно, установлен graphify 0.9.103;
