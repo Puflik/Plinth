@@ -162,6 +162,14 @@ jobs:
       - name: Assemble instrumented tests
         run: ./gradlew assembleGithubDebugAndroidTest
 
+      - name: Upload GitHub debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: plinth-github-debug-${{ github.sha }}
+          path: app/build/outputs/apk/github/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error
+
       # seeds.txt и configuration.txt R8 — по ним читается красный страж R8.
       # mapping.txt (около 57 МБ) не грузим.
       - name: Upload reports
