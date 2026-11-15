@@ -1,10 +1,11 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **VM review 2026-11-15: CHANGES REQUESTED.** Новый VM-B1: retry после grace до согласования текущего контекста. CI-C1: устаревшее наблюдение в Yu4g guard. Опора прежних 12 protected paths `92c78bd` сохраняется; старые планировочные B1/B2 закрыты. Следующий этап — только планировщик по handoff ниже; VM `dc2307e` не принята и в main не переносится.
+> **VM review 2026-11-15: CHANGES REQUESTED.** Новый VM-B1: retry после grace до согласования текущего контекста. CI-C1: устаревшее наблюдение в Yu4g guard. Опора прежних 12 protected paths `92c78bd` сохраняется; старые планировочные B1/B2 закрыты. VM-B1 candidate `b52b256eae8486e6fb92c7094039460740755b25` подготовлен; следующий этап — его независимая приёмка Astra xhigh; VM `dc2307e` не принята и в main не переносится.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
 - **Принятый коммит тестов:** `92c78bdb5220542ed1425e285ee1d44883b7eac9` — 12 защищённых путей после B1-коррекции, 23 readiness-сценария (17+6); полные style PASS, constructor RED9; независимое Astra B1/B2 review 15 ноября PASS. Предыдущий split-кандидат `6e8c32a2e4da0cd3a4341055138406d85f79420b` сохранён; предыдущий кандидат `dd33755a463b0e344e24dd79436cc1d3638ff45e` — для точной сверки прежних 22 тел. Историческая опора семи файлов `cbe6934fcd82f203622a490031e9a0e054272fee`, первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` сохраняются для сравнения.
+- **VM-B1 test candidate (не принят):** `b52b256eae8486e6fb92c7094039460740755b25` — 14 protected paths, runtime RED3/PASS82, full style/обе test Kotlin compilations PASS; независимая Astra xhigh приёмка впереди. Принятая опора прежних 12 остаётся `92c78bd`.
 - **Данные пользователя:** нет: только поиск и положение UI; журнал/каталог/CRDT не меняются.
 - **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04/14/15; последний проход — три VM-B1 runtime RED guards и точная CI-C1 migration, без production.
 - **Исторический запуск планировщика 2026-11-04:** ровно один агент, без вложенных агентов, реализации и массовых сборок. Перед запуском 75% пятичасового / 12% недельного окна; автор разрешил разовое исключение. Лимиты сообщил координатор.
@@ -184,7 +185,7 @@ $env:ANDROID_SERIAL = '<проверенный-serial-эмулятора>'
 Защиту проверять относительно опорного коммита:
 
 ```bash
-test_commit='<VM-B1-candidate-commit>'  # заменить точным hash после RED/gates; пока candidate не принят
+test_commit='b52b256eae8486e6fb92c7094039460740755b25'  # VM-B1 test candidate, независимая приёмка ещё впереди
 git diff --exit-code "$test_commit" HEAD -- \
   app/src/test/kotlin/io/github/puflik/plinth/ui/search/Yu5fProgressiveSearchTest.kt \
   app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt \
@@ -768,3 +769,5 @@ bash ./gradlew --no-daemon --continue ktlintCheck detekt \
 Полные ktlintCheck/detekt и обе test Kotlin compilations **PASS** после единственной коррекции переносов; других коррекций нет. Production, harness и все прежние 12 protected paths неизменны; Yu4g migration точная, остальные assertions и три теста сохранены. Проверка scope/14-path list-command/exact preservation повторена перед commit; `git diff --check` PASS. Изменены ровно три разрешённых файла. Новые API, suppress/ignore, данные, UI, зависимости, graph rebuild, main/rebase/merge/force/release и вложенные агенты отсутствуют.
 
 Результат — **test candidate**, не принятый baseline и не принятие VM. Следующее действие координатора — независимая Astra xhigh приёмка RED3/exact migration/protection14; только затем отдельный VM correction по этому плану. Полный both-flavor CI и UI runtime здесь не выполнялись. Hash test candidate будет закреплён следующим taskfile-only commit; обычный exact-branch push work/yu5f разрешён, выполняется после проверки remote/tracking/diff.
+
+Новый **VM-B1 test candidate**: `b52b256eae8486e6fb92c7094039460740755b25` (`test(search): guard retries before resumed context reconciliation`); этот taskfile-only commit закрепляет hash в шапке и 14-path protection-command. Кандидат не принят, следующий VM executor не запускался. Финальный runtime RED выполнен за 29 s (45 tasks: 2 executed, 43 up-to-date); все проверки завершены, фоновых Gradle sessions этого прохода нет. После metadata commit выполняется обычный exact-branch push без proxy, main/rebase/merge/force.
