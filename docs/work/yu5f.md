@@ -1,11 +1,11 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **VM review 2026-11-15: CHANGES REQUESTED.** Новый VM-B1: retry после grace до согласования текущего контекста. CI-C1: устаревшее наблюдение в Yu4g guard. Опора прежних 12 protected paths `92c78bd` сохраняется; старые планировочные B1/B2 закрыты. VM-B1 candidate `b52b256eae8486e6fb92c7094039460740755b25` подготовлен; следующий этап — его независимая приёмка Astra xhigh; VM `dc2307e` не принята и в main не переносится.
+> **VM review 2026-11-15: CHANGES REQUESTED.** Новый VM-B1: retry после grace до согласования текущего контекста. CI-C1: устаревшее наблюдение в Yu4g guard. Опора прежних 12 protected paths `92c78bd` сохраняется; старые планировочные B1/B2 закрыты. VM-B1 baseline `b52b256eae8486e6fb92c7094039460740755b25` принят независимым Astra xhigh review (PASS); следующий этап — ограниченная коррекция SearchViewModel; VM `dc2307e` не принята и в main не переносится.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
 - **Принятый коммит тестов:** `92c78bdb5220542ed1425e285ee1d44883b7eac9` — 12 защищённых путей после B1-коррекции, 23 readiness-сценария (17+6); полные style PASS, constructor RED9; независимое Astra B1/B2 review 15 ноября PASS. Предыдущий split-кандидат `6e8c32a2e4da0cd3a4341055138406d85f79420b` сохранён; предыдущий кандидат `dd33755a463b0e344e24dd79436cc1d3638ff45e` — для точной сверки прежних 22 тел. Историческая опора семи файлов `cbe6934fcd82f203622a490031e9a0e054272fee`, первый baseline `25c1203670682420f9a51c902cd22c60556ac6f5` сохраняются для сравнения.
-- **VM-B1 test candidate (не принят):** `b52b256eae8486e6fb92c7094039460740755b25` — 14 protected paths, runtime RED3/PASS82, full style/обе test Kotlin compilations PASS; независимая Astra xhigh приёмка впереди. Принятая опора прежних 12 остаётся `92c78bd`.
+- **Принятый VM-B1 baseline:** `b52b256eae8486e6fb92c7094039460740755b25` — 14 protected paths, runtime RED3/PASS82, full style/обе test Kotlin compilations PASS; независимый Astra xhigh review 2026-11-15 PASS, отчёт `yu5f-vmb1-tests-review-20261115.md`. Прежние 12 дополнительно закреплены на `92c78bd`; это приёмка тестов, не VM.
 - **Данные пользователя:** нет: только поиск и положение UI; журнал/каталог/CRDT не меняются.
 - **Планировщик фактически:** `gpt-6.1-sol`, `xhigh`, 2026-11-04/14/15; последний проход — три VM-B1 runtime RED guards и точная CI-C1 migration, без production.
 - **Исторический запуск планировщика 2026-11-04:** ровно один агент, без вложенных агентов, реализации и массовых сборок. Перед запуском 75% пятичасового / 12% недельного окна; автор разрешил разовое исключение. Лимиты сообщил координатор.
@@ -771,3 +771,34 @@ bash ./gradlew --no-daemon --continue ktlintCheck detekt \
 Результат — **test candidate**, не принятый baseline и не принятие VM. Следующее действие координатора — независимая Astra xhigh приёмка RED3/exact migration/protection14; только затем отдельный VM correction по этому плану. Полный both-flavor CI и UI runtime здесь не выполнялись. Hash test candidate будет закреплён следующим taskfile-only commit; обычный exact-branch push work/yu5f разрешён, выполняется после проверки remote/tracking/diff.
 
 Новый **VM-B1 test candidate**: `b52b256eae8486e6fb92c7094039460740755b25` (`test(search): guard retries before resumed context reconciliation`); этот taskfile-only commit закрепляет hash в шапке и 14-path protection-command. Кандидат не принят, следующий VM executor не запускался. Финальный runtime RED выполнен за 29 s (45 tasks: 2 executed, 43 up-to-date); все проверки завершены, фоновых Gradle sessions этого прохода нет. После metadata commit выполняется обычный exact-branch push без proxy, main/rebase/merge/force.
+
+
+## Приёмка VM-B1 тестов — 2026-11-15, поздний вечер
+
+Автор разрешил только одно независимое ревью сверх недельного порога:
+«Да, только это ревью». Перед Astra xhigh окна 11%/88%, после 39%/92%.
+Ревью завершено PASS; точный отчёт `yu5f-vmb1-tests-review-20261115.md`.
+Принят baseline `b52b256eae8486e6fb92c7094039460740755b25` для всех 14 путей
+из существующей команды защиты. Production и старые 12 неизменны;
+проверены реальные XML RED3/PASS82, exact Yu4g migration и причинность guards.
+VM-B1 остаётся открытым. Тесты не ослаблять и не изменять будущему исполнителю.
+
+Следующий отдельный Sol high после проверки лимитов меняет только
+`app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt`
+и свой отчёт в `docs/work/yu5f.md`. Действует узкое решение раздела
+«VM-B1 regression planning»: актуальные settings/query/membership перед retry,
+валидное намерение ровно один раз, removed/master-off без запуска,
+независимость от повторного debounce и сохранение cache/identity/cancellation.
+Никаких новых API, timers, permanent collectors или data/UI изменений.
+Raw query при остановке может измениться: запрет устаревшего retry обязателен,
+хотя три новых guards держат query прежним; это отдельно проследить при VM review.
+
+Требуются свежие 85/85 scoped JVM GREEN, полные style/обе test compilations,
+пустой diff всех 14 protected paths, независимый production review и полный
+CI обеих flavors перед дальнейшим UI-этапом. Один неожиданный failure допускает
+одну коррекцию, повтор — stop/report/commit/push. Нынешний CI43723292462 имеет
+Rust PASS и падение unit step; конкретные CI assertions не подтверждены,
+поскольку job log не скачался из-за сети. Локальный RED не равен CI PASS.
+
+Разрешённое исключение исчерпано этим review; исполнитель сейчас не запускался.
+Кредит reset не использован, граф остаётся позади до конца волны.
