@@ -802,3 +802,15 @@ Rust PASS и падение unit step; конкретные CI assertions не �
 
 Разрешённое исключение исчерпано этим review; исполнитель сейчас не запускался.
 Кредит reset не использован, граф остаётся позади до конца волны.
+
+
+## Полный Github CI baseline подтверждён — 2026-11-17
+
+Координатор разобрал сохранённые XML CI43749054774 на точном `7534c77`:
+1114 tests, 1110 passed, три ожидаемых VM-B1 failures, 0 errors, 1 skip.
+Все failures только в Yu5fAdditionalSearchTest; Yu4gGatedSearchInTest4/4 PASS.
+Других падений Github suite нет. Fdroid XML отсутствуют, both-flavor PASS
+не заявляется. Прежняя неопределённость конкретных CI assertions закрыта;
+доказательства и SHA256 artifact — `yu5f-ci-audit-20261117.md`.
+Baseline14 b52b256 и узкий scope следующего VM correction не меняются.
+Новых агентов/сборок/изменений кода не было: остаток недели3%, reset17ноября09:39+05.
