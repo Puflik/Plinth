@@ -877,3 +877,31 @@ UI/scroll/runtime acceptance остаются обязательными до с
 Исполнитель: `gpt-6.1-terra`, `high` (назначено координатором). HEAD `ef0dcf8`; production и защищённые тесты не менялись. В sandbox `/dev/kvm` скрыт, локальный запуск adb завершился `Operation not permitted`; проверка вне sandbox видит `/dev/kvm` (root:kvm). Начата установка официальных emulator, system image API 35 Google APIs x86_64 и NDK 28.2.13676358 через SDK manager; до завершения runtime и измерения не заявляются.
 
 Установка остановилась до загрузки пакетов: `/home/puflik/Android/Sdk/cmdline-tools/latest/bin/sdkmanager` выводит `Downloading Android CLI...` и не сообщает URL или ошибку. Первая попытка прервана после ожидания; единственный повтор без proxy завершён `timeout` через 90 секунд (exit 124). `emulator`, `system-images`, `ndk` в SDK отсутствуют; AVD и serial не созданы, APK не устанавливался, runtime/scroll не измерен. Процессов sdkmanager/android CLI больше нет; обнаружен `adb -L tcp:5037 fork-server` PID 61195, его происхождение не установлено, сервер не останавливался во избежание воздействия на другие устройства. `/dev/kvm` вне sandbox существует, доступ эмулятора не проверен. Следующий шаг: отдельно выяснить URL и доступность загрузки Android CLI, восстановить SDK manager, затем повторить подготовку и baseline с явным emulator serial и проверкой `ro.kernel.qemu=1`. Исторический +209 px остаётся непроверенным; причину не устанавливаем.
+
+
+## SDK blocker закрыт, следующий UI baseline — 2026-11-18
+
+Terra baseline8d496c2 не запускал runtime из-за bootstrap Android CLI.
+Отдельные Luna этапы сняли blocker: CLI1.1.16919734 в3e9db35 и SDK packages
+в06c2357, отчёты android-cli-bootstrap-20261118.md и android-sdk-packages-20261118.md.
+Использовать отдельный CLI через per-invocation ANDROID_CLI_BIN; existing
+latest/bin/android остаётся зависающим bootstrap и не заменялся.
+
+Установлены emulator37.2.13, system-images;android-35;google_apis;x86_64
+revision9.0.0 и ndk;28.2.13676358/r28c. Метаданные, version и read-only
+accel-check PASS, KVM usable вне sandbox. Cargo-ndk и все4 Android Rust targets
+для1.98.1 уже есть. Никаких AVD/runtime/production UI правок пока не было.
+
+Следующий ограниченный Terra baseline: создать отдельный Plinth AVD,
+проверить конкретный serial/qemu=1, собрать нужные debug/test APK с настоящими
+native libs и измерить прежние scroll/viewport критерии до правки экрана.
+Repository scope этого baseline: только отчёт и при необходимости новый
+Yu5fAdditionalSearchScreenTest.kt; protected14, VM, SearchScreen/strings
+сохранить. Если runtime не воспроизводится или нужен иной scope, записать
+доказательства; не заменять runtime компиляцией и не приписывать причину.
+Телефон и неизвестный adb-server PID61195 не трогать.
+
+При завершении setup окна77%/28%; день начался16%, суточные12пунктов потрачены.
+Новый агент не запущен, heartbeat временно перенесён на19ноября00:02+05,
+с возвратом к обычным5ч2мин на следующем допустимом запуске после проверки окон.
+Граф остаётся позади до конца волны; состояние готово для /compact.
