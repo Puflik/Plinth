@@ -7622,3 +7622,47 @@ Claude из списка убран.
   Astra исправления `f812ee8`; VM-B1 принят. Вся yu5f остаётся незавершённой:
   следующий этап — подготовка выбранного эмулятора и UI/scroll reproduction.
   Код/защищённые тесты в ходе фиксации приёмки не менялись, граф отстаёт.
+- Уточнение preflight: `/dev/kvm` был скрыт файловой песочницей, а не отсутствовал
+  на ноутбуке. Read-only require_escalated показал устройство root:kvm с ACL;
+  CPU vmx, модули kvm/kvm_intel загружены. Kernel/BIOS/права не менялись.
+  При окнах9%/17% запущен один Terra high на ограниченный этап SDK/AVD setup
+  и фактического UI/scroll baseline, до production UI правок. В repo разрешены
+  только отчёт и при необходимости новый дополнительный runtime probe;
+  VM/экран/строки/14 protected paths не менять. Телефон исключён из действий.
+- Terra завершил baseline-этап остановкой по правилу повторной ошибки:
+  sdkmanager зависает на `Downloading Android CLI`, повтор без proxy timeout90s
+  (exit124). Пакеты emulator/system-images/NDK и AVD отсутствуют, runtime
+  не выполнялся, код/тесты не менялись. Отчёт опубликован в `8d496c2`.
+- Причина загрузки уточнена: установленный sdkmanager — wrapper нового
+  Android CLI с override `ANDROID_CLI_BIN`; `bin/android` — ELF bootstrap,
+  его нужно изучать через file/ограниченный strings, не текстовое чтение.
+  Официальный URL `https://dl.google.com/android/cli/latest/linux_x86_64/android-cli`
+  ответил прямому IPv4 HEAD200, размер79497240. При окнах34%/21% Luna medium
+  получил отдельный ограниченный этап bootstrap-repair: скачать официальный
+  CLI рядом с имеющимися tools, проверить version/help/local installed list.
+  Пакеты SDK/AVD/builds/runtime в этот отдельный scope не входят; source/code
+  и protected tests не меняются. Документация CLI:
+  https://developer.android.com/tools/agents/android-cli .
+- Luna bootstrap-repair `3e9db35` завершён: официальный CLI1.1.16919734,
+  SHA2569803784ddf24d4699929eece519ffa8b066afa9a2b93bd58749b3c6d2caaeeec,
+  отдельный путь SDK/cmdline-tools/android-cli-20261118/android-cli; version,
+  help, local installed list и wrapper override PASS. Bootstrap/latest не
+  перезаписаны, SDK packages этим этапом не устанавливались. Отчёт
+  `android-cli-bootstrap-20261118.md`. При окнах46%/23% Luna medium получил
+  отдельный простой этап установки трёх уже выбранных SDK packages без
+  AVD/runtime/code: emulator, API35 Google APIs x86_64, NDK28.2.13676358.
+  День начался16%, норма≈12пунктов; дальнейшая UI работа зависит от остатка.
+- SDK packages завершены в `06c2357`: emulator37.2.13, API35 Google APIs
+  x86_64 revision9.0.0, NDK28.2.13676358/r28c; metadata/source.properties,
+  emulator-version и accel-check PASS (KVM installed and usable). Установка
+  шла одним вызовом с наблюдаемым ростом загрузок; package retry не нужен.
+  Отчёт `android-sdk-packages-20261118.md`. AVD/app/runtime/phone не запускались.
+  Дополнительно read-only подтверждены cargo-ndk и четыре Android Rust targets
+  для1.98.1; эти ранее установленные зависимости не менялись.
+- На завершении setup API77% primary /28% weekly; от начала дня16% потрачено
+  12пунктов при суточном ориентире≈12. Следующий Terra не запущен. По ранее
+  разрешённому правилу автоматизация `plinth` обновлена на ежедневные00:02
+  местного времени, ближайший запуск19ноября; prompt требует на следующем
+  допустимом запуске вернуть обычный интервал302минуты. Это временная задержка
+  из-за суточного бюджета, без reset-кредита/нового чата. Граф отстаёт;
+  состояние сохраняется для /compact и следующего автоматического продолжения.

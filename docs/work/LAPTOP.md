@@ -75,8 +75,24 @@ Codex на ноутбуке установлен.
    По просьбе автора heartbeat `plinth` продолжает этот чат каждые5ч2мин,
    проверяя лимиты/суточную норму; запуск корректируется по resetsAt+2мин.
    Read-only preflight UI17ноября: emulator/system-images в SDK отсутствуют,
-   `/dev/kvm` отсутствует, свободно57GiB; SDK tools/adb доступны. Эмулятор,
-   виртуализация и устройство не настраивались; телефон не использовался.
+   `/dev/kvm` скрыт в sandbox, свободно57GiB; SDK tools/adb доступны.
+   Проверка18ноября с require_escalated показала настоящий `/dev/kvm`
+   (root:kvm, ACL), CPU vmx и загруженные kvm/kvm_intel. Не создавать device
+   заново: для проверки доступа/запуска эмулятора нужна корректная среда вне
+   sandbox. Телефон не использовался; создание AVD и baseline ещё впереди.
+   Terra setup остановился на зависшем bootstrap нового Android CLI (`8d496c2`).
+   Отдельный Luna-этап `3e9db35` восстановил CLI1.1.16919734 в
+   `/home/puflik/Android/Sdk/cmdline-tools/android-cli-20261118/android-cli`;
+   wrapper использовать с per-invocation ANDROID_CLI_BIN этим путём.
+   Version/help/local list PASS; детали/hash в `android-cli-bootstrap-20261118.md`.
+   Отдельный SDK этап `06c2357` завершён: emulator37.2.13, образ API35 Google APIs
+   x86_64 revision9.0.0, NDK28.2.13676358/r28c. Metadata/source.properties,
+   emulator version и accel-check PASS; KVM usable. Подробности в
+   `android-sdk-packages-20261118.md`. Cargo-ndk уже установлен; Rust1.98.1
+   содержит aarch64/armv7/i686/x86_64 Android targets и host x86_64 Linux.
+   AVD/runtime ещё не создавались. Не запускать зависающий bootstrap latest/bin/android.
+   После подготовки окна77%/28%, расход18ноября12пунктов недели; heartbeat
+   временно ожидает19ноября00:02+05 и затем возвращается к обычным5ч2мин.
    В main эта VM не перенесена.
 7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
    `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
