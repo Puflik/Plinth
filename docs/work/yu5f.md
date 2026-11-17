@@ -1,6 +1,6 @@
 # yu5f — независимые секции онлайн-поиска
 
-> **VM review 2026-11-15: CHANGES REQUESTED.** Новый VM-B1: retry после grace до согласования текущего контекста. CI-C1: устаревшее наблюдение в Yu4g guard. Опора прежних 12 protected paths `92c78bd` сохраняется; старые планировочные B1/B2 закрыты. VM-B1 baseline `b52b256eae8486e6fb92c7094039460740755b25` принят независимым Astra xhigh review (PASS); следующий этап — ограниченная коррекция SearchViewModel; VM `dc2307e` не принята и в main не переносится.
+> **VM-B1 review 2026-11-17: PASS.** Исправление `f812ee8`, проверенный handoff `362ab9e`; baseline14 `b52b256` сохранён, свежие85/85 и style/compile PASS. Независимый отчёт `yu5f-vmb1-fix-review-20261117.md`. Полный CI44116043234 на точном `362ab9e` SUCCESS (проверено18ноября); следующий этап — UI/scroll с воспроизведением на эмуляторе. Задача yu5f пока не завершена и не сливается.
 
 - **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`
 - **Исходная основа:** `main` на `af5ecb3`; 2026-11-13 принят main `419ae48` обычным merge `257546c`, без переписывания опубликованной ветки.
@@ -837,3 +837,37 @@ Production commit **`f812ee8e3867a85d466f1d43dfb0df2c4af68933`** (`fix(search): 
 Поведение: при restart settings согласуются без ожидания повторного nonblank debounce, кэш прежнего контекста остаётся первым кадром; removed/master-off не запускают readiness/search, retained retry выполняется однократно. Pending retry связан с identity и проверяется после membership-фильтрации; двойной provider tap не дублирует attempt. Changed raw query не переиспользует старый settled context: initial network context пуст до штатного debounce, immediate retry требует совпадения raw/context, deferred retry повторно сверяет текущий raw перед dispatch. Поэтому старый query retry не разрешается. Путь library debounce, current generation/attempt identity, отмена scope после grace и ABA/readiness цикл сохранены.
 
 Это отчёт реализации, не самостоятельная приёмка: далее требуется независимый Astra review и полный both-flavor CI. Локальный85-test scoped PASS не равен полному CI; Fdroid, UI/emulator/scroll и live YouTube здесь не проверялись. Новые protected tests/fixtures не добавлялись/не менялись, data/UI/dependencies/API/timers/permanent collectors не затронуты. Граф остаётся позади до конца волны. Фоновых Gradle sessions после финала нет.
+
+
+## Независимая приёмка VM-B1 correction — 2026-11-17
+
+Astra xhigh: PASS на production `f812ee8e3867a85d466f1d43dfb0df2c4af68933`,
+metadata `362ab9e9f7e54d1a6a788b08f6ce2f2adab51abb`. Полный отчёт рядом:
+`yu5f-vmb1-fix-review-20261117.md`. VM-B1 закрыт независимым review; 85/85
+и прежние14 protected paths подтверждены. Changed raw query/deferred retry
+проверены статически; это не новый runtime guard. Последний full CI44116043234
+ещё выполняется; его успех обязателен перед следующим UI-этапом.
+
+Следующий Terra high начинает с реального воспроизведения scroll/return
+на явно выбранном эмуляторе; затем меняет только ранее разрешённый UI scope
+SearchScreen/строки Show all и отчёт, без защищённых тестов. Прежние критерии
+секций/5 строк/Show all/retry/сохранения позиции остаются. Если причина вне
+разрешённых UI путей, остановиться с доказательствами. Нынешний scoped VM
+PASS не заменяет instrumented/runtime UI acceptance и не разрешает main merge.
+
+Read-only preflight: SDK emulator/system-images отсутствуют, /dev/kvm
+не найден, свободно57GiB. SDK tools/adb доступны; устройство не менялось.
+Подготовка выбранного эмулятора и фактическое воспроизведение ещё нужны.
+На последней проверке окна66%/10%; новый агент пока выше primary-порога.
+Автор включил heartbeat plinth в текущем чате каждые5ч2мин с проверкой
+обоих окон/суточной нормы и корректировкой следующего запуска по resetsAt+2мин.
+Граф остаётся позади до конца волны.
+
+
+## Подтверждение полного CI — 2026-11-18
+
+Heartbeat plinth подтвердил CI44116043234 completed/success на точном
+362ab9e9f7e54d1a6a788b08f6ce2f2adab51abb. VM-B1 принят после независимого
+Astra PASS и полного CI обеих flavors. Baseline14 b52b256 сохранён.
+UI/scroll/runtime acceptance остаются обязательными до слияния всей задачи.
+На новом входе окна2%/16%; следующий ограниченный этап допускается по бюджету.
