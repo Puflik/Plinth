@@ -871,3 +871,9 @@ Heartbeat plinth подтвердил CI44116043234 completed/success на то�
 Astra PASS и полного CI обеих flavors. Baseline14 b52b256 сохранён.
 UI/scroll/runtime acceptance остаются обязательными до слияния всей задачи.
 На новом входе окна2%/16%; следующий ограниченный этап допускается по бюджету.
+
+## UI baseline — подготовка 2026-11-18
+
+Исполнитель: `gpt-6.1-terra`, `high` (назначено координатором). HEAD `ef0dcf8`; production и защищённые тесты не менялись. В sandbox `/dev/kvm` скрыт, локальный запуск adb завершился `Operation not permitted`; проверка вне sandbox видит `/dev/kvm` (root:kvm). Начата установка официальных emulator, system image API 35 Google APIs x86_64 и NDK 28.2.13676358 через SDK manager; до завершения runtime и измерения не заявляются.
+
+Установка остановилась до загрузки пакетов: `/home/puflik/Android/Sdk/cmdline-tools/latest/bin/sdkmanager` выводит `Downloading Android CLI...` и не сообщает URL или ошибку. Первая попытка прервана после ожидания; единственный повтор без proxy завершён `timeout` через 90 секунд (exit 124). `emulator`, `system-images`, `ndk` в SDK отсутствуют; AVD и serial не созданы, APK не устанавливался, runtime/scroll не измерен. Процессов sdkmanager/android CLI больше нет; обнаружен `adb -L tcp:5037 fork-server` PID 61195, его происхождение не установлено, сервер не останавливался во избежание воздействия на другие устройства. `/dev/kvm` вне sandbox существует, доступ эмулятора не проверен. Следующий шаг: отдельно выяснить URL и доступность загрузки Android CLI, восстановить SDK manager, затем повторить подготовку и baseline с явным emulator serial и проверкой `ro.kernel.qemu=1`. Исторический +209 px остаётся непроверенным; причину не устанавливаем.
