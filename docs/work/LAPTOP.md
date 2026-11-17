@@ -37,7 +37,7 @@ Codex на ноутбуке установлен.
    CI main `43358730931` на `419ae48` также SUCCESS. Завершённые
    `work/yu5f-ready` и `/home/puflik/src/Plinth-yu5f-ready` убраны 14 ноября.
 6. Следующая задача — `yu5f`; Linux worktree `/home/puflik/src/Plinth-yu5f`,
-   ветка `work/yu5f`, handoff `d281678`, реализация VM `dc2307e`. 15 ноября Astra xhigh принял
+   ветка `work/yu5f`, проверяемый handoff `362ab9e`, исправление VM `f812ee8`. 15 ноября Astra xhigh принял
    protected baseline `92c78bd`: 12 путей, 23 readiness guards и восемь
    migrations, B1/B2 закрыты. Полные style PASS; до production compile RED9
    только по обязательному readiness-параметру. Sol high получил ограниченный
@@ -51,8 +51,11 @@ Codex на ноутбуке установлен.
    переносов; production/старые 12 protected неизменны, защита расширена до14.
    Независимый Astra xhigh review PASS: `b52b256` принят как baseline14,
    отчёт `yu5f-vmb1-tests-review-20261115.md`. Следующий этап — Sol high VM
-   correction только SearchViewModel/отчёт, затем независимое review/full CI.
-   VM пока не принята; изменённый raw query дополнительно проверить при review.
+   correction только SearchViewModel/отчёт выполнена17ноября: `f812ee8`,
+   handoff `362ab9e`. Свежие85/85, полные style/обе test compilations PASS,
+   независимое Astra review PASS; raw query дополнительно прослежен в коде.
+   Полный CI44116043234 на точном `362ab9e` SUCCESS, подтверждено18ноября;
+   следующий этап — UI/emulator acceptance перед слиянием всей задачи.
    После первичного этапа окна 86%/69%; вечером primary сбросился, но неделя
    достигла 77%, расход дня ≈20 пунктов. Новый агент превысит суточную норму.
    Позднее автор разрешил расходовать остаток: на входе 60%/81%, перед Sol
@@ -68,6 +71,12 @@ Codex на ноутбуке установлен.
    1110 PASS и1skip, Yu4g4/4 PASS. Fdroid XML отсутствуют. Отчёт
    `yu5f-ci-audit-20261117.md`; ZIP скачан через прямой IPv4 без proxy.
    API после временных ошибок 15%/97% использовано; новых агентов не запускали.
+   Вечером окна обновились: перед Sol4%/1%, перед review37%/6%, после66%/10%.
+   По просьбе автора heartbeat `plinth` продолжает этот чат каждые5ч2мин,
+   проверяя лимиты/суточную норму; запуск корректируется по resetsAt+2мин.
+   Read-only preflight UI17ноября: emulator/system-images в SDK отсутствуют,
+   `/dev/kvm` отсутствует, свободно57GiB; SDK tools/adb доступны. Эмулятор,
+   виртуализация и устройство не настраивались; телефон не использовался.
    В main эта VM не перенесена.
 7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
    `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
