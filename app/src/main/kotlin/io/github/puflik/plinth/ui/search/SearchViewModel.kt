@@ -105,7 +105,7 @@ class SearchViewModel
         private val query = MutableStateFlow("")
 
         private var shownFound = NOTHING
-        private val network = SearchNetwork(online, readiness)
+        private val network = SearchNetwork(online, readiness) { query.value.trim() }
 
         private val settled: Flow<String> =
             query
@@ -128,7 +128,7 @@ class SearchViewModel
 
         private val inNetwork: Flow<OnlineResults> =
             channelFlow {
-                network.collect(this, viewModelScope, combine(settled, configurations, ::SearchContext))
+                network.collect(this, viewModelScope, settled, configurations)
             }
 
         // Песни секций (Ю5а): `resolve` один раз на песню, ход и сердце строки.
@@ -152,12 +152,12 @@ class SearchViewModel
          * ответ). Текста нет или источники выключены — ничего: спрашивать нечего.
          */
         fun onRetryOnline() {
-            viewModelScope.launch { network.retry(null, query.value.isBlank()) }
+            viewModelScope.launch { network.retry(null) }
         }
 
         /** Повторяет только указанную активную секцию, сохраняя соседей. */
         fun onRetryOnline(provider: String) {
-            viewModelScope.launch { network.retry(provider, query.value.isBlank()) }
+            viewModelScope.launch { network.retry(provider) }
         }
 
         /** Найденный трек: контекст — результаты поиска. */
@@ -245,6 +245,7 @@ private data class SearchContext(
 private class SearchNetwork(
     private val online: OnlineRepository,
     private val readiness: OnlineReadiness,
+    private val queryText: () -> String,
 ) {
     private class Attempt {
         var job: Job? = null
@@ -261,19 +262,27 @@ private class SearchNetwork(
     private var scope: CoroutineScope? = null
     private var output: ProducerScope<OnlineResults>? = null
     private var snapshot: OnlineResults = OnlineResults.None
+    private var reconciled = false
+    private val pendingRetries = mutableMapOf<String, Attempt>()
 
     suspend fun collect(
         output: ProducerScope<OnlineResults>,
         owner: CoroutineScope,
-        contexts: Flow<SearchContext>,
+        texts: Flow<String>,
+        configurations: Flow<OnlineConfiguration>,
     ) {
         // A cancelled transport may finish late; it must not delay the next subscription.
         scope = CoroutineScope(owner.coroutineContext + SupervisorJob(owner.coroutineContext[Job]))
         this.output = output
+        reconciled = false
         output.trySend(snapshot)
         try {
-            contexts.collect(::reconcile)
+            // Reuse only an unchanged settled query; settings must not await its restarted debounce.
+            val resumedTexts = texts.onStart { emit(context?.text?.takeIf { it == queryText() }.orEmpty()) }
+            combine(resumedTexts, configurations, ::SearchContext).collect(::reconcile)
         } finally {
+            reconciled = false
+            pendingRetries.clear()
             attempts.replaceAll { _, attempt -> if (attempt.completed) attempt else Attempt() }
             scope?.cancel()
             scope = null
@@ -299,6 +308,8 @@ private class SearchNetwork(
                 attempts[provider] = Attempt()
             }
         }
+        reconciled = true
+        consumeRetries(next.text)
         publish()
         active.forEach { provider ->
             val attempt = attempts.getValue(provider)
@@ -306,22 +317,36 @@ private class SearchNetwork(
         }
     }
 
-    fun retry(
-        provider: String?,
-        blank: Boolean,
-    ) {
-        if (blank || scope == null) return
+    private fun consumeRetries(text: String) {
+        val retries = pendingRetries.toMap()
+        pendingRetries.clear()
+        if (text != queryText()) return
+        retries.forEach { (provider, attempt) ->
+            if (attempts[provider] === attempt) replaceRetry(provider, attempt)
+        }
+    }
+
+    fun retry(provider: String?) {
+        val text = queryText()
+        if (text.isEmpty() || text != context?.text || scope == null) return
         val selected = if (provider == null) attempts.keys.toList() else listOf(provider)
         selected.forEach { id ->
             val old = attempts[id]
             if (old != null && (provider == null || old.completed)) {
-                old.job?.cancel()
-                val fresh = Attempt()
-                attempts[id] = fresh
-                publish()
-                start(id, fresh)
+                if (reconciled) replaceRetry(id, old) else pendingRetries[id] = old
             }
         }
+    }
+
+    private fun replaceRetry(
+        provider: String,
+        old: Attempt,
+    ) {
+        old.job?.cancel()
+        val fresh = Attempt()
+        attempts[provider] = fresh
+        publish()
+        start(provider, fresh)
     }
 
     private fun start(
