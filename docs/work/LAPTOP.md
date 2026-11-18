@@ -108,9 +108,15 @@ Codex на ноутбуке установлен.
    подписи/zipalign/native4/runner target проверены, хеши в задаче yu5f.
    Terra обнаружил отсутствие временного AVD (`e180284`), runtime не запущен.
    Luna создал постоянный `/home/puflik/.android/avd/Plinth_yu5f_api35.avd`
-   (`3728193`), profile pixel_2/API35. GUI отказал с Qt xcb; результат
-   headless/adb не подтверждён. Диагностика передана Sol; до установок снова
-   проверить явный serial/qemu/boot, сохранить реальные stdout/журналы.
+   (`3728193`), profile pixel_2/API35. Sol `0e922f8` подтвердил headless
+   boot/qemu и оба install Success с отдельным adb5038. Runner завершился
+   startup ANR через29.217s, фактически0 начатых/завершённых tests;
+   UI не принят, main-thread stack отсутствует. Следующий этап — диагностика
+   app startup, без предположения о виновности SearchScreen/native.
+   Emulator/adb5038 остановлены, cleanup подтверждён на host. Логи сохранены
+   в app/build/yu5f-runtime-20261119 и дополнительно в локальном архиве main
+   artifacts/yu5f-runtime-20261119.tar.gz. Окна74%/51%, дневные≈10пунктов
+   потрачены; таймер только проверит возможность продолжения без переноса.
    Автор потребовал делегировать и простые задачи; APK этап выполнен Luna.
    По новому запросу создан ровно один heartbeat `plinth` на19ноября05:22:58+05,
    COUNT=1; удалить при срабатывании, без повторов и переносов.
