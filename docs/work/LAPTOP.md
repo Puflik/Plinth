@@ -90,7 +90,17 @@ Codex на ноутбуке установлен.
    emulator version и accel-check PASS; KVM usable. Подробности в
    `android-sdk-packages-20261118.md`. Cargo-ndk уже установлен; Rust1.98.1
    содержит aarch64/armv7/i686/x86_64 Android targets и host x86_64 Linux.
-   AVD/runtime ещё не создавались. Не запускать зависающий bootstrap latest/bin/android.
+   При ручном продолжении создан AVD `Plinth_yu5f_api35` в
+   `/tmp/plinth-yu5f-ui-baseline-20261118/avd`, serial `emulator-5560`, adb5038;
+   qemu=1 и boot_completed=1 подтверждены. Для сборки эмулятор остановлен
+   из-за доступных7.6GiB памяти. Все4 native ABI собраны, debug APK создан;
+   общий успех debug+AndroidTest build и UI runtime ещё не подтверждены.
+   Отчёт `91dcda0`: сборка прервана по команде автора, test APK отсутствует;
+   созданные эмулятор и adb5038 остановлены, чужой5037 сохранён.
+   Логи — `/tmp/plinth-yu5f-ui-baseline-20261118`. Перед установкой снова
+   проверить serial/qemu; чужой adb5037 не останавливать. Автор ограничил
+   завершение пятью минутами; новые тесты не запускались.
+   Не запускать зависающий bootstrap latest/bin/android.
    После подготовки окна77%/28%, расход18ноября12пунктов недели; следующий
    heartbeat был перенесён на19ноября00:02+05. Затем автор отменил таймер
    и попросил продолжить: при11%/32% начат ограниченный Terra runtime baseline.
