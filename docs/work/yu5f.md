@@ -922,3 +922,24 @@ Native build: `armeabi-v7a` завершён за 2m30s, `x86_64` за 2m07s; н
 Все четыре ABI завершили `cargo-ndk`: armeabi-v7a 2m30s, x86_64 2m07s, arm64-v8a 2m07s, x86 2m07s; библиотеки скопированы в `app/build/rust/jniLibs`. По просьбе автора сборка прервана до итогового `BUILD SUCCESSFUL`; общего успешного результата assemble нет. Debug APK существует (35 100 011 байт), архив читается и содержит `libplinth_ffi.so` всех четырёх ABI; завершение его Gradle package task не подтверждено. Kotlin AndroidTest был UP-TO-DATE, test APK отсутствует, его сборка не завершена.
 
 Runtime тесты, установки APK, измерения key/index/offset/viewport/text и screenshots не выполнены; исторический +209 px не подтверждён. Production и защищённые тесты не менялись. Созданный emulator-5560 и собственный adb server 5038 остановлены, посторонний 5037 не трогался. Таймер plinth удалён по решению автора, не восстанавливался. Логи и AVD остаются в `/tmp/plinth-yu5f-ui-baseline-20261118/`.
+
+## Завершение APK-сборки — 2026-11-19
+
+Исполнитель: `gpt-6-luna`, `medium` (назначено координатором). Разрешённая команда
+`bash ./gradlew :app:assembleGithubDebug :app:assembleGithubDebugAndroidTest --no-daemon --console=plain`
+завершилась `BUILD SUCCESSFUL in 1m 14s`, 92 tasks: 11 executed / 81 UP-TO-DATE.
+`:app:cargoNdkBuild` был включён и UP-TO-DATE; `uniffiKotlin` также включён и
+UP-TO-DATE. Runtime/emulator/adb/phone не запускались.
+
+Созданы оба APK: `app/build/outputs/apk/github/debug/app-github-debug.apk`
+(35,100,011 байт; SHA-256 `a6526c2345ddbc0100eccd4f0c00793a7190513a255ef258fc4e96cba91e98d6`)
+и `app/build/outputs/apk/androidTest/github/debug/app-github-debug-androidTest.apk`
+(2,011,675 байт; SHA-256 `cb5839530ba59875e276883baaeae20aca79c8400cc39f4dab17ce494157032d`).
+Оба прошли `apksigner verify` (debug V2 signer) и `zipalign -c -v 4`.
+Release-grade signing не заявляется. Debug APK содержит `libplinth_ffi.so` для
+armeabi-v7a, x86_64, arm64-v8a и x86. AndroidTest manifest содержит runner
+`androidx.test.runner.AndroidJUnitRunner`, target `io.github.puflik.plinth.debug`.
+
+Код, тесты, зависимости и защищённые пути не менялись; отчёт — единственный
+изменённый tracked файл. Не проверены установка и runtime-тесты; сборка APK
+не подтверждает их выполнение.
