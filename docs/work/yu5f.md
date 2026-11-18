@@ -953,3 +953,47 @@ armeabi-v7a, x86_64, arm64-v8a и x86. AndroidTest manifest содержит run
 Первый запрос adb также обнаружил отсутствие `adb` в PATH; исправлен явным SDK platform-tools. Ожидание устройства прервано после обнаружения отсутствующего эмулятора. Диагностический `adb -P 5038 devices` завис и завершён по PID; при финальной проверке собственных процессов emulator/qemu/adb не осталось. Посторонний adb 5037 и телефон не трогались.
 
 Подтверждения qemu/boot для этого прохода нет; APK не устанавливались, тесты и измерения runtime не выполнялись. Ни ожидаемый RED UI, ни исторический +209 px, ни фактические key/index/offset/viewport/text или живой NavHost не подтверждены. Новые тесты не добавлялись, protected paths и production не менялись. Требуется восстановить отдельный AVD, затем повторить проверку serial/qemu/boot до установки и выполнить исходный runtime baseline. APK ранее собраны, как указано выше; новую сборку этот проход не запускал.
+
+### Ограниченный runtime setup — 2026-11-19, остановлен после повторного сбоя
+
+Исполнитель: `gpt-6-luna`, `medium` (фактическая роль этого этапа). Постоянный
+AVD создан стандартным установленным `avdmanager`: имя `Plinth_yu5f_api35`,
+каталог `/home/puflik/.android/avd/Plinth_yu5f_api35.avd`, config/INI в
+`/home/puflik/.android/avd/`. Образ `system-images;android-35;google_apis;x86_64`,
+профиль `pixel_2`. До создания `avdmanager list avd` сообщил только заголовок
+`Available Android Virtual Devices:`; `/home/puflik/Android/Sdk/emulator/emulator
+-list-avds` не вывел AVD; имя и ini проверены как свободные. Image directory
+присутствовал. Создание завершилось сообщением `Auto-selecting single ABI x86_64`.
+Чужие AVD не удалялись/перезаписывались, права и системные настройки не менялись.
+
+Точные попытки запуска:
+`/home/puflik/Android/Sdk/platform-tools/adb -P 5038 start-server; /home/puflik/Android/Sdk/emulator/emulator -avd Plinth_yu5f_api35 -port 5560 -no-snapshot-load -no-snapshot-save >app/build/yu5f-runtime-20261119/emulator.log 2>&1`
+и после GUI failure единственная коррекция:
+`/home/puflik/Android/Sdk/platform-tools/adb -P 5038 start-server; /home/puflik/Android/Sdk/emulator/emulator -avd Plinth_yu5f_api35 -port 5560 -no-window -no-snapshot-load -no-snapshot-save >app/build/yu5f-runtime-20261119/emulator.log 2>&1`.
+Первый foreground повтор до коррекции был вызван с той же AVD/портом и без
+`-no-window`; диагностический вывод сообщил `could not connect to display (:0)`,
+Qt plugin `xcb` не загрузился и `Fatal: This application failed to start because
+no Qt platform plugin could be initialized`. Сообщение указывало, что доступны
+`minimal, offscreen, vnc, linuxfb, xcb`. Первый redirected запуск не оставил
+лога: при последующем чтении файла его не существовало. Вторая foreground-сессия
+с `-no-window` оставалась активна до контрольного вызова с `sleep 60`; за этим
+вызовом tool сообщил завершение без вывода, а последующая проверка устройств и
+лога также не вернула содержимого. Следовательно, elapsed наблюдения для второй
+попытки — около 60 секунд; готовый serial не подтверждён. Цикл ожидания serial
+на 120 итераций по 2 секунды (максимум 240 секунд) завершился tool без вывода;
+фактическая длительность ожидания не была надёжно сообщена.
+
+Команда старта отдельного adb: `/home/puflik/Android/Sdk/platform-tools/adb -P 5038 start-server`.
+Проверка планировалась командами `adb -P 5038 devices`,
+`adb -P 5038 -s emulator-5560 shell getprop ro.kernel.qemu` и
+`adb -P 5038 -s emulator-5560 shell getprop sys.boot_completed`; результат
+команд в tool output отсутствует. Установок APK, runner и instrumented test
+не было. Файл `app/build/yu5f-runtime-20261119/emulator.log` не сохранился;
+путь к запрошенному каталогу логов создавался, но наличие каталога/файла не
+подтверждено в worktree. Точный текст GUI ошибки приведён выше; вторичный
+`-no-window` error text отсутствует и не реконструируется.
+
+После проверок `ps` не выявил собственного процесса emulator/adb с портом 5560
+или 5038; вывод не позволяет заключить о наличии постороннего процесса.
+Порт 5037 не проверялся и не затрагивался. Требуется новый диагностический
+проход после устранения ограничения запуска; попытки этого этапа исчерпаны.
