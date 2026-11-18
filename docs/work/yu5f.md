@@ -905,3 +905,20 @@ Yu5fAdditionalSearchScreenTest.kt; protected14, VM, SearchScreen/strings
 Новый агент не запущен, heartbeat временно перенесён на19ноября00:02+05,
 с возвратом к обычным5ч2мин на следующем допустимом запуске после проверки окон.
 Граф остаётся позади до конца волны; состояние готово для /compact.
+
+## Runtime baseline — 2026-11-18, в работе
+
+Исполнитель: назначены и фактически используются `gpt-6.1-terra`, `high`.
+Отдельный AVD `Plinth_yu5f_api35` создан в `/tmp/plinth-yu5f-ui-baseline-20261118/avd`, образ API 35 Google APIs x86_64. Эмулятор запущен с `-port 5560`, отдельный adb server port 5038; выбран `emulator-5560`. После запуска adb на 5038 подтверждены `ro.kernel.qemu=1` и `sys.boot_completed=1`. Посторонний server на 5037 не останавливался. До подтверждения никаких APK не устанавливалось. Лог: `/tmp/plinth-yu5f-ui-baseline-20261118/emulator.log`.
+
+Сборка `:app:assembleGithubDebug :app:assembleGithubDebugAndroidTest` запущена без исключения `cargoNdkBuild`; конфигурация задаёт все четыре ABI. Лог `/tmp/plinth-yu5f-ui-baseline-20261118/build.log`. Для памяти 7.6 GiB эмулятор временно остановлен через `adb -s emulator-5560 emu kill`; после сборки планируется повторная проверка serial/qemu перед установкой.
+
+Gradle дошёл до настоящего `cargo-ndk ndk -t armeabi-v7a -t x86_64 -t arm64-v8a -t x86 --platform 26`; сборка продолжается. Ожидание adb на отдельном порту сначала запустило собственный daemon 5038; затем `qemu=1` и boot=1 подтверждены. Сообщения emulator.log о недоступном adb предшествовали запуску daemon, повторная проверка прошла.
+
+Native build: `armeabi-v7a` завершён за 2m30s, `x86_64` за 2m07s; начат `arm64-v8a`. Сборка продолжается, финальный APK ещё не проверен.
+
+### Остановка по просьбе автора
+
+Все четыре ABI завершили `cargo-ndk`: armeabi-v7a 2m30s, x86_64 2m07s, arm64-v8a 2m07s, x86 2m07s; библиотеки скопированы в `app/build/rust/jniLibs`. По просьбе автора сборка прервана до итогового `BUILD SUCCESSFUL`; общего успешного результата assemble нет. Debug APK существует (35 100 011 байт), архив читается и содержит `libplinth_ffi.so` всех четырёх ABI; завершение его Gradle package task не подтверждено. Kotlin AndroidTest был UP-TO-DATE, test APK отсутствует, его сборка не завершена.
+
+Runtime тесты, установки APK, измерения key/index/offset/viewport/text и screenshots не выполнены; исторический +209 px не подтверждён. Production и защищённые тесты не менялись. Созданный emulator-5560 и собственный adb server 5038 остановлены, посторонний 5037 не трогался. Таймер plinth удалён по решению автора, не восстанавливался. Логи и AVD остаются в `/tmp/plinth-yu5f-ui-baseline-20261118/`.
