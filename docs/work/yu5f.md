@@ -1122,3 +1122,11 @@ Cleanup: own `emu kill`07:27:40.105 UTC exit0, own logcatPGID141061 SIGTERM, `ad
 ### Отдельный форматирующий этап — 2026-11-20, вечер
 
 Автор новым «продолжай» возобновил работу после двух падений предыдущего исполнителя; его лимит коррекций исчерпан и не переигрывается. API после одного повтора12%/80%. Новый узкий этап Luna medium: сначала сохранить существующие изменения Terra как checkpoint с честным статусом NOT VERIFIED; затем исправить только ktlint multiline-expression-wrapping у ветви OnlineResults.Found в SearchScreen.kt:171, не меняя токены/поведение и не трогая tests/VM/другиефайлы. Разрешены SearchScreen.kt и собственный отчёт; существующие изменения двух strings.xml сохранить в checkpoint. Далее полные ktlintCheck/detekt и обе assemble APK без отключения native/UniFFI, с логами и проверкой защиты. Runtime этому исполнителю не поручен. Одна коррекция неожиданного сбоя, второе падение стоп/отчёт; нормальную остановку без сохранения не повторять. Следующий UI runtime назначит координатор по свежим лимитам. В текущем ручном этапе нет таймеров и сна; ориентир общего завершения до13:46:30UTC, не позже30минут от нового входа13:17:32UTC.
+
+#### Отчёт форматирующего этапа — 2026-11-20
+
+Исполнитель: `gpt-6.2-sol`, medium. До правки создан checkpoint коммит `5446cff` со всеми четырьмя уже изменёнными файлами; на том моменте они имели статус NOT VERIFIED. В исходном UI этапе Terra были две ошибки: сначала MaxLineLength, затем multiline-expression-wrapping. Исправлен только перенос `OnlineResults.Found` и его whitespace-отступы; поведение и тесты не менялись.
+
+Первый полный запуск остановился на ktlint indent после первичного переноса. Использована одна разрешённая коррекция отступов; повторный полный `ktlintCheck detekt :app:assembleGithubDebug :app:assembleGithubDebugAndroidTest` завершился успешно (113 задач, 15 выполнены). Защищённые `app/src/test`, `app/src/sharedTest`, `app/src/androidTest` совпадают с baseline `b52b256eae8486e6fb92c7094039460740755b25`. Emulator/runtime не запускался.
+
+APK Github Debug SHA-256 `d5556dffffd437322a4dc52c905a9307b3b134edffcb2f339571e5a6fb960f02`, mtime 2026-11-20 18:25:54 +0500. AndroidTest APK SHA-256 `cb5839530ba59875e276883baaeae20aca79c8400cc39f4dab17ce494157032d`, mtime 2026-11-19 00:22:07 +0500 (сборка UP-TO-DATE). Итог не подтверждает runtime/UI приёмку.

@@ -168,9 +168,10 @@ private fun LazyListScope.online(
     when (online) {
         OnlineResults.None -> Unit
         OnlineResults.Searching -> item(key = SEARCHING_KEY) { Searching() }
-        is OnlineResults.Found -> online.sections.forEach {
-            section(it, songs, onOpenAlbum, onRetry, it.provider in expandedProviders, onExpand)
-        }
+        is OnlineResults.Found ->
+            online.sections.forEach {
+                section(it, songs, onOpenAlbum, onRetry, it.provider in expandedProviders, onExpand)
+            }
     }
 }
 
