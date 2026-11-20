@@ -280,6 +280,7 @@
     <!-- Онлайн-источники (E3) -->
     <string name="track_online">Online track</string>
     <string name="track_online_from">From %1$s</string>
+    <string name="search_show_all">Show all</string>
     <string name="search_section_library">In your library</string>
     <string name="search_library_nothing">Nothing in your library.</string>
     <string name="online_song_getting">Getting the song…</string>

@@ -27,12 +27,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -79,6 +83,7 @@ fun SearchScreen(
     // круг через её Flow отставал от быстрого ввода и стирал буквы.
     val query = rememberTextFieldState()
     LaunchedEffect(query) { snapshotFlow { query.text.toString() }.collect(viewModel::onQuery) }
+    var expandedProviders by rememberSaveable(query.text.toString().trim()) { mutableStateOf(emptyList<String>()) }
     val feedback = rememberTrackActionFeedback(onOpenPlayer)
     val onTrack = { track: LibraryTrack, action: TrackAction ->
         viewModel.onTrack(track, action)
@@ -121,7 +126,9 @@ fun SearchScreen(
             state.online != OnlineResults.None ->
                 LazyColumn {
                     library(state.results, onTrack)
-                    online(state.online, songs, onOpenAlbum, viewModel::onRetryOnline)
+                    online(state.online, songs, onOpenAlbum, viewModel::onRetryOnline, expandedProviders) { provider ->
+                        expandedProviders = expandedProviders + provider
+                    }
                 }
             state.results.isNotEmpty() -> LazyColumn { tracks(state.results, onTrack) }
             state.searched -> Message(stringResource(R.string.search_nothing_found))
@@ -154,12 +161,16 @@ private fun LazyListScope.online(
     online: OnlineResults,
     songs: SongHandlers,
     onOpenAlbum: (OnlineAlbumHeader) -> Unit,
-    onRetry: () -> Unit,
+    onRetry: (String) -> Unit,
+    expandedProviders: List<String>,
+    onExpand: (String) -> Unit,
 ) {
     when (online) {
         OnlineResults.None -> Unit
         OnlineResults.Searching -> item(key = SEARCHING_KEY) { Searching() }
-        is OnlineResults.Found -> online.sections.forEach { section(it, songs, onOpenAlbum, onRetry) }
+        is OnlineResults.Found -> online.sections.forEach {
+            section(it, songs, onOpenAlbum, onRetry, it.provider in expandedProviders, onExpand)
+        }
     }
 }
 
@@ -167,22 +178,39 @@ private fun LazyListScope.section(
     section: OnlineSection,
     songs: SongHandlers,
     onOpenAlbum: (OnlineAlbumHeader) -> Unit,
-    onRetry: () -> Unit,
+    onRetry: (String) -> Unit,
+    expanded: Boolean,
+    onExpand: (String) -> Unit,
 ) {
     val name = providerName(section.provider)
     item(key = "section-${section.provider}") { SectionTitle(name) }
     val problem = section.problem
     when {
-        problem != null -> item(key = "problem-${section.provider}") { ProblemNote(problem, name, onRetry) }
+        problem != null ->
+            item(key = "problem-${section.provider}") {
+                ProblemNote(problem, name, section.provider) { onRetry(section.provider) }
+            }
         section.results.isEmpty() ->
             item(key = "empty-${section.provider}") { Note(stringResource(R.string.search_nothing_found)) }
-        else ->
-            items(section.results, key = { songKey(section.provider, it) }) { result ->
+        else -> {
+            val visible = if (expanded) section.results else section.results.take(PREVIEW_COUNT)
+            items(visible, key = { songKey(section.provider, it) }) { result ->
                 when (result.kind) {
                     OnlineKind.TRACK -> SongItem(section.provider, result, songs)
                     OnlineKind.ALBUM -> ResultRow(result) { onOpenAlbum(header(section.provider, result)) }
                 }
             }
+            if (!expanded && section.results.size > PREVIEW_COUNT) {
+                item(key = "show-all-${section.provider}") {
+                    OutlinedButton(
+                        onClick = { onExpand(section.provider) },
+                        modifier = Modifier.padding(horizontal = 16.dp).testTag("search-show-all-${section.provider}"),
+                    ) {
+                        Text(stringResource(R.string.search_show_all))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -267,6 +295,7 @@ private fun SongItem(
 private fun ProblemNote(
     problem: OnlineProblem,
     provider: String,
+    providerId: String,
     onRetry: () -> Unit,
 ) {
     Column {
@@ -275,7 +304,10 @@ private fun ProblemNote(
         } else {
             Note(problemText(problem, provider))
         }
-        OutlinedButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 16.dp)) {
+        OutlinedButton(
+            onClick = onRetry,
+            modifier = Modifier.padding(horizontal = 16.dp).testTag("search-retry-$providerId"),
+        ) {
             Text(stringResource(R.string.online_retry))
         }
     }
@@ -343,3 +375,5 @@ private fun Message(text: String) {
 private const val LIBRARY_KEY = "library"
 private const val LIBRARY_EMPTY_KEY = "library-empty"
 private const val SEARCHING_KEY = "searching"
+
+private const val PREVIEW_COUNT = 5

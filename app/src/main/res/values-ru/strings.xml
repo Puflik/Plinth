@@ -301,6 +301,7 @@
     <!-- Онлайн-источники (E3) -->
     <string name="track_online">Сетевой трек</string>
     <string name="track_online_from">Из %1$s</string>
+    <string name="search_show_all">Показать все</string>
     <string name="search_section_library">В библиотеке</string>
     <string name="search_library_nothing">В библиотеке ничего не найдено.</string>
     <string name="online_song_getting">Получаем песню…</string>
