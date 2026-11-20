@@ -156,6 +156,25 @@ Codex на ноутбуке установлен.
    Собственные процессы/порты очищены и проверены на host. Архив
    artifacts/yu5f-saved-anr-20261120.tar.gz сохранён локально. Окна43%/69%,
    база63%, расход≈6пунктов; после публикации — разрешённый сон, таймеров нет.
+   После сна автор разрешил новое продолжение максимум30минут. Sol861218b
+   выполнил6UItests:2PASS/4assertionFAIL, startup ANR не повторился.
+   Ошибки соответствуют ещё не реализованным preview5/Show all/provider retry.
+   Одного Terra сверх primary-порога автор явно разрешил; при85%/76%
+   начат ограниченный UI этап, protected tests/VM не меняются. Deadline
+   исполнителя07:43:30UTC, root до07:46:30UTC; без новых таймеров/сна.
+   Вечернее продолжение: UI checkpoint5446cff, форматирование ca6b73a.
+   Полные ktlintCheck/detekt и обе Github Debug APK сборки PASS;
+   native/UniFFI включены, protected test tree сохранён. Debug APK SHA256
+   d5556dffffd437322a4dc52c905a9307b3b134edffcb2f339571e5a6fb960f02;
+   test APK остался cb5839530ba59875e276883baaeae20aca79c8400cc39f4dab17ce494157032d
+   (UP-TO-DATE). Отдельный runtime40a2d09 на том же собственном AVD,
+   adb5038/console5560, завершился startup ANR до начала тестов (0/0).
+   Target PID2368,20ноября18:33:23.783+05; причина неизвестна, trace до
+   cleanup не получен. Свои процессы/порты очищены, userdata сохранены.
+   Следующее действие — ограниченное чтение сохранённого target ANR;
+   будущие воспроизведения обязаны сохранять target stack до cleanup.
+   Логи app/build/yu5f-ui-green-20261120 и форматирования сохранены отдельно
+   в artifacts/yu5f-ui-20261120.tar.gz, hash в decisions. UI PASS нет.
    В main эта VM не перенесена.
 7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
    `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
