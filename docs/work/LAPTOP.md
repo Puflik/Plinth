@@ -176,6 +176,9 @@ Codex на ноутбуке установлен.
    Архив проверки: artifacts/yu5f-saved-target-20261120-night.tar.gz.
    Логи app/build/yu5f-ui-green-20261120 и форматирования сохранены отдельно
    в artifacts/yu5f-ui-20261120.tar.gz, hash в decisions. UI PASS нет.
+   24 ноября после загрузки того же AVD шесть тестов исправленного поиска
+   прошли за 74,955 секунды. В logcat за 23:41:19 (+05) runner подтвердил
+   6 tests, 0 failed, 0 ignored. Стек в этом запуске не понадобился.
    В main эта VM не перенесена.
 7. 15 ноября подготовлен APK из CI `43680512364`, snapshot `808b22b`:
    `/home/puflik/src/Plinth/artifacts/Plinth-YouTube-2026-11-15-808b22b.apk`.
