@@ -1205,3 +1205,38 @@ Cleanup: `emu kill` только собственного verified serial exit0 
 Логи локальные игнорируемые: `app/build/yu5f-live-20261124`, progress `/tmp/plinth-yu5f-live-20261124.md`. Сохранены полные stdout/stderr/status/time, APK hashes, семь серий нагрузки, непрерывный logcat, PID observations, runner assertions, служебные ошибки и финальные host-проверки; прежние каталоги доказательств не перезаписаны. Назначена роль `plinth_executor`, `gpt-6.1-sol`/`high`; отдельная runtime telemetry фактической модели недоступна, замена не заявляется. Production/tests не менялись; Gradle/JVM/CI, source repair, release, merge/rebase и graph update не выполнялись. PASS относится к этому защищённому Compose harness; оставшаяся приёмка живого NavHost/scroll/mini-player и независимое ревью остаются координатору.
 
 Финальные Git-проверки: `git diff --check` PASS; полный diff всех `**/src/test/**`, `**/src/sharedTest/**`, `**/src/androidTest/**` относительно `b52b256eae8486e6fb92c7094039460740755b25` пуст. От входного HEAD изменён только `docs/work/yu5f.md`; исходные четыре строки задания координатора сохранены. Коммит отчёта — только `work/yu5f`; push выполняет координатор.
+
+
+## Дополнение планировщика 2026-11-24: ожидающая секция UI
+
+- **Ветка/ворктри:** `work/yu5f`, `/home/puflik/src/Plinth-yu5f`; входной HEAD `04a4ddf`.
+- **Основа:** принятое решение этого файла, строки37–55; новых продуктовых решений нет.
+- **Данные пользователя:** нет; только fake repositories и Compose harness, без журнала/CRDT/миграций.
+- **Планировщик:** назначен `plinth_planner`, `gpt-6.1-sol`/`xhigh`; отдельная runtime telemetry фактической модели недоступна, замена не заявляется.
+
+### Цель, решение и инварианты
+
+Защитить показ ожидающего Internet Archive перед уже готовым YouTube. Реальные `SearchScreen`/`SearchViewModel`, один альбом на провайдера; `CompletableDeferred` задерживает только Archive. Тест ждёт подтверждённого частичного `Found(YouTube, loading={Archive})`, проверяет быстрый результат до освобождения gate, доступные heading/progress semantics и расположение Archive→индикатор→YouTube. Поиск через `performScrollToNode` отличает отсутствующий LazyColumn item от виртуализации. После gate виден ответ Archive, индикаторов нет. Без sleep, live network и новых production test tags.
+
+### Файлы и защищённые тесты
+
+Менять на этом этапе только `docs/work/yu5f.md` и новый `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fPendingSectionScreenTest.kt`; последний становится защищённым отдельным регрессионным файлом в коммите этого этапа. Прежние baseline14, все старые instrumentation tests, production, зависимости и общие документы не менять. Производственную реализацию планировщик не выполняет. Будущий исполнитель меняет только ранее разрешённый `SearchScreen.kt`, читая это дополнение вместе с исходным решением; независимое ревью остаётся Astra xhigh.
+
+### Проверки, критерии и остановка
+
+`JAVA_HOME=/home/puflik/.local/opt/jdk21 ANDROID_HOME=/home/puflik/Android/Sdk GRADLE_USER_HOME=/home/puflik/.gradle RUSTUP_TOOLCHAIN=1.98.1 bash ./gradlew ktlintCheck assembleGithubDebugAndroidTest`, без отключения native. Затем один classrun `Yu5fPendingSectionScreenTest` на собственном `Plinth_yu5f_api35`, adb5038/serial emulator-5560, после явной identity/qemu/boot проверки и завершения Gradle. Цель этого этапа — компиляция и intended runtime RED отсутствующего pending header, не исправление production. Одна коррекция неожиданного сбоя; при втором остановка, отчёт/cleanup/commit.
+
+### Отчёт планировщика — ход работы
+
+В18:45UTC входная ветка/HEAD проверены, дерево чистое; graphify-out в этом worktree отсутствует, scoped graph query не запускался. Исходный UI обходит только `Found.sections` и не использует `Found.loading`; это ожидаемая причина RED. Новый guard написан, проверки ещё не завершены. Локальный прогресс: `/tmp/plinth-yu5f-pending-guard.md`.
+
+
+### Отчёт планировщика — остановка после второй проверки
+
+На 2026-11-24T18:51:11.801746+00:00 написан один новый тест `pending_archive_stays_before_fast_youtube_until_its_result_arrives`; production и прежние тесты не менялись. Назначение `plinth_planner`, `gpt-6.1-sol`/`xhigh`; независимая runtime telemetry модели недоступна.
+
+Первая команда `ktlintCheck assembleGithubDebugAndroidTest` завершилась exit1 за1м23с: `compileGithubDebugAndroidTestKotlin` выполнена успешно, но ktlint нашёл оформление цепочки и длинного expression body в новом файле. Применена единственная коррекция форматирования. Повтор той же команды завершился exit1 за22с: Kotlin снова скомпилирован, `cargoNdkBuild` включён и UP-TO-DATE; ktlint выявил оставшийся перенос операнда в строке75 (`youtube?.provider == ... && result?.title == ...`). Нужный перенос перед `result` не внесён: после второго последовательного падения действует обязательный стоп. Логи: `/tmp/yu5f-pending-build.log`, `/tmp/yu5f-pending-build-retry.log`; свежая компиляция теста подтверждена, успешные ktlint и assemble не заявляются. Предупреждение устаревшего `createComposeRule` совпадает с существующим harness; API и зависимости не менялись.
+
+Нового собранного test APK и новых SHA не заявляем. Эмулятор/adb/logcat/classrun не запускались, runtime RED **не подтверждён**, production выполнять нельзя до intended RED. Подготовленный отдельный runner `/tmp/yu5f_pending_guard_20261124.py` не запускался; APK/SHA-файл для него не создавался. Следующий шаг координатора — устранить единственное оформление в новой отдельной задаче, заново выполнить lint/assemble, записать настоящие APK SHA и подтвердить RED на собственном AVD с явным5038/5560/serial/qemu/boot; прежние тесты остаются защищены. Gradle daemon остановлен для cleanup.
+
+Текущая находка в коде остаётся: `SearchScreen.online` обходит только завершённые `Found.sections`, ожидаемые ID из `Found.loading` не представлены заголовком/индикатором. Guard ловит это после подтверждённого частичного состояния VM, а не по таймеру. После первого успешного подтверждения RED коммит guard должен быть опорным для защиты этого файла. Независимое ревью и push выполняет координатор.
