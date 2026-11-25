@@ -53,6 +53,7 @@ import io.github.puflik.plinth.ffi.OnlineResult
 import io.github.puflik.plinth.ffi.OnlineSection
 import io.github.puflik.plinth.ffi.PlaylistId
 import io.github.puflik.plinth.library.model.LibraryTrack
+import io.github.puflik.plinth.online.OnlineProviderIds
 import io.github.puflik.plinth.ui.library.TrackAction
 import io.github.puflik.plinth.ui.library.components.TrackLabel
 import io.github.puflik.plinth.ui.library.components.TrackRow
@@ -169,8 +170,14 @@ private fun LazyListScope.online(
         OnlineResults.None -> Unit
         OnlineResults.Searching -> item(key = SEARCHING_KEY) { Searching() }
         is OnlineResults.Found ->
-            online.sections.forEach {
-                section(it, songs, onOpenAlbum, onRetry, it.provider in expandedProviders, onExpand)
+            OnlineProviderIds.ALL.forEach { provider ->
+                val completed = online.sections.find { it.provider == provider }
+                if (completed != null) {
+                    section(completed, songs, onOpenAlbum, onRetry, provider in expandedProviders, onExpand)
+                } else if (provider in online.loading) {
+                    item(key = "section-$provider") { SectionTitle(providerName(provider)) }
+                    item(key = "loading-$provider") { Searching() }
+                }
             }
     }
 }
