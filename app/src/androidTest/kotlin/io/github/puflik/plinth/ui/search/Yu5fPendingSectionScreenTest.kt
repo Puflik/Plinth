@@ -72,7 +72,8 @@ class Yu5fPendingSectionScreenTest {
                 val youtube = state?.sections?.singleOrNull()
                 val result = youtube?.results?.singleOrNull()
                 state?.loading == setOf(OnlineProviderIds.ARCHIVE) &&
-                    youtube?.provider == OnlineProviderIds.YOUTUBE && result?.title == FAST_TITLE
+                    youtube?.provider == OnlineProviderIds.YOUTUBE &&
+                    result?.title == FAST_TITLE
             }
             compose.waitForIdle()
             assertThat(archiveRelease.isCompleted).isFalse()
