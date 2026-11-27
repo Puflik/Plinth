@@ -41,22 +41,7 @@ class Yu5fPendingSectionScreenTest {
     fun pending_archive_stays_before_fast_youtube_until_its_result_arrives() {
         val archiveRelease = CompletableDeferred<Unit>()
         val online = PendingOnline(archiveRelease)
-        val scope = CoroutineScope(Dispatchers.Unconfined)
-        val actions =
-            TrackActions(
-                PlaybackController(FakeAudioEngine(), scope),
-                FakeUserDataRepository(),
-                FakePlaylistRepository(),
-                scope,
-            )
-        val viewModel =
-            SearchViewModel(
-                FakeLibraryRepository(),
-                online,
-                FakeOnlineSettings(),
-                actions,
-                readiness = FakeOnlineReadiness(),
-            )
+        val viewModel = createViewModel(online)
         val heading = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
         val archiveHeading = hasText("Internet Archive") and heading
         val youtubeHeading = hasText("YouTube") and heading
@@ -108,6 +93,24 @@ class Yu5fPendingSectionScreenTest {
         } finally {
             archiveRelease.complete(Unit)
         }
+    }
+
+    private fun createViewModel(online: OnlineRepository): SearchViewModel {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val actions =
+            TrackActions(
+                PlaybackController(FakeAudioEngine(), scope),
+                FakeUserDataRepository(),
+                FakePlaylistRepository(),
+                scope,
+            )
+        return SearchViewModel(
+            FakeLibraryRepository(),
+            online,
+            FakeOnlineSettings(),
+            actions,
+            readiness = FakeOnlineReadiness(),
+        )
     }
 
     private class PendingOnline(
