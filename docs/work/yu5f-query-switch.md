@@ -1,0 +1,98 @@
+# yu5f-query-switch — раскрытие показанного ответа при смене запроса
+
+> Файл задачи для исполнителя, по `docs/work/TEMPLATE.md`.
+> Исполнитель меняет только раздел «Отчёт исполнителя».
+
+- **Ветка:** `work/yu5f` · **Ворктри:** `/home/puflik/src/Plinth-yu5f`.
+- **Основа:** `117fcd478d55afad2b83da608d76882ce58c7536` · **Коммит тестов:** будет закреплён коммитом этого файла и отдельного нового теста.
+- **Откуда:** R1 независимого `docs/work/yu5f-search-ui-review-20261128.md` в основном клоне.
+- **Данные пользователя:** нет; временное раскрытие поисковой выдачи, без журнала, миграций, CRDT и восстановления.
+- **Исследование и ревью:** `plinth_researcher`, `gpt-6-astra`, `xhigh`; решение R1 принято в указанном ревью; ревью нового плана и теста ожидается.
+- **Планировщик:** назначена и используется роль `plinth_planner`, `gpt-6.1-sol`, `xhigh` по конфигурации запуска, подтверждённой координатором; отдельный фактический runtime model ID интерфейс не раскрывает; замены не было.
+- **Исполнитель:** планируется `plinth_ui_executor`, `gpt-6.1-terra`, `high`; ограниченная правка экранного состояния по проверяемому сценарию.
+- **План до реализации:** независимый Astra xhigh после коммита теста; Astra max не требуется, постоянные данные не затронуты.
+
+## Цель
+
+Нажатие «Показать все» на ещё видимом ответе A во время ввода B не раскрывает новый ответ B. Новый ответ каждого провайдера показывает первые пять строк до собственного раскрытия.
+
+## Контекст
+
+- Основной клон: `docs/work/yu5f-search-ui-review-20261128.md`, раздел R1; `CODEX.md`, «Точка продолжения»; `LAPTOP.md`, пункт о ART speed и готовом AVD.
+- `SearchScreen.kt:77–133,163–224`: ключ раскрытия сейчас берётся из сырого поля, кнопка передаёт только provider.
+- `SearchViewModel.kt:50–79,104–146,222–225`: показанные секции отстают от сырого ввода на debounce 300 ms.
+- Прежние protected guards и `Yu5fSearchSectionsScreenTest.kt` не меняются; R2/R3 вне этой задачи.
+
+## Решение
+
+Согласовать идентичность раскрытия с запросом показанного ответа, а не с немедленно редактируемым полем. Допустимо запрещать действие старой кнопки при расхождении поля и показанного запроса; после settle B его секция обязательно свёрнута. Конкретное представление идентичности в SearchUiState/OnlineResults остаётся исполнителю в пределах двух разрешённых production-файлов; публичный внешний API, зависимости и хранилища не меняются.
+
+Новый instrumented-тест использует настоящие SearchScreen и SearchViewModel, отдельный виртуальный dispatcher только для VM и обычный Android Main для Compose. Запросы A/B возвращают разные шесть ALBUM на каждый provider. Время VM продвигается явно, поэтому реальная скорость AVD не определяет попадание нажатия в 300 ms окно.
+
+## Инварианты
+
+- Действие над A не раскрывает B; provider раскрывается независимо.
+- Само раскрытие читает кэш и не создаёт новых сетевых запросов.
+- На A и B приходится ровно по одному поиску каждого провайдера.
+- Существующие assertions, retry, сохранение состояния и данные пользователя не ослабляются.
+
+## Файлы
+
+- **Менять исполнителю:** `app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt`; при необходимости `app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt`; только «Отчёт исполнителя» этого файла.
+- **Не трогать:** другие файлы, прежние тесты, CI, зависимости, ресурсы, main, CHANGELOG/tasks/decisions и production до независимого разрешения на реализацию.
+- **Защищённые тесты:** новый `app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fQuerySwitchExpansionTest.kt`, плюс все 14 прежних protected paths из `docs/work/yu5f.md` и новый pending-section guard.
+- **Владение планировщика:** только этот новый файл задачи и новый test выше; сборочные логи остаются в игнорируемом `app/build/yu5f-query-switch-20261128`.
+
+## Тесты (написаны в коммите тестов)
+
+`old_answer_expansion_during_debounce_does_not_expand_the_next_query`: устоявшийся A с шестью результатами → поле B с recomposition и начатым, но не продвинутым виртуальным debounce → нажатие старой кнопки A → settle B. Поле, ответы и счётчики подтверждают, что действие состоялось до запроса B. Шестая строка B отсутствует во всём LazyColumn до собственного раскрытия; затем доступна; сосед остаётся ограниченным; новых поисков нет. На исходном `117fcd4` ожидается assertion RED: шестая строка B найдётся без собственного нажатия.
+
+## Проверки
+
+Текущий этап — планировщик, production не меняется. Полный набор:
+
+```bash
+JAVA_HOME=/home/puflik/.local/opt/jdk21 ANDROID_HOME=/home/puflik/Android/Sdk ANDROID_SDK_ROOT=/home/puflik/Android/Sdk GRADLE_USER_HOME=/home/puflik/.gradle RUSTUP_TOOLCHAIN=1.98.1 PATH=/home/puflik/.local/opt/jdk21/bin:$PATH bash ./gradlew --no-daemon ktlintCheck detekt :app:assembleGithubDebug :app:assembleGithubDebugAndroidTest
+```
+
+Только после подтверждения выделенного `Plinth_yu5f_api35`/adb5038/serial emulator-5560 и readiness:
+
+```bash
+/home/puflik/Android/Sdk/platform-tools/adb -P 5038 -s emulator-5560 shell am instrument -w -r -e class io.github.puflik.plinth.ui.search.Yu5fQuerySwitchExpansionTest io.github.puflik.plinth.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+ Использовать foreground ADB, 1536 MiB/2 cores/software GPU/nice10, проверку ownership/AVD/boot/qemu и SHA установленных APK, ART speed и ожидание покоя, как в проверенном `app/build/yu5f-pending-20261128/runner.py`. Не запускать connected-check без serial, не трогать adb5037/телефон, не делать wipe; по завершении остановить собственные процессы и проверить порты. Сбой до начала assertions — инфраструктура, не RED.
+
+## Готово, когда
+
+- Baseline RED скомпилирован и реально исполнен на точном сценарии R1.
+- После исправления тот же тест GREEN; старые проверки сохраняются.
+- Независимый Astra проверил опорный тест, scope и результаты; слияние только координатором.
+
+## Остановиться и написать, если
+
+- Нужны изменения вне разрешённых файлов или ослабление теста.
+- После одной коррекции повторяется неожиданный сбой проверки.
+- Не подтверждены выделенный AVD/serial, APK или отдельное владение процессами.
+
+## Отчёт планировщика
+
+2026-11-28, `plinth_planner` / `gpt-6.1-sol` / `xhigh` по подтверждённой конфигурации запуска; отдельный runtime ID интерфейсом не раскрыт. Добавлены только эта задача и отдельный новый test; production, старые тесты и CI не менялись.
+
+- Первая проверка: два ktlint-переноса нового файла, exit 1, 83.024 s; это не RED. Единственная коррекция — только перенос цепочки assertion и второго supertype.
+- Повтор полного `ktlintCheck detekt :app:assembleGithubDebug :app:assembleGithubDebugAndroidTest`: PASS, exit 0, 154.122 s, 9 executed/104 up-to-date. Новый Kotlin test скомпилирован, новый test APK собран; native/UniFFI не исключались. Есть обычное предупреждение deprecation прежнего createComposeRule, без подавлений.
+- Source SHA-256 `96bed4b2570dfcab65d77561af5568a812004f23e8076069ddc6eb4d4c677624`; `source-pinned.json` подтверждает побайтный production baseline `117fcd4`. App APK SHA-256 `e36a16b160a7a8feb88ee86406ec1a8f8c8a3e72f08c2b8c18af6c29ff0722ca`; test APK `1a41fe848490dfad96ecdbcceeadc55afa96dc5469ddf42006150dd175cb7a18`.
+- Подготовка AVD: проверены собственные process groups, AVD/serial/qemu/boot/root uid0; оба install Success; SHA установленных APK совпали; ART speed обоих пакетов Success. Во время ожидания CPU settle пользователь попросил прерваться при первой возможности.
+- В 10:41:59 UTC послан SIGINT только проверенному собственному runner PID90568 до запуска instrumentation. Его finally штатно остановил эмулятор и ADB; exit130 отражает остановку пользователем. Первый final ps застал краткоживущий helper emulator `-kill/-sleep20`; свежий `cleanup-verified.json` подтвердил отсутствие всех собственных process groups и свободные 5038/5560/5561. adb5037 и телефон не затронуты.
+
+**RED НЕ ПОДТВЕРЖДЁН:** instrumentation не запускалась, начато/завершено тестов 0/0. Это остановка пользователем на подготовке, а не assertion RED и не установленная неисправность инфраструктуры. Детерминированный сценарий скомпилирован, но его фактическое исполнение и GREEN остаются следующему разрешённому этапу. Новые проверки после запроса остановки не запускались; CI не ожидается.
+
+Журналы, точные argv/exit/duration, pinned source/APK и runner: `app/build/yu5f-query-switch-20261128`. Файлы и результаты сохранены перед коммитом. Граф отстаёт; текущая причина R1 сверена с исходниками после адресного graphify query, не выведена из графа.
+
+## Отчёт исполнителя
+
+_Не запускался; production не менялся. Перед реализацией нужен настоящий RED и независимое ревью нового плана/теста._
+
+## Ревью
+
+_Независимое ревью нового плана и теста ожидается; сборка не заменяет runtime._
