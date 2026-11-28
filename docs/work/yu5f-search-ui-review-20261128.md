@@ -1,0 +1,77 @@
+# Ю5f: независимое ревью UI на 117fcd4 — 2026-11-28
+
+**Вердикт проверенного изменения: BLOCK.** Найден новый дефект P2: раскрытие старого ответа во время debounce переносится на новый запрос (R1). Исправление ожидающей секции и рефакторинг теста сами по себе проходят ревью.
+
+**Готовность полной Ю5f: BLOCK.** Помимо R1, остаются ранее поставленные требования к ключам, общему состоянию списка и измерениям настоящей навигации (R2–R3). Семь зелёных проверок не закрывают эти требования; слияние не рекомендовано.
+
+Назначенная и использованная роль — `plinth_researcher`, Astra `xhigh` (модель роли по AGENT_ROLES — `gpt-6-astra`); точный runtime model ID в доступных данных не показан, замена не выполнялась. Проверено в `/home/puflik/src/Plinth-yu5f`; HEAD и локальный `origin/work/yu5f` равны `117fcd478d55afad2b83da608d76882ce58c7536`, рабочее дерево чистое. Ревью читает код, тесты и сохранённые артефакты; Gradle, эмулятор, новые UI-эксперименты и дополнительные агенты не запускались. Единственный результат в репозитории — этот файл; рабочие заметки — `/tmp/plinth-review-117fcd4.md`.
+
+## Область и доказательства
+
+Сравнение UI — `861218b..117fcd4`: `SearchScreen.kt`, по одной строке `search_show_all` в английских/русских ресурсах, новый `Yu5fPendingSectionScreenTest.kt` и отчёт задачи. `SearchViewModel`, `OnlineSongs`, `MainActivity`, `PlinthNavHost`, зависимости и core в этом сравнении не меняются. Граф в основном клоне использован для адресной навигации (`graphify query`, budget 900); итоговые выводы проверены по коду точного SHA, а не по потенциально отставшему графу.
+
+Все **14 защищённых путей** из `docs/work/yu5f.md:100` побайтно совпадают между `b52b256` и `117fcd4`. Во всех деревьях `app/src/test`, `app/src/sharedTest`, `app/src/androidTest` единственное отличие — добавленный pending-test. Игнорирования, подавления или ослабления прежних assertions не внесены.
+
+Изменение нового теста после `a1c0b18` ограничено выделением создания scope/actions/ViewModel в фабрику: [создание](/home/puflik/src/Plinth-yu5f/app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fPendingSectionScreenTest.kt:44), [фабрика](/home/puflik/src/Plinth-yu5f/app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fPendingSectionScreenTest.kt:98). Независимое обратное разворачивание дало побайтное равенство с `a1c0b18`; `test-before.kt` и `test-after.kt` совпадают соответственно с `a1c0b18` и `117fcd4`. Сохранились порядок зависимостей, ожидания/таймаут 5000 ms, assertions и `finally`. SHA-256 нового файла: `b1ae4d9184b4c033b548c4c71d56bab4d2a2b41c4659c1a9791d5e586aa397e5`; совпадает с `refactor-proof.json` и `source-pinned.json`.
+
+[Сохранённый запуск](/home/puflik/src/Plinth-yu5f/app/build/yu5f-pending-20261128/summary.json) содержит 7 started/7 passed. В `instrumentation.stdout` присутствуют оба класса, `Time: 95.685`, `OK (7 tests)`; процесс завершился exit 0. APK тогда собраны с HEAD `a1c0b18` и изменённым новым тестом: привязка к финальному исходнику подтверждена его хешем и точным совпадением `test-after.kt`, а не подменой даты/HEAD запуска. [CI 46072370194](https://github.com/Puflik/Plinth/actions/runs/46072370194) на точном `117fcd4` — SUCCESS по проверенному входному свидетельству координатора; повторного запроса GitHub и повторного CI в этом ревью нет.
+
+## R1 — P2, новый дефект: раскрытие имеет другую идентичность запроса, чем показанный ответ
+
+Место: [SearchScreen.kt:87](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:87), [обработчик раскрытия:130](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:130), [применение и кнопка:204](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:204).
+
+`rememberSaveable(query.text.toString().trim())` переключает состояние сразу при редактировании поля. Содержимое секций поступает из другого состояния: [settled:110](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt:110) ждёт 300 ms ([константа:225](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt:225)), и до settle остаётся прежний ответ. `SearchUiState`/`OnlineResults.Found` не несут идентификатора запроса показанных секций ([типы:58](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchViewModel.kt:58)). Кнопка передаёт только provider.
+
+Достаточная трасса из кода:
+
+1. Устоялся запрос A; у провайдера P есть больше пяти результатов, секция свернута.
+2. Поле меняется на B, происходит recomposition; список раскрытых провайдеров сброшен и теперь относится к input B. До истечения debounce ещё видны результаты A.
+3. До 300 ms пользователь нажимает «Показать все» у видимой секции A/P: обработчик добавляет P в состояние, уже привязанное к B.
+4. B устоялся, начинается и заканчивается его поиск. Поле не менялось, поэтому состояние раскрытия повторно не сбрасывается; ответ B/P сразу показывает все результаты, хотя нажатие было на ответе A/P.
+
+Для нового ответа нарушено согласование «раскрытие на provider/query»: устаревшее действие применяется к другой выдаче. Соседняя секция при этом остаётся ограниченной пятью; лишнего сетевого запроса само раскрытие не делает. Дополнительный эффект той же причины: A → B → A с отдельными recomposition, но без settle B, сбрасывает раскрытие A, хотя новый поиск не состоялся. Изменение только внешних пробелов сохраняет trimmed key и этого эффекта не вызывает.
+
+**Статус доказательства:** статическая трасса достижимого пути, не выполненный UI-эксперимент. Защищённый [тест смены запроса:147](/home/puflik/src/Plinth-yu5f/app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt:147) ждёт новый сетевой вызов и не нажимает старую кнопку в промежутке, поэтому зелёный результат не опровергает R1.
+
+Условие снятия: действие и сохранённое раскрытие должны иметь идентичность именно показанного ответа; на смене settled query старое раскрытие не применяется к новому. Допустимо явно запрещать устаревшее раскрытие, пока поле и показанный запрос расходятся. Конкретное решение — отдельная задача реализации; здесь API и production не менялись. Нужен новый адресный регрессионный сценарий с управляемым временем: два разных набора A/B по >5 элементов, изменение поля, recomposition и нажатие старой кнопки до settle, затем B; шестой элемент B должен отсутствовать до его собственного раскрытия. Прежние защищённые тесты сохраняются.
+
+## R2 — P2, входящий долг полной Ю5f: row key не различает kind
+
+[Строки результата:205](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:205) используют `songKey(provider, result)`, а [OnlineSongs.kt:50](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/OnlineSongs.kt:50) возвращает `provider/external`. Два провайдера с одинаковым external разведены; TRACK и ALBUM одного провайдера с одинаковым external получат один LazyColumn key. Если оба входят в показанные строки, ключи дублируются; если второй находится за пятой строкой, коллизия открывается после «Показать все». Подмена kind у того же external также сохраняет идентичность строки вопреки заданному контракту.
+
+[Библиотечные строки:158](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:158) используют голый `track.id.value`; отдельного UI namespace нет. Для существующих UUID не утверждается наблюдавшаяся коллизия с сетевыми ключами. Заголовки/ожидание/ошибка/empty/Show all уже имеют разные provider-prefixed ключи, одинаковые external разных провайдеров не смешиваются.
+
+Это существовало до `861218b`; новый pending-render не создаёт данную проблему. Явное требование отдельного UI key с library/provider/external/kind записано в [задаче:74](/home/puflik/src/Plinth-yu5f/docs/work/yu5f.md:74). `songKey` для `OnlineSongs` менять нельзя: нужна отдельная идентичность UI. Реального ответа текущих провайдеров с cross-kind collision и падения приложения в этом ревью не получено; описан условный дефект контракта, а не частота его проявления.
+
+## R3 — P2, входящая незавершённая приёмка: состояние списка и настоящий NavHost
+
+[SearchScreen.kt:128](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:128) и [134](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/search/SearchScreen.kt:134) всё ещё создают две LazyColumn без общего явного `rememberLazyListState`. Так было и на `861218b`. Требование [задачи:70](/home/puflik/src/Plinth-yu5f/docs/work/yu5f.md:70) не выполнено; при переходе между online/library ветками состояние не закреплено общим владельцем. Приход второй секции при `Found` не меняет ветку, но вставляет/заменяет элементы перед текущей строкой; стабильные ключи помогают живой композиции и не доказывают восстановление первой строки после удаления композиции.
+
+Настоящий поиск/плеер находятся в [PlinthNavHost.kt:50](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/navigation/PlinthNavHost.kt:50), [63](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/navigation/PlinthNavHost.kt:63) и [89](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/ui/navigation/PlinthNavHost.kt:89). [MainActivity.kt:139](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/MainActivity.kt:139) включает мини-плеер после появления трека, а [Scaffold:148](/home/puflik/src/Plinth-yu5f/app/src/main/kotlin/io/github/puflik/plinth/MainActivity.kt:148) меняет отступ/доступную высоту NavHost. Это места проверки, не доказанная причина исторического сдвига ≈209 px.
+
+Имеющийся harness [Yu5fSearchSectionsScreenTest.kt:73](/home/puflik/src/Plinth-yu5f/app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt:73) удаляет SearchScreen через boolean и восстанавливает через SaveableStateHolder, симулируя мини-плеер padding 64 dp. [Scroll guard:170](/home/puflik/src/Plinth-yu5f/app/src/androidTest/kotlin/io/github/puflik/plinth/ui/search/Yu5fSearchSectionsScreenTest.kt:170) проверяет top текста одной песни ±1 px и отсутствие новых запросов при двух возвратах. Он не измеряет первую видимую строку/key/index/scrollOffset, viewport, границы прокрутки, настоящий back stack или появление второй секции во время ухода. Сам новый pending-test не удаляет композицию и не фиксирует якорь при completion; его scroll-to-node явно перемещает список. Наличие двух LazyColumn само по себе не объявляется доказанным воспроизведением исторического скачка.
+
+## Что проходит в проверенном slice
+
+| Контракт | Вывод и опора |
+|---|---|
+| Быстрый YouTube при ожидающем IA | PASS: проход по `OnlineProviderIds.ALL` рисует заголовок/loader IA до YouTube; новый тест подтверждает быстрый результат до release, ровно один progress между заголовками, оба результата после release. См. SearchScreen:172 и pending-test:55–92. |
+| Быстрый IA при ожидающем YouTube | По коду тот же проход рисует completed IA и pending YouTube в фиксированном порядке. Исходные JVM tests покрывают обе очередности (`Yu5fProgressiveSearchTest.kt:78`, `:97`, `:116`); отдельный симметричный UI runtime не заявляется. |
+| Первичное ожидание | Новый VM-путь публикует `Found` с loading всех активных провайдеров (SearchViewModel:415); обе секции имеют собственный индикатор. Старый `Searching` оставлен совместимым fallback с одним индикатором. |
+| Empty / null / problem | Empty показывает сообщение под своим заголовком (SearchScreen:201); null завершает попытку, снимает loading и не создаёт секцию (SearchViewModel:403–423); problem остаётся под заголовком, сосед не стирается (SearchScreen:195). При null всех провайдеров видимой сетевой секции нет, показанная библиотечная область сохраняется. |
+| Retry | ID передаётся из конкретной error-секции (SearchScreen:199); VM:329–349 заменяет только выбранную завершённую попытку и игнорирует повтор во время loading. Сохранённый UI-тест:157 подтверждает отсутствие повтора IA при retry YouTube. NO_NETWORK сохраняет прежнюю firmware-подсказку. |
+| Пять строк / раскрытие | `take(5)`, кнопка только `size > 5`, полный cached response после раскрытия, сосед независим; callback меняет только локальный список ID. Нет вызова сети, resolve/add или очереди из Show all. Переходы TRACK/ALBUM используют прежние обработчики. Исключение — R1. |
+| Возврат / новый запрос | SaveableStateHolder-тест подтверждает сохранение раскрытия при прежнем запросе и обычный сброс после нового поиска. Настоящий NavHost, дебаунс-окно R1 и поздняя вторая секция за пределами этой гарантии. |
+
+## Один следующий воспроизводимый сценарий: поздняя секция и два возврата через настоящий плеер
+
+Подготовить отдельный параметризованный instrumented сценарий на **MainActivity + настоящем PlinthNavHost**, с fake audio и управляемыми DI-репозиториями; не заменять навигацию boolean/SaveableStateHolder. Разрешённые диагностические файлы и доступ к `LazyListState.layoutInfo` оформляются отдельной задачей. Измерять через test/debug probe фактический список, не выводить index/offset только из координат текста и не исправлять позицию ручным `scrollToItem` после события.
+
+Параметры одной матрицы: первый провайдер IA/YouTube; исходное положение верх/середина/конец; release второго ответа при открытом поиске/после удаления поиска из композиции на плеере. Каждый независимый case начинает без playing track/мини-плеера, на отдельном явно выбранном API35 AVD; личный телефон и очистка его данных не используются.
+
+1. Для query `concert` быстрый провайдер возвращает 20 уникальных строк с доступными TRACK, второй удерживается gate. Раскрыть быстрый источник; выставить заданную позицию. Сохранить sample до действия и счётчики `searchIn(provider, query)`.
+2. Для release в живом поиске отпустить gate и снять sample после стабильного layout. Для release на плеере открыть его настоящим PLAY по видимому TRACK, дождаться удаления SearchScreen после navigation transition и отпустить gate до окончания grace 5000 ms; зафиксировать completion, затем выполнить настоящий Back. Если completion до grace не удалось, case считается несостоявшимся, а не PASS.
+3. Снять первый возврат после стабилизации viewport/мини-плеера, затем повторить PLAY → Back и снять второй. Для живого release также выполнить оба возврата. Проверить, что завершённые секции не запросились заново и раскрыт только выбранный provider/query.
+4. В каждом sample записать время и phase, query, sections/loading, `firstVisibleItem.key`, `firstVisibleItemIndex`, `firstVisibleItemScrollOffset` в px, `visibleItemsInfo.first().offset/size`, viewport start/end и высоту в px, totalItemsCount, canScrollBackward/Forward, положение мини-плеера и счётчики сети. Сравнить ключ и offset после каждого события; числовой индекс вправе измениться из-за вставленных строк, но не подменять этим сохранение ключа. Верх/низ и возможное ограничение прокрутки отметить явно, не скрывать как допуск.
+
+Критерий: прежний верхний видимый key и offset сохраняются при допустимом изменении высоты/индекса; повторные поиски завершённых секций отсутствуют. Любое ограничение у края объясняется фактической геометрией и рассматривается отдельно. Эта матрица ещё **не выполнена**; числовых результатов настоящего NavHost в данном отчёте нет. Параллельно планировщик может оформить адресный RED для R1, не переписывая старые guards.
